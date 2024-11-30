@@ -7,7 +7,12 @@ TODO
 
 ## Building
 
-TODO
+```
+cd build
+cmake -DENABLE_SANITIZERS=ON ..
+make VERBOSE=1
+ctest -V
+```
 
 ## Dependencies
 

@@ -1,3 +1,4 @@
+#include <string.h>
 #include "xdr_funcs.h"
 
 /*
@@ -44,11 +45,27 @@ xdr_buf (XDR *xdrs, buf_t *objp)
 }
 
 static bool_t
+xdr_str (XDR *xdrs, char **objp)
+{
+    unsigned int len = 0;
+
+    if (xdrs->x_op == XDR_ENCODE)
+        len = (*objp ? (unsigned int) strlen(*objp) + 1 : 0);
+
+    if (!xdr_bytes(xdrs, objp, &len, UINT32_MAX))
+        return FALSE;
+    return TRUE;
+}
+
+static bool_t
 xdr_tx_entry (XDR *xdrs, tx_entry_t *objp)
 {
     if (!xdrs || !objp)
         return FALSE;
-    if (!xdr_string (xdrs, &objp->key, 255))
+    if (xdrs->x_op == XDR_ENCODE && !objp->key)
+        return FALSE;
+
+    if (!xdr_str (xdrs, &objp->key))
         return FALSE;
     if (!xdr_buf (xdrs, &objp->value))
         return FALSE;
@@ -61,9 +78,10 @@ bool_t xdr_transaction (XDR *xdrs, transaction_t *objp)
 {
     if (!xdrs || !objp)
         return FALSE;
+
     if (!xdr_u_int32_t (xdrs, &objp->rev))
         return FALSE;
-    if (!xdr_string (xdrs, &objp->user, 255))
+    if (!xdr_str (xdrs, &objp->user))
         return FALSE;
     if (!xdr_u_int64_t (xdrs, &objp->timestamp))
         return FALSE;

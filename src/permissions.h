@@ -4,6 +4,11 @@
 #include <stdint.h>
 #include <stdbool.h>
 
+/**
+ * @file
+ * Permissions object and support functions.
+ */
+
 typedef struct crud_t
 {
     uint8_t create:1;               //<! Allowed to create

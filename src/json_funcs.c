@@ -59,6 +59,8 @@ static yyjson_mut_val * json_serialize_tx_entry(yyjson_mut_doc *doc, const tx_en
 {
     if (unlikely(!entry->key))
         return NULL;
+    if (unlikely(!entry->value.data && entry->value.length > 0))
+        return NULL;
 
     yyjson_mut_val *obj = yyjson_mut_obj(doc);
 
@@ -73,23 +75,23 @@ static yyjson_mut_val * json_serialize_tx_entry(yyjson_mut_doc *doc, const tx_en
     if (entry->action != TX_ACTION_UPSERT && entry->action != TX_ACTION_UNKNOW)
         return obj;
 
-    if (is_utf8(entry->value.data, entry->value.length))
-    {
+    if (!entry->value.data)
+        yyjson_mut_obj_add_null(doc, obj, JSON_KEY_VALUE);
+    else if (is_utf8(entry->value.data, entry->value.length))
         yyjson_mut_obj_add_str(doc, obj, JSON_KEY_VALUE, entry->value.data);
-    }
     else
     {
         yyjson_alc *alc = &doc->alc;
         size_t len = ceil(entry->value.length / 3) * 4 + 8;
-        char *buf = alc->malloc(alc->ctx, len);
+        char *str = alc->malloc(alc->ctx, len);
 
-        if (!buf)
+        if (!str)
             return NULL;
 
-        bintob64(buf, entry->value.data, entry->value.length);
+        bintob64(str, entry->value.data, entry->value.length);
 
         yyjson_mut_obj_add_true(doc, obj, JSON_KEY_BASE64);
-        yyjson_mut_obj_add_str(doc, obj, JSON_KEY_VALUE, buf);
+        yyjson_mut_obj_add_str(doc, obj, JSON_KEY_VALUE, str);
     }
 
     return obj;
@@ -116,13 +118,13 @@ yyjson_mut_val * json_serialize_transaction(yyjson_mut_doc *doc, const transacti
 
     if (tx->timestamp != 0)
     {
-        char *buf = doc->alc.malloc(doc->alc.ctx, 32);
+        char *str = doc->alc.malloc(doc->alc.ctx, 32);
 
-        if (unlikely(!buf))
+        if (unlikely(!str))
             return NULL;
 
-        millis_to_iso8601(tx->timestamp, buf, 32); 
-        yyjson_mut_obj_add_str(doc, obj, JSON_KEY_TIMESTAMP, buf);
+        millis_to_iso8601(tx->timestamp, str, 32); 
+        yyjson_mut_obj_add_str(doc, obj, JSON_KEY_TIMESTAMP, str);
     }
 
     if (unlikely((entries = yyjson_mut_obj_add_arr(doc, obj, JSON_KEY_ENTRIES)) == NULL))
@@ -175,7 +177,7 @@ static bool json_deserialize_tx_entry(yyjson_val *obj, tx_entry_t *tx_entry)
         value_is_base64 = yyjson_get_bool(value);
     }
 
-    if ((value = yyjson_obj_get(obj, JSON_KEY_VALUE)) != NULL)
+    if ((value = yyjson_obj_get(obj, JSON_KEY_VALUE)) != NULL && !yyjson_is_null(value))
     {
         if (!yyjson_is_str(value))
             goto JSON_DESERIALIZE_TX_ENTRY_ERROR;

@@ -95,7 +95,7 @@ static void test_transaction_format_ok(format_e format)
         { .key = "/energy/as28/status", .action = TX_ACTION_CHECK },
         { .key = "/energy/as29/status", .action = TX_ACTION_DELETE },
         { .key = "/energy/as27/watts", .value = { .data = "25", .reserved = 2, .length = 2 }, .action = TX_ACTION_UPSERT },
-        { .key = "/energy/as27/png", .value = { .data = "pngcontent", .reserved = 11, .length = 11 } },
+        { .key = "/energy/as27/png", .value = { .data = NULL, .reserved = 0, .length = 0 } },
         { .key = "/energy/as27/json", .value = { .data = "{ \"var\": [ 42 ] }", .reserved = 17, .length = 17 } },
     };
 
@@ -122,6 +122,9 @@ static void test_transaction_format_ok(format_e format)
         transaction_reset(&tx2);
     }
 
+    // if (format == FORMAT_JSON)
+    //     printf("\n%s\n", buf.data);
+
     transaction_writer_free(writer);
     transaction_reader_free(reader);
 }
@@ -144,7 +147,7 @@ static void test_transaction_format_ko(format_e format)
         { .key = "/energy/as28/status", .action = TX_ACTION_CHECK },
         { .key = "/energy/as29/status", .action = TX_ACTION_DELETE },
         { .key = "/energy/as27/watts", .value = { .data = "25", .reserved = 2, .length = 2 }, .action = TX_ACTION_UPSERT },
-        { .key = NULL, .value = { .data = "pngcontent", .reserved = 11, .length = 11 } },   // <- INVALID KEY!!!
+        { .key = NULL, .value = { .data = NULL, .reserved = 0, .length = 0 } }, // <- INVALID KEY!!!
         { .key = "/energy/as27/json", .value = { .data = "{ \"var\": [ 42 ] }", .reserved = 17, .length = 17 } },
     };
 

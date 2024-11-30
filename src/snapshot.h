@@ -2,9 +2,11 @@
 #define SNAPSHOT_H
 
 #include "nplex.h"
+#include "permissions.h"
 #include "transaction.h"
 
 /**
+ * @file
  * Snapshot object and support functions.
  */
 
@@ -13,7 +15,7 @@ typedef struct snapshot_t
     rev_t rev;                          //!< Snapshot revision.
     format_e format;                    //!< Format (xdr, json).
     compression_e compression;          //!< Compression algorithm (none, lz4).
-    char *data;                         //!< Serialized snapshot.
+    char *data;                         //!< Serialized data.
     uint32_t length;                    //!< Data length (in bytes).
     uint32_t reserved;                  //!< Reserved memory (in bytes).
 } snapshot_t;
@@ -22,15 +24,24 @@ typedef struct snapshot_writer_t snapshot_writer_t;
 typedef struct snapshot_reader_t snapshot_reader_t;
 
 /**
+ * Reset snapshot object.
+ * Dealloc memory allocated by the snapshot, no the object itself.
+ * 
+ * @param[in] snapshot Snapshot object.
+ */
+void snapshot_reset(snapshot_t *snapshot);
+
+/**
  * Creates a snapshot writer.
  * 
  * @param[in] rev Snapshot revision.
+ * @param[in] permissions Permissions to apply (ownership is not transferred, can be NULL).
  * @param[in] format Snapshot format.
  * @param[in] compression Compression algorithm.
  * @return Snapshot writer,
  *         NULL on error.
  */
-snapshot_writer_t * snapshot_writer_new(rev_t rev, format_e format, compression_e compression);
+snapshot_writer_t * snapshot_writer_new(rev_t rev, const permissions_t *permissions, format_e format, compression_e compression);
 
 /**
  * Appends a transaction to a snapshot writer.

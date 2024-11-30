@@ -101,8 +101,68 @@ static void test_is_utf8(void)
     TEST_CHECK(!is_utf8(buffer, 8));
 }
 
+static void test_buf_functions(void)
+{
+    buf_t buf = {0};
+    char *ptr = NULL;
+
+    buf_reset(&buf);
+    TEST_CHECK(buf.data == NULL);
+    TEST_CHECK(buf.length == 0);
+    TEST_CHECK(buf.reserved == 0);
+
+    TEST_CHECK(buf_reserve(&buf, 14));
+    TEST_CHECK(buf.data != NULL);
+    TEST_CHECK(buf.length == 0);
+    TEST_CHECK(buf.reserved == 14);
+
+    ptr = buf.data;
+    TEST_CHECK(buf_append(&buf, "1234567890", 10));
+    TEST_CHECK(buf.data == ptr);
+    TEST_CHECK(buf.length == 10);
+    TEST_CHECK(buf.reserved == 14);
+
+    TEST_CHECK(buf_reserve(&buf, 3));
+    TEST_CHECK(buf.data == ptr);
+    TEST_CHECK(buf.length == 10);
+    TEST_CHECK(buf.reserved == 14);
+
+    TEST_CHECK(buf_append(&buf, "1234567890", 10));
+    TEST_CHECK(buf.data != NULL);
+    TEST_CHECK(buf.length == 20);
+    TEST_CHECK(buf.reserved == 28);
+
+    buf_reset(&buf);
+    TEST_CHECK(buf.data == NULL);
+    TEST_CHECK(buf.length == 0);
+    TEST_CHECK(buf.reserved == 0);
+
+    TEST_CHECK(buf_append(&buf, "1234567890", 10));
+    TEST_CHECK(buf.data != NULL);
+    TEST_CHECK(buf.length == 10);
+    TEST_CHECK(buf.reserved == 10);
+
+    buf_reset(&buf);
+    TEST_CHECK(buf.data == NULL);
+    TEST_CHECK(buf.length == 0);
+    TEST_CHECK(buf.reserved == 0);
+
+    // buf_append errors
+    TEST_CHECK(!buf_append(NULL, "1234567890", 10));
+    TEST_CHECK(!buf_append(&buf, NULL, 10));
+
+    // corrupted object
+    buf_t bad = (buf_t){ .data = NULL, .length = 0, .reserved = 10 };
+    TEST_CHECK(!buf_reserve(&bad, 1));
+    TEST_CHECK(!buf_append(&bad, "1234567890", 10));
+    bad = (buf_t){ .data = NULL, .length = 10, .reserved = 0 };
+    TEST_CHECK(!buf_reserve(&bad, 1));
+    TEST_CHECK(!buf_append(&bad, "1234567890", 10));
+}
+
 TEST_LIST = {
     { "iso8601_conversions",            test_iso8601_conversions },
     { "is_utf8()",                      test_is_utf8 },
+    { "buf_functions",                  test_buf_functions },
     { NULL, NULL }
 };

@@ -6,6 +6,7 @@
 #include <stdbool.h>
 
 /**
+ * @file
  * Generic nplex types.
  */
 

@@ -8,6 +8,8 @@
 #include "simdutf8check.h"
 #include "utils.h"
 
+#define BUF_GROWTH_FACTOR       2
+
 uint64_t iso8601_to_millis(const char *iso8601)
 {
     struct tm tm_time = {0};
@@ -131,8 +133,84 @@ bool millis_to_iso8601(uint64_t millis, char *buffer, size_t len)
 
 bool is_utf8(const char *str, size_t len)
 {
-    if (strlen(str) != len)
+    if (!str || strlen(str) != len)
         return false;
 
     return validate_utf8_fast(str, len);
+}
+
+static bool buf_is_valid(const buf_t *buf)
+{
+    return (buf && buf->length <= buf->reserved && (buf->reserved == 0 || buf->data));
+}
+
+bool buf_reserve(buf_t *buf, uint32_t size)
+{
+    if (!buf_is_valid(buf))
+        return false;
+
+    if (buf->reserved >= size)
+        return true;
+
+    if (buf->reserved == 0)
+    {
+        free(buf->data);
+
+        if ((buf->data = malloc(size)) == NULL)
+            return false;
+
+        buf->reserved = size;
+        return true;
+    }
+
+    size_t reserved = buf->reserved;
+
+    while (reserved < size)
+    {
+        reserved *= BUF_GROWTH_FACTOR;
+
+        if (reserved > UINT32_MAX)
+            reserved = size;
+    }
+
+    char *ptr = realloc(buf->data, reserved);
+
+    if (unlikely(!ptr))
+        return false;
+
+    buf->data = ptr;
+    buf->reserved = (uint32_t) reserved;
+
+    return true;
+}
+
+void buf_reset(buf_t *buf)
+{
+    if (!buf)
+        return;
+    
+    if (buf->data)
+        free(buf->data);
+    
+    *buf = (buf_t){0};
+}
+
+bool buf_append(buf_t *buf, const char *str, uint32_t len)
+{
+    if (!buf_is_valid(buf))
+        return false;
+
+    if (len == 0)
+        return true;
+
+    if (!str || buf->length + len <= buf->length) // length overflow
+        return false;
+
+    if (!buf_reserve(buf, buf->length + len))
+        return false;
+
+    memcpy(buf->data + buf->length, str, len);
+    buf->length += len;
+
+    return true;
 }

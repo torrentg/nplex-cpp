@@ -4,6 +4,12 @@
 #include <stdint.h>
 #include <stddef.h>
 #include <stdbool.h>
+#include "nplex.h"
+
+/**
+ * @file
+ * Utility functions.
+ */
 
 /**
  * Converts a NUL-ended ISO-8601 formatted string to a timestamp in milliseconds since the epoch.
@@ -39,5 +45,34 @@ bool millis_to_iso8601(uint64_t millis, char *buffer, size_t len);
  *         false = otherwise.
  */
 bool is_utf8(const char *str, size_t len);
+
+/**
+ * Ensure buffer capacity.
+ * Does nothing if reserved size is greater than requested size.
+ * Otherwise reserve enough memory granting the requested size.
+ * 
+ * @param[in] buf Buffer to update.
+ * @param[in] size Bytes to reserve.
+ * @return true = success, false = error (not enough memory).
+ */
+bool buf_reserve(buf_t *buf, uint32_t size);
+
+/**
+ * Resets a buffer.
+ * 
+ * @param[in] buf Buffer to reset.
+ */
+void buf_reset(buf_t *buf);
+
+/**
+ * Append data to buffer.
+ * Realloc mem if required.
+ * 
+ * @param[in] buf Buffer to update.
+ * @param[in] str Content to add.
+ * @param[in] len Content length.
+ * @return true = success, false = error (not enough memory).
+ */
+bool buf_append(buf_t *buf, const char *str, uint32_t len);
 
 #endif

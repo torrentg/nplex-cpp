@@ -4,6 +4,7 @@
 #include "nplex.h"
 
 /**
+ * @file
  * Transaction object and support functions.
  * 
  * Transactions are used in two contexts:

@@ -10,26 +10,24 @@
 
 typedef struct snapshot_writer_t 
 {
-    snapshot_t serialized_snapshot;
-    yyjson_alc *json_allocator;
-    yyjson_mut_doc *json_doc;
-    yyjson_mut_val *root;
+    snapshot_t snapshot;
+    transaction_writer_t *tx_writer;
+    const permissions_t *permissions;
 } snapshot_writer_t;
 
-
-static bool serialize_transaction_json(const transaction_t *tx, buf_t *ret)
+void snapshot_reset(snapshot_t *snapshot)
 {
-    assert(tx);
-    assert(ret);
+    if (!snapshot)
+        return;
 
+    free(snapshot->data);
+
+    *snapshot = (snapshot_t){0};
 }
 
-snapshot_writer_t * snapshot_writer_new(rev_t rev, format_e format, compression_e compression)
+snapshot_writer_t * snapshot_writer_new(rev_t rev, const permissions_t *permissions, format_e format, compression_e compression)
 {
     if (rev == 0)
-        return NULL;
-    
-    if (format != FORMAT_XDR && format != FORMAT_JSON)
         return NULL;
     
     if (compression != COMPRESSION_NONE && compression != COMPRESSION_LZ4)
@@ -39,24 +37,22 @@ snapshot_writer_t * snapshot_writer_new(rev_t rev, format_e format, compression_
     if (unlikely(!writer))
         goto SNAPSHOT_WRITER_ERROR;
 
-    writer->serialized_snapshot.rev = rev;
-    writer->serialized_snapshot.format = format;
-    writer->serialized_snapshot.compression = compression;
-    writer->serialized_snapshot.reserved = INITIAL_MEMORY_SIZE;
-    writer->serialized_snapshot.data = (char *) malloc(INITIAL_MEMORY_SIZE);
-    writer->serialized_snapshot.length = 0;
+    writer->snapshot.rev = rev;
+    writer->snapshot.format = format;
+    writer->snapshot.compression = compression;
+    writer->snapshot.data = (char *) malloc(INITIAL_MEMORY_SIZE);
+    writer->snapshot.reserved = INITIAL_MEMORY_SIZE;
+    writer->snapshot.length = 0;
 
-    if (unlikely(!writer->serialized_snapshot.data))
+    if (unlikely(!writer->snapshot.data))
         goto SNAPSHOT_WRITER_ERROR;
 
-    if (format == FORMAT_JSON)
-    {
-        if ((writer->json_allocator = yyjson_alc_dyn_new()) == NULL)
-            goto SNAPSHOT_WRITER_ERROR;
+    writer->tx_writer = transaction_writer_new(format);
 
-        if ((writer->json_doc = yyjson_mut_doc_new(writer->json_allocator)) == NULL)
-            goto SNAPSHOT_WRITER_ERROR;
-    }
+    if (unlikely(!writer->tx_writer))
+        goto SNAPSHOT_WRITER_ERROR;
+
+    writer->permissions = permissions;
 
     return writer;
 
@@ -69,9 +65,29 @@ void snapshot_writer_free(snapshot_writer_t *writer)
 {
     if (!writer)
         return;
-    
-    yyjson_alc_dyn_free(writer->json_allocator);
-    yyjson_mut_doc_free(writer->json_doc) ;
-    writer->json_allocator = NULL;
+
+    snapshot_reset(&writer->snapshot);
+    transaction_writer_free(writer->tx_writer);
+
     free(writer);
+}
+
+bool snapshot_writer_append(snapshot_writer_t *writer, const transaction_t *tx)
+{
+    if (!writer || !tx)
+        return false;
+
+    buf_t buf = {0};
+    
+    if (!transaction_writer_serialize(writer->tx_writer, tx, &buf))
+        return false;
+
+    if (buf.length == 0)
+        return true;
+
+    if (writer->snapshot.reserved + buf.length > writer->snapshot.reserved)
+
+    // TODO: call LZ4 if required
+
+    return buf_append(&writer->snapshot.buf, buf.data, buf.length);
 }

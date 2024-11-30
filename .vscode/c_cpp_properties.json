@@ -3,7 +3,8 @@
         {
             "name": "Linux",
             "includePath": [
-                "${workspaceFolder}/deps"
+                "${workspaceFolder}/deps",
+                "${workspaceFolder}/src"
             ],
             "compilerPath": "/usr/lib64/ccache/gcc",
             "cStandard": "c17",
@@ -20,11 +21,11 @@
                 "-Wduplicated-cond",
                 "-Wlogical-op",
                 "-Wnon-virtual-dtor",
-                "-Wuseless-cast",
-                "-DSPDLOG_FMT_EXTERNAL"
+                "-Wuseless-cast"
             ],
             "browse": {
                 "path": [
+                    "${workspaceFolder}/test",
                     "${workspaceFolder}/deps",
                     "${workspaceFolder}/src",
                     "/usr/include/tirpc"
