@@ -1,0 +1,54 @@
+{
+  "files.associations": {
+    "format": "c",
+    "random": "c",
+    "string_view": "c",
+    "sstream": "c",
+    "cstdint": "c",
+    "acutest.h": "c",
+    "match.h": "c",
+    "yyjson.h": "c",
+    "array": "c",
+    "string": "c",
+    "span": "c",
+    "utils.h": "c",
+    "charconv": "c",
+    "chrono": "c",
+    "optional": "c",
+    "ratio": "c",
+    "system_error": "c",
+    "functional": "c",
+    "tuple": "c",
+    "type_traits": "c",
+    "utility": "c",
+    "math.h": "c",
+    "json_funcs.h": "c",
+    "transaction.h": "c",
+    "nplex.h": "c",
+    "stdint.h": "c",
+    "cstdlib": "c"
+  },
+  "C_Cpp.default.cStandard": "c17",
+  "C_Cpp.default.includePath": [
+    "${workspaceFolder}/deps",
+    "/usr/include/tirpc"
+  ],
+  "c-cpp-flylint.language": "c",
+  "c-cpp-flylint.standard": [
+    "c17"
+  ],
+  "c-cpp-flylint.includePaths": [
+    "${workspaceFolder}/deps",
+    "/usr/include/tirpc"
+  ],
+  "c-cpp-flylint.clang.includePaths": [
+    "${workspaceFolder}/deps",
+    "/usr/include/tirpc"
+  ],
+  "c-cpp-flylint.clang.standard": [
+    "c17"
+  ],
+  "c-cpp-flylint.excludeFromWorkspacePaths": [
+    "${workspaceFolder}/deps"
+  ]
+}

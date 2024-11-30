@@ -1,0 +1,37 @@
+{
+    "configurations": [
+        {
+            "name": "Linux",
+            "includePath": [
+                "${workspaceFolder}/deps"
+            ],
+            "compilerPath": "/usr/lib64/ccache/gcc",
+            "cStandard": "c17",
+            "intelliSenseMode": "linux-gcc-x64",
+            "compilerArgs": [
+                "-Wall",
+                "-Wextra",
+                "-Wshadow",
+                "-Wpedantic",
+                "-Wconversion",
+                "-Wsign-conversion",
+                "-Wnull-dereference",
+                "-Wduplicated-branches",
+                "-Wduplicated-cond",
+                "-Wlogical-op",
+                "-Wnon-virtual-dtor",
+                "-Wuseless-cast",
+                "-DSPDLOG_FMT_EXTERNAL"
+            ],
+            "browse": {
+                "path": [
+                    "${workspaceFolder}/deps",
+                    "${workspaceFolder}/src",
+                    "/usr/include/tirpc"
+                ],
+                "limitSymbolsToIncludedHeaders": true
+            }
+        }
+    ],
+    "version": 4
+}
