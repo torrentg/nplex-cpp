@@ -37,7 +37,7 @@ xdr_buf (XDR *xdrs, buf_t *objp)
         return FALSE;
 
     if (xdrs->x_op == XDR_DECODE) {
-        objp->reserved = (uint32_t) len;
+        objp->capacity = (uint32_t) len;
         objp->length = (uint32_t) len;
     }
 

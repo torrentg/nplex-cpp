@@ -15,9 +15,7 @@ typedef struct snapshot_t
     rev_t rev;                          //!< Snapshot revision.
     format_e format;                    //!< Format (xdr, json).
     compression_e compression;          //!< Compression algorithm (none, lz4).
-    char *data;                         //!< Serialized data.
-    uint32_t length;                    //!< Data length (in bytes).
-    uint32_t reserved;                  //!< Reserved memory (in bytes).
+    buf_t content;                      //!< Snapshot content.
 } snapshot_t;
 
 typedef struct snapshot_writer_t snapshot_writer_t;

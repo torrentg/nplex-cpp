@@ -250,7 +250,7 @@ static void test_permissions(void)
     permissions_t perms = {0};
 
     TEST_CHECK(perms.length == 0);
-    TEST_CHECK(perms.reserved == 0);
+    TEST_CHECK(perms.capacity == 0);
     TEST_CHECK(perms.data == 0);
 
     TEST_CHECK(!permissions_append(NULL, "perm", CRUD(0,0,0,0), true));
@@ -261,7 +261,7 @@ static void test_permissions(void)
     {
         TEST_CHECK(permissions_append(&perms, list[i].pattern, list[i].crud, list[i].op_and));
         TEST_CHECK(perms.length == i + 1);
-        TEST_CHECK(perms.reserved >= i + 1);
+        TEST_CHECK(perms.capacity >= i + 1);
         TEST_CHECK(perms.data);
         TEST_CHECK(*((uint8_t *) &perms.data[i].crud) == *((uint8_t *) &list[i].crud));
         TEST_CHECK(perms.data[i].pattern);
@@ -279,7 +279,7 @@ static void test_permissions(void)
     permissions_free(&perms);
 
     TEST_CHECK(perms.length == 0);
-    TEST_CHECK(perms.reserved == 0);
+    TEST_CHECK(perms.capacity == 0);
     TEST_CHECK(perms.data == 0);
 }
 

@@ -26,9 +26,9 @@ typedef struct permission_t
 
 typedef struct permissions_t
 {
-    uint16_t reserved;              //<! Reserved length.
-    uint16_t length;                //<! Current length.
     permission_t *data;             //<! Permissions list.
+    uint16_t length;                //<! Current length.
+    uint16_t capacity;              //<! Reserved memory.
 } permissions_t;
 
 #define CRUD(c, r, u, d) (crud_t){.create = c, .read = r, .update = u, .delete = d}

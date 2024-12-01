@@ -38,7 +38,7 @@ static bool is_valid_permissions(const permissions_t *perms)
     if (!perms)
         return false;
 
-    if (perms->length > perms->reserved)
+    if (perms->length > perms->capacity)
         return false;
 
     if (perms->length > 0 && !perms->data)
@@ -85,18 +85,18 @@ bool permissions_append(permissions_t *perms, const char *pattern, crud_t crud, 
     if (!is_valid_permissions(perms) || !is_valid_pattern(pattern))
         return false;
 
-    if (perms->length == perms->reserved)
+    if (perms->length == perms->capacity)
     {
-        uint16_t reserved = (perms->reserved == 0 ? INITIAL_LENGTH : (uint16_t)(FACTOR * perms->reserved));
-        permission_t *data = reallocarray(perms->data, reserved, sizeof(permission_t));
+        uint16_t capacity = (perms->capacity == 0 ? INITIAL_LENGTH : (uint16_t)(FACTOR * perms->capacity));
+        permission_t *data = reallocarray(perms->data, capacity, sizeof(permission_t));
         if (!data)
             return false;
 
         perms->data = data;
-        perms->reserved = reserved;
+        perms->capacity = capacity;
     }
 
-    assert(perms->reserved > perms->length);
+    assert(perms->capacity > perms->length);
 
     perms->data[perms->length].pattern = strdup(pattern);
     if (!perms->data[perms->length].pattern)
@@ -114,23 +114,18 @@ void permissions_free(permissions_t *perms)
     if (!perms)
         return;
 
-    if (!perms->data) {
-        perms->reserved = 0;
-        perms->length = 0;
-        return;
+    if (perms->data)
+    {
+        for (size_t i = 0; i < perms->length; i++) {
+            free(perms->data[i].pattern);
+            perms->data[i].pattern = NULL;
+            perms->data[i].crud = CRUD(0,0,0,0);
+        }
+
+        free(perms->data);
     }
 
-    for (size_t i = 0; i < perms->length; i++) {
-        free(perms->data[i].pattern);
-        perms->data[i].pattern = NULL;
-        perms->data[i].crud = CRUD(0,0,0,0);
-    }
-
-    free(perms->data);
-
-    perms->data = NULL;
-    perms->reserved = 0;
-    perms->length = 0;
+    *perms = (permissions_t){0};
 }
 
 crud_t permissions_check(const permissions_t *perms, const char *path)

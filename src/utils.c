@@ -141,7 +141,7 @@ bool is_utf8(const char *str, size_t len)
 
 static bool buf_is_valid(const buf_t *buf)
 {
-    return (buf && buf->length <= buf->reserved && (buf->reserved == 0 || buf->data));
+    return (buf && buf->length <= buf->capacity && (buf->capacity == 0 || buf->data));
 }
 
 bool buf_reserve(buf_t *buf, uint32_t size)
@@ -149,37 +149,37 @@ bool buf_reserve(buf_t *buf, uint32_t size)
     if (!buf_is_valid(buf))
         return false;
 
-    if (buf->reserved >= size)
+    if (buf->capacity >= size)
         return true;
 
-    if (buf->reserved == 0)
+    if (buf->capacity == 0)
     {
         free(buf->data);
 
         if ((buf->data = malloc(size)) == NULL)
             return false;
 
-        buf->reserved = size;
+        buf->capacity = size;
         return true;
     }
 
-    size_t reserved = buf->reserved;
+    size_t capacity = buf->capacity;
 
-    while (reserved < size)
+    while (capacity < size)
     {
-        reserved *= BUF_GROWTH_FACTOR;
+        capacity *= BUF_GROWTH_FACTOR;
 
-        if (reserved > UINT32_MAX)
-            reserved = size;
+        if (capacity > UINT32_MAX)
+            capacity = size;
     }
 
-    char *ptr = realloc(buf->data, reserved);
+    char *ptr = realloc(buf->data, capacity);
 
     if (unlikely(!ptr))
         return false;
 
     buf->data = ptr;
-    buf->reserved = (uint32_t) reserved;
+    buf->capacity = (uint32_t) capacity;
 
     return true;
 }

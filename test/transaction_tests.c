@@ -90,13 +90,13 @@ static void test_transaction_format_ok(format_e format)
     TEST_ASSERT(reader);
 
     tx_entry_t entries[] = {
-        { .key = "/energy/as27/status", .value = { .data = "disabled", .reserved = 8, .length = 8 } },
-        { .key = "/energy/as26/status", .action = TX_ACTION_UPSERT, .value = { .data = "enabled", .reserved = 7, .length = 7 } },
+        { .key = "/energy/as27/status", .value = { .data = "disabled", .capacity = 8, .length = 8 } },
+        { .key = "/energy/as26/status", .action = TX_ACTION_UPSERT, .value = { .data = "enabled", .capacity = 7, .length = 7 } },
         { .key = "/energy/as28/status", .action = TX_ACTION_CHECK },
         { .key = "/energy/as29/status", .action = TX_ACTION_DELETE },
-        { .key = "/energy/as27/watts", .value = { .data = "25", .reserved = 2, .length = 2 }, .action = TX_ACTION_UPSERT },
-        { .key = "/energy/as27/png", .value = { .data = NULL, .reserved = 0, .length = 0 } },
-        { .key = "/energy/as27/json", .value = { .data = "{ \"var\": [ 42 ] }", .reserved = 17, .length = 17 } },
+        { .key = "/energy/as27/watts", .value = { .data = "25", .capacity = 2, .length = 2 }, .action = TX_ACTION_UPSERT },
+        { .key = "/energy/as27/png", .value = { .data = NULL, .capacity = 0, .length = 0 } },
+        { .key = "/energy/as27/json", .value = { .data = "{ \"var\": [ 42 ] }", .capacity = 17, .length = 17 } },
     };
 
     transaction_t tx1 = {
@@ -142,13 +142,13 @@ static void test_transaction_format_ko(format_e format)
     TEST_ASSERT(reader);
 
     tx_entry_t entries[] = {
-        { .key = "/energy/as27/status", .value = { .data = "disabled", .reserved = 8, .length = 8 } },
-        { .key = "/energy/as26/status", .action = TX_ACTION_UPSERT, .value = { .data = "enabled", .reserved = 7, .length = 7 } },
+        { .key = "/energy/as27/status", .value = { .data = "disabled", .capacity = 8, .length = 8 } },
+        { .key = "/energy/as26/status", .action = TX_ACTION_UPSERT, .value = { .data = "enabled", .capacity = 7, .length = 7 } },
         { .key = "/energy/as28/status", .action = TX_ACTION_CHECK },
         { .key = "/energy/as29/status", .action = TX_ACTION_DELETE },
-        { .key = "/energy/as27/watts", .value = { .data = "25", .reserved = 2, .length = 2 }, .action = TX_ACTION_UPSERT },
-        { .key = NULL, .value = { .data = NULL, .reserved = 0, .length = 0 } }, // <- INVALID KEY!!!
-        { .key = "/energy/as27/json", .value = { .data = "{ \"var\": [ 42 ] }", .reserved = 17, .length = 17 } },
+        { .key = "/energy/as27/watts", .value = { .data = "25", .capacity = 2, .length = 2 }, .action = TX_ACTION_UPSERT },
+        { .key = NULL, .value = { .data = NULL, .capacity = 0, .length = 0 } }, // <- INVALID KEY!!!
+        { .key = "/energy/as27/json", .value = { .data = "{ \"var\": [ 42 ] }", .capacity = 17, .length = 17 } },
     };
 
     transaction_t tx1 = {
@@ -170,7 +170,7 @@ static void test_transaction_format_ko(format_e format)
 
     // trying to decode garbage
     transaction_t tx2 = {0};
-    buf = (buf_t){ .data = "garbage", .length = 7, .reserved = 7 };
+    buf = (buf_t){ .data = "garbage", .length = 7, .capacity = 7 };
     TEST_CHECK(!transaction_reader_deserialize(reader, &buf, &tx2));
 
     transaction_writer_free(writer);

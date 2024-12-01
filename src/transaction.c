@@ -1,5 +1,6 @@
 #include <stdlib.h>
 #include <assert.h>
+#include "utils.h"
 #include "xdr_funcs.h"
 #include "json_funcs.h"
 #include "transaction.h"
@@ -12,7 +13,7 @@ typedef struct transaction_writer_t
     format_e format;
     yyjson_alc *json_allocator;
     yyjson_mut_doc *json_doc;
-    char *xdr_str;
+    buf_t xdr_str;
 } transaction_writer_t;
 
 typedef struct transaction_reader_t
@@ -88,8 +89,7 @@ void transaction_writer_free(transaction_writer_t *writer)
     yyjson_alc_dyn_free(writer->json_allocator);
     writer->json_allocator = NULL;
 
-    free(writer->xdr_str);
-    writer->xdr_str = NULL;
+    buf_reset(&writer->xdr_str);
 
     free(writer);
 }
@@ -119,7 +119,7 @@ static bool transaction_writer_serialize_json(transaction_writer_t *writer, cons
 
     buf->data = str;
     buf->length = str_len;
-    buf->reserved = str_len;
+    buf->capacity = str_len;
 
     return true;
 
@@ -137,18 +137,16 @@ static bool transaction_writer_serialize_xdr(transaction_writer_t *writer, const
     unsigned int len = xdr_sizeof((xdrproc_t) xdr_transaction, (void *) tx);
     bool ret = false;
     
-    free(writer->xdr_str);
-    writer->xdr_str = calloc(len, 1);
+    writer->xdr_str.length = 0;
 
-    if (!writer->xdr_str)
+    if (!buf_reserve(&writer->xdr_str, len))
         return false;
 
-    xdrmem_create(&xdrs, writer->xdr_str, len, XDR_ENCODE);
+    xdrmem_create(&xdrs, writer->xdr_str.data, len, XDR_ENCODE);
 
     if (xdr_transaction(&xdrs, (void *) tx)) {
-        buf->data = writer->xdr_str;
-        buf->reserved = (uint32_t) len;
-        buf->length = (uint32_t) len;
+        writer->xdr_str.length = len;
+        *buf = writer->xdr_str;
         ret = true;
     }
 
@@ -162,7 +160,7 @@ bool transaction_writer_serialize(transaction_writer_t *writer, const transactio
     if (!writer || !tx || !ret || (tx->entries == NULL && tx->num_entries != 0))
         return false;
 
-    *ret = (buf_t){.data = NULL, .length = 0, .reserved = 0};
+    *ret = (buf_t){0};
 
     switch (writer->format)
     {

@@ -1,6 +1,7 @@
 #include <stdlib.h>
 #include <assert.h>
 #include "yyjson.h"
+#include "utils.h"
 #include "snapshot.h"
 
 // gcc -Wall -pedantic -c snapshot.c
@@ -20,7 +21,7 @@ void snapshot_reset(snapshot_t *snapshot)
     if (!snapshot)
         return;
 
-    free(snapshot->data);
+    buf_reset(&snapshot->content);
 
     *snapshot = (snapshot_t){0};
 }
@@ -40,11 +41,8 @@ snapshot_writer_t * snapshot_writer_new(rev_t rev, const permissions_t *permissi
     writer->snapshot.rev = rev;
     writer->snapshot.format = format;
     writer->snapshot.compression = compression;
-    writer->snapshot.data = (char *) malloc(INITIAL_MEMORY_SIZE);
-    writer->snapshot.reserved = INITIAL_MEMORY_SIZE;
-    writer->snapshot.length = 0;
 
-    if (unlikely(!writer->snapshot.data))
+    if (unlikely(!buf_reserve(&writer->snapshot.content, INITIAL_MEMORY_SIZE)))
         goto SNAPSHOT_WRITER_ERROR;
 
     writer->tx_writer = transaction_writer_new(format);
@@ -82,12 +80,10 @@ bool snapshot_writer_append(snapshot_writer_t *writer, const transaction_t *tx)
     if (!transaction_writer_serialize(writer->tx_writer, tx, &buf))
         return false;
 
-    if (buf.length == 0)
-        return true;
-
-    if (writer->snapshot.reserved + buf.length > writer->snapshot.reserved)
+    if (!buf_append(&writer->snapshot.content, buf.data, buf.length))
+        return false;
 
     // TODO: call LZ4 if required
 
-    return buf_append(&writer->snapshot.buf, buf.data, buf.length);
+    return true;
 }

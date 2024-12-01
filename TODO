@@ -1,6 +1,4 @@
-* Rename buf_t::reserved to buf_t::capacity
-* Use snapshot_t::buf_t instead of snapshot_t::data, etc
-* Replace transaction_writer_t::xdr_str by a buf_t
 * Add permissions to transaction_writer_new
 * Add permissions to transaction_reader_new
 * Add anonymous union in crud_t allowing to set crud by number
+* permissions_check() stops at first match

@@ -48,7 +48,7 @@ bool is_utf8(const char *str, size_t len);
 
 /**
  * Ensure buffer capacity.
- * Does nothing if reserved size is greater than requested size.
+ * Does nothing if capacity is greater than requested size.
  * Otherwise reserve enough memory granting the requested size.
  * 
  * @param[in] buf Buffer to update.
@@ -59,6 +59,7 @@ bool buf_reserve(buf_t *buf, uint32_t size);
 
 /**
  * Resets a buffer.
+ * Deallocates memory used by buffer.
  * 
  * @param[in] buf Buffer to reset.
  */

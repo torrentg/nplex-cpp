@@ -196,7 +196,7 @@ static bool json_deserialize_tx_entry(yyjson_val *obj, tx_entry_t *tx_entry)
         }
 
         tx_entry->value.data = strndup(ptr, len);
-        tx_entry->value.reserved = len;
+        tx_entry->value.capacity = len + 1;
         tx_entry->value.length = len;
     }
 

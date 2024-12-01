@@ -44,7 +44,7 @@ typedef struct string_t {
 typedef struct buf_t {
     char *data;
     uint32_t length;
-    uint32_t reserved;
+    uint32_t capacity;
 } buf_t;
 
 #endif
