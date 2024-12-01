@@ -49,7 +49,7 @@ uint64_t iso8601_to_millis(const char *iso8601)
     }
     else if (*str == '+' || *str == '-')
     {
-        char timezone[6] = {0};
+        char timezone_str[6] = {0};
         size_t len = 0;
         int sign = (*str == '-' ? -1 : +1);
         int hours = 0;
@@ -57,13 +57,13 @@ uint64_t iso8601_to_millis(const char *iso8601)
         int rc = 0;
 
         str++;
-        strncpy(timezone, str, 5);
-        len = strlen(timezone);
+        strncpy(timezone_str, str, 5);
+        len = strlen(timezone_str);
 
         if (strlen(str) != len)
             return 0;
 
-        rc = sscanf(timezone, "%2d:%2d", &hours, &minutes);
+        rc = sscanf(timezone_str, "%2d:%2d", &hours, &minutes);
 
         switch (rc)
         {
@@ -84,7 +84,7 @@ uint64_t iso8601_to_millis(const char *iso8601)
 
         tz_offset_seconds = sign * (hours * 3600 + minutes * 60);
 
-        str += strlen(timezone);
+        str += strlen(timezone_str);
     }
     else
     {

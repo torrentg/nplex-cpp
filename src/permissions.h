@@ -11,15 +11,19 @@
 
 typedef struct crud_t
 {
-    uint8_t create:1;               //<! Allowed to create
-    uint8_t read  :1;               //<! Allowed to read
-    uint8_t update:1;               //<! Allowed to update
-    uint8_t delete:1;               //<! Allowed to delete
+    union {
+        uint8_t num;                        //<! Hexadecimal value representing the bit pattern.
+        struct {
+            uint8_t create:1;               //<! Allowed to create
+            uint8_t read  :1;               //<! Allowed to read
+            uint8_t update:1;               //<! Allowed to update
+            uint8_t delete:1;               //<! Allowed to delete
+        };
+    };
 } crud_t;
 
 typedef struct permission_t
 {
-    bool op_and;                    //<! Logical operator to apply when there is a previous match (true=and, false=or).
     crud_t crud;                    //<! Pattern permissions.
     char *pattern;                  //<! Glob pattern (ex. system/**/password).
 } permission_t;
@@ -30,8 +34,6 @@ typedef struct permissions_t
     uint16_t length;                //<! Current length.
     uint16_t capacity;              //<! Reserved memory.
 } permissions_t;
-
-#define CRUD(c, r, u, d) (crud_t){.create = c, .read = r, .update = u, .delete = d}
 
 /**
  * Check if a string is a valid pattern.
@@ -58,16 +60,14 @@ bool permissions_contains(const permissions_t *perms, const char *pattern);
 /**
  * Append a new permission to the end of the list
  * Pattern is not checked for uniqueness.
- * Takes care of list resize if required.
  * 
  * @param[in] perms Permissions list.
  * @param[in] pattern Pattern to add.
  * @param[in] crud Pattern crud.
- * @param[in] op_and Logical operator (true=and, false=or).
  * @return true on success.
  * @return false otherwise or error.
  */
-bool permissions_append(permissions_t *perms, const char *pattern, crud_t crud, bool op_and);
+bool permissions_append(permissions_t *perms, const char *pattern, crud_t crud);
 
 /**
  * Dealloc a list of permissions.
@@ -80,11 +80,8 @@ void permissions_free(permissions_t *perms);
 /**
  * Get path permissions.
  * 
- * At startup, path has no permissions (----).
- * Checks sequentially all patterns.
- * On a pattern match:
- *   - First match -> assigns pattern permissions
- *   - Subsequent matchs -> permissions combined using logical operator
+ * Returns the crud corresponding to the first match.
+ * If no match returns the empty crud (0).
  * 
  * @param[in] perms Permissions list.
  * @param[in] path Path to check.

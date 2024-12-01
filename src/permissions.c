@@ -9,30 +9,6 @@
 #define MAX_PATTERN_LENGTH 256
 #define FACTOR 2
 
-static crud_t crud_and(crud_t lhs, crud_t rhs)
-{
-    uint8_t ret = (*((uint8_t *) &lhs) & *((uint8_t *) &rhs));
-    return *((crud_t *) &ret);
-    // return (crud_t){
-    //     .create = lhs.create & rhs.create,
-    //     .read   = lhs.read   & rhs.read,
-    //     .update = lhs.update & rhs.update,
-    //     .delete = lhs.delete & rhs.delete,
-    // };
-}
-
-static crud_t crud_or(crud_t lhs, crud_t rhs)
-{
-    uint8_t ret = (*((uint8_t *) &lhs) | *((uint8_t *) &rhs));
-    return *((crud_t *) &ret);
-    // return (crud_t){
-    //     .create = lhs.create | rhs.create,
-    //     .read   = lhs.read   | rhs.read,
-    //     .update = lhs.update | rhs.update,
-    //     .delete = lhs.delete | rhs.delete
-    // };
-}
-
 static bool is_valid_permissions(const permissions_t *perms)
 {
     if (!perms)
@@ -80,7 +56,7 @@ bool permissions_contains(const permissions_t *perms, const char *pattern)
     return false;
 }
 
-bool permissions_append(permissions_t *perms, const char *pattern, crud_t crud, bool op_and)
+bool permissions_append(permissions_t *perms, const char *pattern, crud_t crud)
 {
     if (!is_valid_permissions(perms) || !is_valid_pattern(pattern))
         return false;
@@ -103,7 +79,6 @@ bool permissions_append(permissions_t *perms, const char *pattern, crud_t crud, 
         return false;
 
     perms->data[perms->length].crud = crud;
-    perms->data[perms->length].op_and = op_and;
     perms->length++;
 
     return true;
@@ -119,7 +94,7 @@ void permissions_free(permissions_t *perms)
         for (size_t i = 0; i < perms->length; i++) {
             free(perms->data[i].pattern);
             perms->data[i].pattern = NULL;
-            perms->data[i].crud = CRUD(0,0,0,0);
+            perms->data[i].crud = (crud_t){0};
         }
 
         free(perms->data);
@@ -130,26 +105,14 @@ void permissions_free(permissions_t *perms)
 
 crud_t permissions_check(const permissions_t *perms, const char *path)
 {
-    crud_t crud = CRUD(0,0,0,0);
-    uint16_t num_matches = 0;
-
     if (!is_valid_permissions(perms) || !path) {
         assert(false);
-        return crud;
+        return (crud_t){0};
     }
 
     for (size_t i = 0; i < perms->length; i++)
-    {
         if (glob_match(path, perms->data[i].pattern))
-        {
-            if (num_matches == 0 || !perms->data[i].op_and)
-                crud = crud_or(crud, perms->data[i].crud);
-            else
-                crud = crud_and(crud, perms->data[i].crud);
+            return perms->data[i].crud;
 
-            num_matches++;
-        }
-    }
-
-    return crud;
+    return (crud_t){0};
 }

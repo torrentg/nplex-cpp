@@ -1,4 +1,2 @@
 * Add permissions to transaction_writer_new
 * Add permissions to transaction_reader_new
-* Add anonymous union in crud_t allowing to set crud by number
-* permissions_check() stops at first match

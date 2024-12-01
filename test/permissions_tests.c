@@ -5,19 +5,18 @@
 // gcc -std=c11 -g -Wall -Wextra -D_DEFAULT_SOURCE -DRUNNING_ON_VALGRIND -I../src -I../deps -o permissions_tests permissions_tests.c ../deps/match.c ../src/permissions.c
 // valgrind --tool=memcheck --leak-check=yes ./permissions_tests
 
-#define OP_AND 1
-#define OP_OR 0
+#define CRUD(c, r, u, d) (crud_t){.create = c, .read = r, .update = u, .delete = d}
 
 static permission_t list[] = {
-    { OP_AND, CRUD(false, false, false, false), "**" },                         // remove all permissions (this is the default)
-    { OP_AND, CRUD(false, false, false, false), "system/**" },                  // system directory is not accessible
-    { OP_OR,  CRUD(false, true , false, false), "system/user/jdoe/**" },        // user jdoe can read his data
-    { OP_AND, CRUD(false, false, false, false), "system/user/jdoe/password" },  // user jdoe can not read his password
-    { OP_OR,  CRUD(false, true , false, false), "system/user/*/status" },       // user jdoe can access other users status (only read)
-    { OP_OR,  CRUD(false, true , true , false), "energy/**" },                  // user jdoe can read/update all energy entries
-    { OP_OR,  CRUD(false, true , false, false), "tracks/**" },                  // user jdoe can read all track entries
-    { OP_AND, CRUD(false, true , true , false), "tracks/t001/value" },          // user jdoe can update track1.value
-    { OP_OR,  CRUD(false, true , false, false), "alarms/**" },                  // user jdoe can do anything under alarms
+    { CRUD(false, true , true , false), "energy/**" },                  // user jdoe can read/update all energy entries
+    { CRUD(true , true , true , true ), "alarms/**" },                  // user jdoe can do anything under alarms
+    { CRUD(false, true , true , false), "tracks/t001/value" },          // user jdoe can read/update track1.value
+    { CRUD(false, true , false, false), "tracks/**" },                  // user jdoe can read all track entries
+    { CRUD(false, false, false, false), "system/user/jdoe/password" },  // user jdoe can not read his password
+    { CRUD(false, true , false, false), "system/user/jdoe/**" },        // user jdoe can read his data
+    { CRUD(false, true , false, false), "system/user/*/status" },       // user jdoe can access other users status (only read)
+    { CRUD(false, true,  false, false), "system/server/**" },           // user jdoe can read servers entries
+    { CRUD(false, false, false, false), "system/**" },                  // system directory is not accessible
 };
 
 static void test_match(void)
@@ -253,20 +252,19 @@ static void test_permissions(void)
     TEST_CHECK(perms.capacity == 0);
     TEST_CHECK(perms.data == 0);
 
-    TEST_CHECK(!permissions_append(NULL, "perm", CRUD(0,0,0,0), true));
-    TEST_CHECK(!permissions_append(&perms, NULL, CRUD(0,0,0,0), true));
-    TEST_CHECK(!permissions_append(&perms, "", CRUD(0,0,0,0), true));
+    TEST_CHECK(!permissions_append(NULL, "perm", (crud_t){0}));
+    TEST_CHECK(!permissions_append(&perms, NULL, (crud_t){0}));
+    TEST_CHECK(!permissions_append(&perms, "", (crud_t){0}));
 
     for (size_t i = 0; i < sizeof(list)/sizeof(list[0]); i++) 
     {
-        TEST_CHECK(permissions_append(&perms, list[i].pattern, list[i].crud, list[i].op_and));
+        TEST_CHECK(permissions_append(&perms, list[i].pattern, list[i].crud));
         TEST_CHECK(perms.length == i + 1);
         TEST_CHECK(perms.capacity >= i + 1);
         TEST_CHECK(perms.data);
         TEST_CHECK(*((uint8_t *) &perms.data[i].crud) == *((uint8_t *) &list[i].crud));
         TEST_CHECK(perms.data[i].pattern);
         TEST_CHECK(strcmp(perms.data[i].pattern, list[i].pattern) == 0);
-        TEST_CHECK(perms.data[i].op_and == list[i].op_and);
     }
 
     for (size_t i = 0; i < sizeof(list)/sizeof(list[0]); i++)
@@ -275,6 +273,14 @@ static void test_permissions(void)
     TEST_CHECK(!permissions_contains(&perms, ""));
     TEST_CHECK(!permissions_contains(&perms, "unknow/permission"));
     TEST_CHECK(!permissions_contains(&perms, "tracks/t002/value"));
+
+    TEST_CHECK(permissions_check(&perms, "").num == 0);
+    TEST_CHECK(permissions_check(&perms, "xxx").num == 0);
+    TEST_CHECK(permissions_check(&perms, "energy").num == 0);
+    TEST_CHECK(permissions_check(&perms, "energy/ss043/watts").num == 6);
+    TEST_CHECK(permissions_check(&perms, "alarms/00042/level").num == 15);
+    TEST_CHECK(permissions_check(&perms, "tracks/t001/value").num == 6);
+    TEST_CHECK(permissions_check(&perms, "tracks/t001/units").num == 2);
 
     permissions_free(&perms);
 

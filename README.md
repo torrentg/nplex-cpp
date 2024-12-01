@@ -1,17 +1,19 @@
 # nplex
 
 TODO
+
 ## Features
 
 TODO
 
 ## Building
 
-```
+```bash
 cd build
 cmake -DENABLE_SANITIZERS=ON ..
 make VERBOSE=1
 ctest -V
+valgrind --tool=memcheck --leak-check=yes test/permissions_tests
 ```
 
 ## Dependencies
