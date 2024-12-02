@@ -13,7 +13,7 @@ typedef struct transaction_writer_t
     format_e format;
     yyjson_alc *json_allocator;
     yyjson_mut_doc *json_doc;
-    buf_t xdr_str;
+    buf_t xdr_buf;
 } transaction_writer_t;
 
 typedef struct transaction_reader_t
@@ -30,26 +30,44 @@ void tx_entry_reset(tx_entry_t *tx_entry)
     free(tx_entry->key);
     tx_entry->key = NULL;
 
-    free(tx_entry->value.data);
-    tx_entry->value.data = NULL;
+    buf_reset(&tx_entry->value);
 
     *tx_entry = (tx_entry_t){0};
+}
+
+void transaction_clear(transaction_t *tx)
+{
+    if (!tx)
+        return;
+
+    free(tx->user);
+    tx->user = NULL;
+
+    if (tx->entries.data != NULL)
+    {
+        for (size_t i = 0; i < tx->entries.length; i++)
+            tx_entry_reset(&tx->entries.data[i]);
+
+        tx->entries.length = 0;
+    }
+    else
+    {
+        buf_reset((buf_t *) &tx->entries);
+    }
+
+    tx->rev = 0;
+    tx->timestamp = 0;
+    tx->type = 0;
+    tx->mode = TX_MODE_UNKNOW;
 }
 
 void transaction_reset(transaction_t *tx)
 {
     if (!tx)
         return;
-    
-    free(tx->user);
 
-    if (tx->entries != NULL)
-    {
-        for (size_t i = 0; i < tx->num_entries; i++)
-            tx_entry_reset(&tx->entries[i]);
-    
-        free(tx->entries);
-    }
+    transaction_clear(tx);
+    buf_reset((buf_t *) &tx->entries);
 
     *tx = (transaction_t){0};
 }
@@ -89,7 +107,7 @@ void transaction_writer_free(transaction_writer_t *writer)
     yyjson_alc_dyn_free(writer->json_allocator);
     writer->json_allocator = NULL;
 
-    buf_reset(&writer->xdr_str);
+    buf_reset(&writer->xdr_buf);
 
     free(writer);
 }
@@ -136,17 +154,17 @@ static bool transaction_writer_serialize_xdr(transaction_writer_t *writer, const
     XDR xdrs = {0};
     unsigned int len = xdr_sizeof((xdrproc_t) xdr_transaction, (void *) tx);
     bool ret = false;
-    
-    writer->xdr_str.length = 0;
 
-    if (!buf_reserve(&writer->xdr_str, len))
+    writer->xdr_buf.length = 0;
+
+    if (!buf_reserve(&writer->xdr_buf, len, sizeof(char)))
         return false;
 
-    xdrmem_create(&xdrs, writer->xdr_str.data, len, XDR_ENCODE);
+    xdrmem_create(&xdrs, writer->xdr_buf.data, len, XDR_ENCODE);
 
     if (xdr_transaction(&xdrs, (void *) tx)) {
-        writer->xdr_str.length = len;
-        *buf = writer->xdr_str;
+        writer->xdr_buf.length = len;
+        *buf = writer->xdr_buf;
         ret = true;
     }
 
@@ -157,7 +175,7 @@ static bool transaction_writer_serialize_xdr(transaction_writer_t *writer, const
 
 bool transaction_writer_serialize(transaction_writer_t *writer, const transaction_t *tx, buf_t *ret)
 {
-    if (!writer || !tx || !ret || (tx->entries == NULL && tx->num_entries != 0))
+    if (!writer || !tx || !ret || !buf_is_valid((buf_t *) &tx->entries))
         return false;
 
     *ret = (buf_t){0};
@@ -253,7 +271,7 @@ bool transaction_reader_deserialize(transaction_reader_t *reader, const buf_t *b
     if (!reader || !buf || !tx || !buf->data)
         return false;
 
-    transaction_reset(tx);
+    transaction_clear(tx);
 
     switch (reader->format)
     {

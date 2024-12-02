@@ -4,6 +4,8 @@
 // gcc -march=native -std=c11 -g -Wall -Wextra -D_DEFAULT_SOURCE -DRUNNING_ON_VALGRIND -I../src -I../deps -o utils_tests utils_tests.c ../src/utils.c
 // valgrind --tool=memcheck --leak-check=yes ./utils_tests
 
+DECL_BUF_T(uint64_t) uint64_buf_t;
+
 static void test_iso8601_conversions(void)
 {
     char buffer[25] = {0};
@@ -101,63 +103,82 @@ static void test_is_utf8(void)
     TEST_CHECK(!is_utf8(buffer, 8));
 }
 
-static void test_buf_functions(void)
+static void test_buf_type(buf_t *buf, size_t size)
 {
-    buf_t buf = {0};
-    char *ptr = NULL;
+    const void *ptr = NULL;
+    char data[3*1024] = {0};
 
-    buf_reset(&buf);
-    TEST_CHECK(buf.data == NULL);
-    TEST_CHECK(buf.length == 0);
-    TEST_CHECK(buf.capacity == 0);
+    for (size_t i = 0; i < sizeof(data); i++)
+        data[i] = '0' + i;
 
-    TEST_CHECK(buf_reserve(&buf, 14));
-    TEST_CHECK(buf.data != NULL);
-    TEST_CHECK(buf.length == 0);
-    TEST_CHECK(buf.capacity == 14);
+    buf_reset(buf);
+    TEST_CHECK(buf->data == NULL);
+    TEST_CHECK(buf->length == 0);
+    TEST_CHECK(buf->capacity == 0);
 
-    ptr = buf.data;
-    TEST_CHECK(buf_append(&buf, "1234567890", 10));
-    TEST_CHECK(buf.data == ptr);
-    TEST_CHECK(buf.length == 10);
-    TEST_CHECK(buf.capacity == 14);
+    TEST_CHECK(buf_reserve(buf, 14, size));
+    TEST_CHECK(buf->data != NULL);
+    TEST_CHECK(buf->length == 0);
+    TEST_CHECK(buf->capacity == 14);
 
-    TEST_CHECK(buf_reserve(&buf, 3));
-    TEST_CHECK(buf.data == ptr);
-    TEST_CHECK(buf.length == 10);
-    TEST_CHECK(buf.capacity == 14);
+    ptr = buf->data;
+    TEST_CHECK(buf_append(buf, data, 10, size));
+    TEST_CHECK(buf->data == ptr);
+    TEST_CHECK(buf->length == 10);
+    TEST_CHECK(buf->capacity == 14);
 
-    TEST_CHECK(buf_append(&buf, "1234567890", 10));
-    TEST_CHECK(buf.data != NULL);
-    TEST_CHECK(buf.length == 20);
-    TEST_CHECK(buf.capacity == 28);
+    TEST_CHECK(buf_reserve(buf, 3, size));
+    TEST_CHECK(buf->data == ptr);
+    TEST_CHECK(buf->length == 10);
+    TEST_CHECK(buf->capacity == 14);
 
-    buf_reset(&buf);
-    TEST_CHECK(buf.data == NULL);
-    TEST_CHECK(buf.length == 0);
-    TEST_CHECK(buf.capacity == 0);
+    TEST_CHECK(buf_append(buf, data, 10, size));
+    TEST_CHECK(buf->data != NULL);
+    TEST_CHECK(buf->length == 20);
+    TEST_CHECK(buf->capacity == 28);
 
-    TEST_CHECK(buf_append(&buf, "1234567890", 10));
-    TEST_CHECK(buf.data != NULL);
-    TEST_CHECK(buf.length == 10);
-    TEST_CHECK(buf.capacity == 10);
+    buf_reset(buf);
+    TEST_CHECK(buf->data == NULL);
+    TEST_CHECK(buf->length == 0);
+    TEST_CHECK(buf->capacity == 0);
 
-    buf_reset(&buf);
-    TEST_CHECK(buf.data == NULL);
-    TEST_CHECK(buf.length == 0);
-    TEST_CHECK(buf.capacity == 0);
+    TEST_CHECK(buf_append(buf, data, 10, size));
+    TEST_CHECK(buf->data != NULL);
+    TEST_CHECK(buf->length == 10);
+    TEST_CHECK(buf->capacity == 10);
+
+    buf_reset(buf);
+    TEST_CHECK(buf->data == NULL);
+    TEST_CHECK(buf->length == 0);
+    TEST_CHECK(buf->capacity == 0);
 
     // buf_append errors
-    TEST_CHECK(!buf_append(NULL, "1234567890", 10));
-    TEST_CHECK(!buf_append(&buf, NULL, 10));
+    TEST_CHECK(!buf_is_valid(NULL));
+    TEST_CHECK(!buf_append(NULL, data, 10, size));
+    TEST_CHECK(!buf_append(buf, NULL, 10, size));
 
-    // corrupted object
-    buf_t bad = (buf_t){ .data = NULL, .length = 0, .capacity = 10 };
-    TEST_CHECK(!buf_reserve(&bad, 1));
-    TEST_CHECK(!buf_append(&bad, "1234567890", 10));
-    bad = (buf_t){ .data = NULL, .length = 10, .capacity = 0 };
-    TEST_CHECK(!buf_reserve(&bad, 1));
-    TEST_CHECK(!buf_append(&bad, "1234567890", 10));
+    // corrupted object (NULL data and capacity > 0)
+    *buf = (buf_t){ .data = NULL, .length = 0, .capacity = 10 };
+    TEST_CHECK(!buf_is_valid(buf));
+    TEST_CHECK(!buf_reserve(buf, 1, size));
+    TEST_CHECK(!buf_append(buf, data, 10, size));
+
+    // corrupted object (length > capacity)
+    *buf = (buf_t){ .data = NULL, .length = 10, .capacity = 0 };
+    TEST_CHECK(!buf_is_valid(buf));
+    TEST_CHECK(!buf_reserve(buf, 1, size));
+    TEST_CHECK(!buf_append(buf, data, 10, size));
+
+    *buf = (buf_t){0};
+}
+
+static void test_buf_functions(void)
+{
+    char_buf_t buf1 = {0};
+    test_buf_type((buf_t *) &buf1, sizeof(char));
+
+    uint64_buf_t buf2 = {0};
+    test_buf_type((buf_t *) &buf2, sizeof(uint64_t));
 }
 
 TEST_LIST = {

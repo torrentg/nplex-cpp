@@ -3,6 +3,7 @@
 
 #include <stdint.h>
 #include <stdbool.h>
+#include "utils.h"
 
 /**
  * @file
@@ -28,12 +29,7 @@ typedef struct permission_t
     char *pattern;                  //<! Glob pattern (ex. system/**/password).
 } permission_t;
 
-typedef struct permissions_t
-{
-    permission_t *data;             //<! Permissions list.
-    uint16_t length;                //<! Current length.
-    uint16_t capacity;              //<! Reserved memory.
-} permissions_t;
+DECL_BUF_T(permission_t) permissions_t;
 
 /**
  * Check if a string is a valid pattern.

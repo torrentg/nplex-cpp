@@ -28,7 +28,8 @@
     "stdint.h": "c",
     "cstdlib": "c",
     "xdr_funcs.h": "c",
-    "xdr.h": "c"
+    "xdr.h": "c",
+    "permissions.h": "c"
   },
   "C_Cpp.default.cStandard": "c17",
   "C_Cpp.default.includePath": [

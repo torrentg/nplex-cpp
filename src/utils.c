@@ -139,41 +139,41 @@ bool is_utf8(const char *str, size_t len)
     return validate_utf8_fast(str, len);
 }
 
-static bool buf_is_valid(const buf_t *buf)
+bool buf_is_valid(const buf_t *buf)
 {
     return (buf && buf->length <= buf->capacity && (buf->capacity == 0 || buf->data));
 }
 
-bool buf_reserve(buf_t *buf, uint32_t size)
+bool buf_reserve(buf_t *buf, uint32_t len, size_t size)
 {
     if (!buf_is_valid(buf))
         return false;
 
-    if (buf->capacity >= size)
+    if (buf->capacity >= len)
         return true;
 
     if (buf->capacity == 0)
     {
         free(buf->data);
 
-        if ((buf->data = malloc(size)) == NULL)
+        if ((buf->data = malloc(len * size)) == NULL)
             return false;
 
-        buf->capacity = size;
+        buf->capacity = len;
         return true;
     }
 
     size_t capacity = buf->capacity;
 
-    while (capacity < size)
+    while (capacity < len)
     {
         capacity *= BUF_GROWTH_FACTOR;
 
         if (capacity > UINT32_MAX)
-            capacity = size;
+            capacity = len;
     }
 
-    char *ptr = realloc(buf->data, capacity);
+    void *ptr = realloc(buf->data, capacity * size);
 
     if (unlikely(!ptr))
         return false;
@@ -188,14 +188,14 @@ void buf_reset(buf_t *buf)
 {
     if (!buf)
         return;
-    
+
     if (buf->data)
         free(buf->data);
-    
+
     *buf = (buf_t){0};
 }
 
-bool buf_append(buf_t *buf, const char *str, uint32_t len)
+bool buf_append(buf_t *buf, const void *ptr, uint32_t len, size_t size)
 {
     if (!buf_is_valid(buf))
         return false;
@@ -203,13 +203,13 @@ bool buf_append(buf_t *buf, const char *str, uint32_t len)
     if (len == 0)
         return true;
 
-    if (!str || buf->length + len <= buf->length) // length overflow
+    if (!ptr || buf->length + len <= buf->length) // length overflow
         return false;
 
-    if (!buf_reserve(buf, buf->length + len))
+    if (!buf_reserve(buf, buf->length + len, size))
         return false;
 
-    memcpy(buf->data + buf->length, str, len);
+    memcpy((char *) buf->data + (size * buf->length), ptr, len * size);
     buf->length += len;
 
     return true;

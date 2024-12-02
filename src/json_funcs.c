@@ -130,9 +130,9 @@ yyjson_mut_val * json_serialize_transaction(yyjson_mut_doc *doc, const transacti
     if (unlikely((entries = yyjson_mut_obj_add_arr(doc, obj, JSON_KEY_ENTRIES)) == NULL))
         return NULL;
 
-    for (uint32_t i = 0; i < tx->num_entries; i++)
+    for (uint32_t i = 0; i < tx->entries.length; i++)
     {
-        yyjson_mut_val *entry = json_serialize_tx_entry(doc, &tx->entries[i]);
+        yyjson_mut_val *entry = json_serialize_tx_entry(doc, &tx->entries.data[i]);
 
         if (unlikely(!entry))
             return NULL;
@@ -215,7 +215,7 @@ bool json_deserialize_transaction(yyjson_val *obj, transaction_t *tx)
     yyjson_val *value = NULL;
     yyjson_val *entries = NULL;
 
-    transaction_reset(tx);
+    transaction_clear(tx);
 
     if (!yyjson_is_obj(obj))
         return NULL;
@@ -262,25 +262,27 @@ bool json_deserialize_transaction(yyjson_val *obj, transaction_t *tx)
 
     uint32_t num_entries = yyjson_arr_size(entries);
 
-    if ((tx->entries = calloc(num_entries, sizeof(tx_entry_t))) == NULL)
+    if (!buf_reserve((buf_t *) &tx->entries, num_entries, sizeof(tx_entry_t)))
         goto JSON_DESERIALIZE_TRANSACTION_ERROR;
 
     for (uint32_t i = 0; i < num_entries; i++)
     {
         yyjson_val *entry = yyjson_arr_get(entries, i);
+        tx_entry_t tx_entry = {0};
 
         if (!entry || !yyjson_is_obj(entry))
             goto JSON_DESERIALIZE_TRANSACTION_ERROR;
 
-        if (!json_deserialize_tx_entry(entry, &tx->entries[i]))
+        if (!json_deserialize_tx_entry(entry, &tx_entry))
             goto JSON_DESERIALIZE_TRANSACTION_ERROR;
 
-        tx->num_entries++;
+        if (!buf_append((buf_t *) &tx->entries, &tx_entry, 1, sizeof(tx_entry_t)))
+            goto JSON_DESERIALIZE_TRANSACTION_ERROR;
     }
 
     return true;
 
 JSON_DESERIALIZE_TRANSACTION_ERROR:
-    transaction_reset(tx);
+    transaction_clear(tx);
     return false;
 }

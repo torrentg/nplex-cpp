@@ -1,4 +1,6 @@
+#include <assert.h>
 #include <string.h>
+#include "utils.h"
 #include "xdr_funcs.h"
 
 /*
@@ -90,13 +92,17 @@ bool_t xdr_transaction (XDR *xdrs, transaction_t *objp)
     if (!xdr_tx_mode (xdrs, &objp->mode))
         return FALSE;
 
-    unsigned int num_entries = (unsigned int) objp->num_entries;
+    unsigned int num_entries = (unsigned int) objp->entries.length;
 
-    if (!xdr_array(xdrs, (char **) &objp->entries, &num_entries, UINT32_MAX, sizeof(tx_entry_t), (xdrproc_t) xdr_tx_entry))
+    if (!xdr_array(xdrs, (char **) &objp->entries.data, &num_entries, UINT32_MAX, sizeof(tx_entry_t), (xdrproc_t) xdr_tx_entry))
         return FALSE;
 
-    if (xdrs->x_op == XDR_DECODE)
-        objp->num_entries = (uint32_t) num_entries;
+    if (xdrs->x_op == XDR_DECODE) {
+        objp->entries.capacity = (uint32_t) num_entries;
+        objp->entries.length = (uint32_t) num_entries;
+    }
+
+    assert(buf_is_valid((buf_t *) &objp->entries));
 
     return TRUE;
 }

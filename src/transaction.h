@@ -2,6 +2,7 @@
 #define TRANSACTION_H
 
 #include "nplex.h"
+#include "utils.h"
 
 /**
  * @file
@@ -35,13 +36,14 @@ typedef struct tx_entry_t
     tx_action_e action;                 //!< Entry action (upsert | delete | check).
 } tx_entry_t;
 
+DECL_BUF_T(tx_entry_t) tx_entries_t;
+
 typedef struct transaction_t
 {
     rev_t rev;                          //!< Revision (case1: user data rev, case2+case3: transaction rev).
     char *user;                         //!< Creator (case1: unused, case1+case3: mandatory, max length = 255).
     uint64_t timestamp;                 //!< Creation time (case1: unused, case1+case3: mandatory).
-    tx_entry_t *entries;                 //!< Entries (order matters).
-    uint32_t num_entries;               //!< Number of entries.
+    tx_entries_t entries;               //!< Transaction entries (order matters).
     uint16_t type;                      //!< Type (user-defined, optional, 0 is the default value).
     tx_mode_e mode;                     //!< Transaction mode (optional, serial is the default value).
 } transaction_t;
@@ -64,6 +66,14 @@ void tx_entry_reset(tx_entry_t *tx_entry);
  * @param[in] tx Transaction to reset.
  */
 void transaction_reset(transaction_t *tx);
+
+/**
+ * Clear transaction data.
+ * Entries array is not deallocated.
+ * 
+ * @param[in] tx Transaction to clear.
+ */
+void transaction_clear(transaction_t *tx);
 
 /**
  * Creates a transaction writer.

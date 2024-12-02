@@ -47,15 +47,48 @@ bool millis_to_iso8601(uint64_t millis, char *buffer, size_t len);
 bool is_utf8(const char *str, size_t len);
 
 /**
- * Ensure buffer capacity.
- * Does nothing if capacity is greater than requested size.
- * Otherwise reserve enough memory granting the requested size.
+ * Macros used to create a typed buf_t (ex. char_buf_t).
+ */
+#define DECL_BUF_T(type)      \
+typedef struct {              \
+    type *data;               \
+    uint32_t length;          \
+    uint32_t capacity;        \
+}
+
+DECL_BUF_T(char) char_buf_t;
+
+/**
+ * Check if buffer content is valid.
+ * 
+ * @param[in] bu Buffer object to check.
+ * @return true = valid buf_t obejct, false = invalid buffer.
+ */
+bool buf_is_valid(const buf_t *buf);
+
+/**
+ * Ensures buffer capacity.
+ * It does nothing if current capacity covers length request.
+ * Otherwise  grants the requested size increasing and reallocating memory.
  * 
  * @param[in] buf Buffer to update.
- * @param[in] size Bytes to reserve.
+ * @param[in] len Number of elements to reserve.
+ * @param[in] size Sizeof of each element.
  * @return true = success, false = error (not enough memory).
  */
-bool buf_reserve(buf_t *buf, uint32_t size);
+bool buf_reserve(buf_t *buf, uint32_t len, size_t size);
+
+/**
+ * Append data to buffer.
+ * Reallocs mem if required.
+ * 
+ * @param[in] buf Buffer to update.
+ * @param[in] ptr Elements to add.
+ * @param[in] len Number of elements to add.
+ * @param[in] size Sizeof of each element.
+ * @return true = success, false = error (not enough memory).
+ */
+bool buf_append(buf_t *buf, const void *ptr, uint32_t len, size_t size);
 
 /**
  * Resets a buffer.
@@ -64,16 +97,5 @@ bool buf_reserve(buf_t *buf, uint32_t size);
  * @param[in] buf Buffer to reset.
  */
 void buf_reset(buf_t *buf);
-
-/**
- * Append data to buffer.
- * Realloc mem if required.
- * 
- * @param[in] buf Buffer to update.
- * @param[in] str Content to add.
- * @param[in] len Content length.
- * @return true = success, false = error (not enough memory).
- */
-bool buf_append(buf_t *buf, const char *str, uint32_t len);
 
 #endif

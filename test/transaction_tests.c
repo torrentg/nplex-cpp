@@ -64,14 +64,14 @@ static bool transaction_eq(transaction_t *lhs, transaction_t *rhs)
     if (lhs->mode != rhs->mode)
         return false;
 
-    if (lhs->num_entries != rhs->num_entries)
+    if (lhs->entries.length != rhs->entries.length)
         return false;
 
-    if (lhs->num_entries == 0)
+    if (lhs->entries.length == 0)
         return true;
 
-    for (size_t i = 0; i < lhs->num_entries; i++)
-        if (!tx_entry_eq(&lhs->entries[i], &rhs->entries[i]))
+    for (size_t i = 0; i < lhs->entries.length; i++)
+        if (!tx_entry_eq(&lhs->entries.data[i], &rhs->entries.data[i]))
             return false;
 
     return true;
@@ -105,8 +105,7 @@ static void test_transaction_format_ok(format_e format)
         .timestamp = 1732791529411,
         .type = 15,
         .mode = TX_MODE_DIRTY,
-        .num_entries = 7,
-        .entries = entries
+        .entries = (tx_entries_t) { .data = entries, .length = 7, .capacity = 7 }
     };
     transaction_t tx2 = {0};
 
@@ -118,6 +117,12 @@ static void test_transaction_format_ok(format_e format)
 
         TEST_CHECK(transaction_reader_deserialize(reader, &buf, &tx2));
         TEST_CHECK(transaction_eq(&tx1, &tx2));
+
+        TEST_CHECK(tx2.entries.data != NULL);
+        TEST_CHECK(tx2.entries.length == 7);
+        transaction_clear(&tx2);
+        TEST_CHECK(tx2.entries.data != NULL);
+        TEST_CHECK(tx2.entries.length == 0);
 
         transaction_reset(&tx2);
     }
@@ -157,15 +162,14 @@ static void test_transaction_format_ko(format_e format)
         .timestamp = 1732791529411,
         .type = 15,
         .mode = TX_MODE_DIRTY,
-        .num_entries = 7,
-        .entries = entries
+        .entries = (tx_entries_t) { .data = entries, .length = 7, .capacity = 7 }
     };
 
     // try to encode an invalid transaction (key with NULL)
     TEST_CHECK(!transaction_writer_serialize(writer, &tx1, &buf));
 
     // try to encode an invalid transaction (num_entries > 0 and entries = NULL)
-    tx1.entries = NULL;
+    tx1.entries = (tx_entries_t) { .data = NULL, .length = 7, .capacity = 7 };
     TEST_CHECK(!transaction_writer_serialize(writer, &tx1, &buf));
 
     // trying to decode garbage

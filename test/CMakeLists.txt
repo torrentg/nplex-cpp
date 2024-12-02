@@ -43,6 +43,7 @@ add_test(
 add_executable(
     permissions_tests
     ${DEPS_DIR}/match.c
+    ${SRC_DIR}/utils.c
     ${SRC_DIR}/permissions.c
     ${TEST_DIR}/permissions_tests.c
 )

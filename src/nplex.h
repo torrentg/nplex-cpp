@@ -42,7 +42,7 @@ typedef struct string_t {
 } string_t;
 
 typedef struct buf_t {
-    char *data;
+    void *data;
     uint32_t length;
     uint32_t capacity;
 } buf_t;

@@ -9,20 +9,6 @@
 #define MAX_PATTERN_LENGTH 256
 #define FACTOR 2
 
-static bool is_valid_permissions(const permissions_t *perms)
-{
-    if (!perms)
-        return false;
-
-    if (perms->length > perms->capacity)
-        return false;
-
-    if (perms->length > 0 && !perms->data)
-        return false;
-
-    return true;
-}
-
 bool is_valid_pattern(const char *pattern)
 {
     if (!pattern)
@@ -42,7 +28,7 @@ bool is_valid_pattern(const char *pattern)
 
 bool permissions_contains(const permissions_t *perms, const char *pattern)
 {
-    if (!is_valid_permissions(perms) || !is_valid_pattern(pattern))
+    if (!buf_is_valid((buf_t *) perms) || !is_valid_pattern(pattern))
         return false;
 
     for (size_t i = 0; i < perms->length; i++)
@@ -56,30 +42,30 @@ bool permissions_contains(const permissions_t *perms, const char *pattern)
     return false;
 }
 
+static void permission_reset(permission_t *perm)
+{
+    if (!perm)
+        return;
+
+    free(perm->pattern);
+
+    *perm = (permission_t){0};
+}
+
 bool permissions_append(permissions_t *perms, const char *pattern, crud_t crud)
 {
-    if (!is_valid_permissions(perms) || !is_valid_pattern(pattern))
+    if (!buf_is_valid((buf_t *) perms) || !is_valid_pattern(pattern))
         return false;
 
-    if (perms->length == perms->capacity)
-    {
-        uint16_t capacity = (perms->capacity == 0 ? INITIAL_LENGTH : (uint16_t)(FACTOR * perms->capacity));
-        permission_t *data = reallocarray(perms->data, capacity, sizeof(permission_t));
-        if (!data)
-            return false;
+    permission_t perm = {
+        .crud = crud,
+        .pattern = strdup(pattern)
+    };
 
-        perms->data = data;
-        perms->capacity = capacity;
+    if (!perm.pattern || !buf_append((buf_t *) perms, &perm, 1, sizeof(permission_t))) {
+        permission_reset(&perm);
+        return false;
     }
-
-    assert(perms->capacity > perms->length);
-
-    perms->data[perms->length].pattern = strdup(pattern);
-    if (!perms->data[perms->length].pattern)
-        return false;
-
-    perms->data[perms->length].crud = crud;
-    perms->length++;
 
     return true;
 }
@@ -89,23 +75,17 @@ void permissions_free(permissions_t *perms)
     if (!perms)
         return;
 
-    if (perms->data)
-    {
-        for (size_t i = 0; i < perms->length; i++) {
-            free(perms->data[i].pattern);
-            perms->data[i].pattern = NULL;
-            perms->data[i].crud = (crud_t){0};
-        }
-
-        free(perms->data);
+    if (perms->data) {
+        for (size_t i = 0; i < perms->length; i++)
+            permission_reset(&perms->data[i]);
     }
 
-    *perms = (permissions_t){0};
+    buf_reset((buf_t *) perms);
 }
 
 crud_t permissions_check(const permissions_t *perms, const char *path)
 {
-    if (!is_valid_permissions(perms) || !path) {
+    if (!buf_is_valid((buf_t *) perms) || !path) {
         assert(false);
         return (crud_t){0};
     }
