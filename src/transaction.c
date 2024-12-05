@@ -223,7 +223,7 @@ void transaction_reader_free(transaction_reader_t *reader)
     free(reader);
 }
 
-static bool transaction_reader_deserialize_json(transaction_reader_t *reader, const buf_t *buf, transaction_t *tx)
+static bool transaction_reader_deserialize_json(transaction_reader_t *reader, const buf_t *buf, transaction_t *tx, uint32_t *bytes)
 {
     assert(reader->format == FORMAT_JSON);
 
@@ -238,6 +238,8 @@ static bool transaction_reader_deserialize_json(transaction_reader_t *reader, co
     if (!json_deserialize_transaction(root, tx))
         goto DESERIALIZE_JSON_ERROR;
 
+    *bytes = (uint32_t) yyjson_doc_get_read_size(doc);
+
     yyjson_doc_free(doc);
     return true;
 
@@ -246,7 +248,7 @@ DESERIALIZE_JSON_ERROR:
     return false;
 }
 
-static bool transaction_reader_deserialize_xdr(transaction_reader_t *reader, const buf_t *buf, transaction_t *tx)
+static bool transaction_reader_deserialize_xdr(transaction_reader_t *reader, const buf_t *buf, transaction_t *tx, uint32_t *bytes)
 {
     UNUSED(reader);
     assert(reader->format == FORMAT_XDR);
@@ -261,22 +263,30 @@ static bool transaction_reader_deserialize_xdr(transaction_reader_t *reader, con
         *tx = (transaction_t){0};
         ret = false;
     }
+    else {
+        *bytes = (uint32_t) XDR_GETPOS(&xdrs);
+    }
 
     xdr_destroy(&xdrs);
     return ret;
 }
 
-bool transaction_reader_deserialize(transaction_reader_t *reader, const buf_t *buf, transaction_t *tx)
+bool transaction_reader_deserialize(transaction_reader_t *reader, const buf_t *buf, transaction_t *tx, uint32_t *bytes)
 {
     if (!reader || !buf || !tx || !buf->data)
         return false;
 
     transaction_clear(tx);
 
+    uint32_t dummy = 0;
+
+    if (!bytes)
+        bytes = &dummy;
+
     switch (reader->format)
     {
-        case FORMAT_JSON: return transaction_reader_deserialize_json(reader, buf, tx);
-        case FORMAT_XDR: return transaction_reader_deserialize_xdr(reader, buf, tx);
+        case FORMAT_JSON: return transaction_reader_deserialize_json(reader, buf, tx, bytes);
+        case FORMAT_XDR: return transaction_reader_deserialize_xdr(reader, buf, tx, bytes);
         default: return false;
     }
 }

@@ -1,4 +1,3 @@
-
 #include "acutest.h"
 #include "transaction.h"
 
@@ -115,7 +114,7 @@ static void test_transaction_format_ok(format_e format)
         TEST_CHECK(transaction_writer_serialize(writer, &tx1, &buf));
         TEST_ASSERT(buf.data && buf.length > 10);
 
-        TEST_CHECK(transaction_reader_deserialize(reader, &buf, &tx2));
+        TEST_CHECK(transaction_reader_deserialize(reader, &buf, &tx2, NULL));
         TEST_CHECK(transaction_eq(&tx1, &tx2));
 
         TEST_CHECK(tx2.entries.data != NULL);
@@ -175,7 +174,7 @@ static void test_transaction_format_ko(format_e format)
     // trying to decode garbage
     transaction_t tx2 = {0};
     buf = (buf_t){ .data = "garbage", .length = 7, .capacity = 7 };
-    TEST_CHECK(!transaction_reader_deserialize(reader, &buf, &tx2));
+    TEST_CHECK(!transaction_reader_deserialize(reader, &buf, &tx2, NULL));
 
     transaction_writer_free(writer);
     transaction_reader_free(reader);

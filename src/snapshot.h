@@ -22,7 +22,7 @@ typedef struct snapshot_writer_t snapshot_writer_t;
 typedef struct snapshot_reader_t snapshot_reader_t;
 
 /**
- * Reset snapshot object.
+ * Resets a snapshot object.
  * Dealloc memory allocated by the snapshot, no the object itself.
  * 
  * @param[in] snapshot Snapshot object.
@@ -59,7 +59,7 @@ bool snapshot_writer_append(snapshot_writer_t *writer, const transaction_t *tx);
  * @param[in] writer Snapshot writer.
  * @return Serialized snapshot (rev == 0 means error).
  */
-snapshot_t snapshot_writer_get(snapshot_writer_t *writer);
+snapshot_t snapshot_writer_get_snapshot(snapshot_writer_t *writer);
 
 /**
  * Deallocates a snapshot writer object.
@@ -71,11 +71,12 @@ void snapshot_writer_free(snapshot_writer_t *writer);
 /**
  * Creates a snapshot reader.
  * 
- * @param[in] data Serialized data (ownership not transferred).
+ * @param[in] snapshot Serialized data (ownership not transferred).
+ * @param[in] permissions Permissions to apply (ownership is not transferred, can be NULL).
  * @return Snapshot reader,
  *         NULL on error (ex. unrecognized format, corrupted data, etc).
  */
-snapshot_reader_t * snapshot_reader_new(snapshot_t *data);
+snapshot_reader_t * snapshot_reader_new(const snapshot_t *snapshot, const permissions_t *permissions);
 
 /**
  * Check if there is a tx pending to be read.

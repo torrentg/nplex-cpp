@@ -117,10 +117,11 @@ transaction_reader_t * transaction_reader_new(format_e format);
  * @param[in] reader Reader object.
  * @param[in] buf Serialized transaction (ownership not transferred).
  * @param[out] tx Deserialized transaction (ownership transferred).
+ * @param[out] bytes Number of bytes read (can be NULL).
  * @return true = success,
  *         false = error (not enough memory, corrupted data, etc).
  */
-bool transaction_reader_deserialize(transaction_reader_t *reader, const buf_t *buf, transaction_t *tx);
+bool transaction_reader_deserialize(transaction_reader_t *reader, const buf_t *buf, transaction_t *tx, uint32_t *bytes);
 
 /**
  * Deallocates a transaction reader object.

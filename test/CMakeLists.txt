@@ -66,3 +66,21 @@ add_test(
     NAME transaction_tests
     COMMAND $<TARGET_FILE:transaction_tests>
 )
+
+add_executable(
+    snapshot_tests
+    ${DEPS_DIR}/match.c
+    ${DEPS_DIR}/yyjson.c
+    ${DEPS_DIR}/base64.c
+    ${SRC_DIR}/utils.c
+    ${SRC_DIR}/xdr_funcs.c
+    ${SRC_DIR}/json_funcs.c
+    ${SRC_DIR}/transaction.c
+    ${SRC_DIR}/permissions.c
+    ${SRC_DIR}/snapshot.c
+    ${TEST_DIR}/snapshot_tests.c
+)
+add_test(
+    NAME snapshot_tests
+    COMMAND $<TARGET_FILE:snapshot_tests>
+)
