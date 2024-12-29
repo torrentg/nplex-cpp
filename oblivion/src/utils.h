@@ -13,6 +13,7 @@
 
 /**
  * Converts a NUL-ended ISO-8601 formatted string to a timestamp in milliseconds since the epoch.
+ * Mainly based on profile RFC-3339.
  * 
  * This function handles ISO-8601 strings with milliseconds and optional timezone offsets.
  * Any additional leading or trailing characters will be considered an error.
