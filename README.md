@@ -13,27 +13,24 @@ cd build
 cmake -DENABLE_SANITIZERS=ON ..
 make VERBOSE=1
 ctest -V
-valgrind --tool=memcheck --leak-check=yes test/permissions_tests
+valgrind --tool=memcheck --leak-check=yes test/tests
 ```
 
 ## Dependencies
 
 ### Static
 
+* [{fmt}](https://github.com/fmtlib/fmt). A string formatting library. MIT license.
+* [cstring](https://github.com/torrentg/cstring). A C++ immutable C-string with reference counting. LGPL-3.0 license.
+* [cqueue](https://github.com/torrentg/cqueue). A C++20 header-only circular queue container. LGPL-3.0 license.
+* [doctest](https://github.com/doctest/doctest). The fastest feature-rich C++11/14/17/20/23 single-header testing framework. MIT license.
 * [FastGlobbing](https://github.com/Robert-van-Engelen/FastGlobbing). Wildcard string matching and globbing library. CPOL license.
-* [hashmap.c](https://github.com/tidwall/hashmap.c). Hash map implementation in C. MIT license.
-* [rbtree](https://github.com/NLnetLabs/unbound/tree/master/util). Generic red-black tree. BSD-3-Clause license.
-* [fastvalidate-utf-8](https://github.com/lemire/fastvalidate-utf-8). Validate UTF-8 strings at high speeds using SIMD instructions. MIT license.
-* [base64](https://github.com/rafagafe/base64). Base64 is a C library to convert from plain to base64 and vice versa. MIT license.
-* [yyjson](https://github.com/ibireme/yyjson). A high performance JSON library written in ANSI C. MIT license.
-* [journal](https://github.com/torrentg/logdb). A simple log-structured database. MIT license.
-* [acutest](https://github.com/mity/acutest). Another C/C++ Unit Test facility. MIT license.
 
 ### Shared
 
-* [libuv](https://github.com/libuv/libuv). Cross-platform asynchronous I/O. MIT license.
-* [libtirpc](http://git.linux-nfs.org/?p=steved/libtirpc.git;a=summary). Transport independent RPC library. BSD-3-clause license
 * [lz4](https://github.com/lz4/lz4). Extremely fast compression. BSD-2-Clause license.
+* [libuv](https://github.com/libuv/libuv). Cross-platform asynchronous I/O. MIT license.
+* [flatbuffers](https://github.com/google/flatbuffers). Memory efficient serialization library. Apache-2.0 license .
 
 ## Maintainers
 

@@ -6,8 +6,8 @@
                 "${workspaceFolder}/deps",
                 "${workspaceFolder}/src"
             ],
-            "compilerPath": "/usr/lib64/ccache/gcc",
-            "cStandard": "c17",
+            "compilerPath": "/usr/lib64/ccache/g++",
+            "cppStandard": "c++20",
             "intelliSenseMode": "linux-gcc-x64",
             "compilerArgs": [
                 "-Wall",
