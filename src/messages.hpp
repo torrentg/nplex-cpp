@@ -845,8 +845,8 @@ inline ::flatbuffers::Offset<PingRequest> CreatePingRequestDirect(
 
 struct PingResponseT : public ::flatbuffers::NativeTable {
   typedef PingResponse TableType;
-  uint64_t crev = 0;
   uint64_t cid = 0;
+  uint64_t crev = 0;
   std::string payload{};
 };
 
@@ -855,23 +855,23 @@ struct PingResponse FLATBUFFERS_FINAL_CLASS : private ::flatbuffers::Table {
   typedef PingResponseBuilder Builder;
   struct Traits;
   enum FlatBuffersVTableOffset FLATBUFFERS_VTABLE_UNDERLYING_TYPE {
-    VT_CREV = 4,
-    VT_CID = 6,
+    VT_CID = 4,
+    VT_CREV = 6,
     VT_PAYLOAD = 8
   };
-  uint64_t crev() const {
-    return GetField<uint64_t>(VT_CREV, 0);
-  }
   uint64_t cid() const {
     return GetField<uint64_t>(VT_CID, 0);
+  }
+  uint64_t crev() const {
+    return GetField<uint64_t>(VT_CREV, 0);
   }
   const ::flatbuffers::String *payload() const {
     return GetPointer<const ::flatbuffers::String *>(VT_PAYLOAD);
   }
   bool Verify(::flatbuffers::Verifier &verifier) const {
     return VerifyTableStart(verifier) &&
-           VerifyField<uint64_t>(verifier, VT_CREV, 8) &&
            VerifyField<uint64_t>(verifier, VT_CID, 8) &&
+           VerifyField<uint64_t>(verifier, VT_CREV, 8) &&
            VerifyOffset(verifier, VT_PAYLOAD) &&
            verifier.VerifyString(payload()) &&
            verifier.EndTable();
@@ -885,11 +885,11 @@ struct PingResponseBuilder {
   typedef PingResponse Table;
   ::flatbuffers::FlatBufferBuilder &fbb_;
   ::flatbuffers::uoffset_t start_;
-  void add_crev(uint64_t crev) {
-    fbb_.AddElement<uint64_t>(PingResponse::VT_CREV, crev, 0);
-  }
   void add_cid(uint64_t cid) {
     fbb_.AddElement<uint64_t>(PingResponse::VT_CID, cid, 0);
+  }
+  void add_crev(uint64_t crev) {
+    fbb_.AddElement<uint64_t>(PingResponse::VT_CREV, crev, 0);
   }
   void add_payload(::flatbuffers::Offset<::flatbuffers::String> payload) {
     fbb_.AddOffset(PingResponse::VT_PAYLOAD, payload);
@@ -907,12 +907,12 @@ struct PingResponseBuilder {
 
 inline ::flatbuffers::Offset<PingResponse> CreatePingResponse(
     ::flatbuffers::FlatBufferBuilder &_fbb,
-    uint64_t crev = 0,
     uint64_t cid = 0,
+    uint64_t crev = 0,
     ::flatbuffers::Offset<::flatbuffers::String> payload = 0) {
   PingResponseBuilder builder_(_fbb);
-  builder_.add_cid(cid);
   builder_.add_crev(crev);
+  builder_.add_cid(cid);
   builder_.add_payload(payload);
   return builder_.Finish();
 }
@@ -924,14 +924,14 @@ struct PingResponse::Traits {
 
 inline ::flatbuffers::Offset<PingResponse> CreatePingResponseDirect(
     ::flatbuffers::FlatBufferBuilder &_fbb,
-    uint64_t crev = 0,
     uint64_t cid = 0,
+    uint64_t crev = 0,
     const char *payload = nullptr) {
   auto payload__ = payload ? _fbb.CreateString(payload) : 0;
   return nplex::msgs::CreatePingResponse(
       _fbb,
-      crev,
       cid,
+      crev,
       payload__);
 }
 
@@ -1115,8 +1115,8 @@ struct LoadResponse::Traits {
 
 struct CommitResponseT : public ::flatbuffers::NativeTable {
   typedef CommitResponse TableType;
-  uint64_t crev = 0;
   uint64_t cid = 0;
+  uint64_t crev = 0;
   std::unique_ptr<nplex::msgs::TransactionT> transaction{};
   CommitResponseT() = default;
   CommitResponseT(const CommitResponseT &o);
@@ -1129,23 +1129,23 @@ struct CommitResponse FLATBUFFERS_FINAL_CLASS : private ::flatbuffers::Table {
   typedef CommitResponseBuilder Builder;
   struct Traits;
   enum FlatBuffersVTableOffset FLATBUFFERS_VTABLE_UNDERLYING_TYPE {
-    VT_CREV = 4,
-    VT_CID = 6,
+    VT_CID = 4,
+    VT_CREV = 6,
     VT_TRANSACTION = 8
   };
-  uint64_t crev() const {
-    return GetField<uint64_t>(VT_CREV, 0);
-  }
   uint64_t cid() const {
     return GetField<uint64_t>(VT_CID, 0);
+  }
+  uint64_t crev() const {
+    return GetField<uint64_t>(VT_CREV, 0);
   }
   const nplex::msgs::Transaction *transaction() const {
     return GetPointer<const nplex::msgs::Transaction *>(VT_TRANSACTION);
   }
   bool Verify(::flatbuffers::Verifier &verifier) const {
     return VerifyTableStart(verifier) &&
-           VerifyField<uint64_t>(verifier, VT_CREV, 8) &&
            VerifyField<uint64_t>(verifier, VT_CID, 8) &&
+           VerifyField<uint64_t>(verifier, VT_CREV, 8) &&
            VerifyOffset(verifier, VT_TRANSACTION) &&
            verifier.VerifyTable(transaction()) &&
            verifier.EndTable();
@@ -1159,11 +1159,11 @@ struct CommitResponseBuilder {
   typedef CommitResponse Table;
   ::flatbuffers::FlatBufferBuilder &fbb_;
   ::flatbuffers::uoffset_t start_;
-  void add_crev(uint64_t crev) {
-    fbb_.AddElement<uint64_t>(CommitResponse::VT_CREV, crev, 0);
-  }
   void add_cid(uint64_t cid) {
     fbb_.AddElement<uint64_t>(CommitResponse::VT_CID, cid, 0);
+  }
+  void add_crev(uint64_t crev) {
+    fbb_.AddElement<uint64_t>(CommitResponse::VT_CREV, crev, 0);
   }
   void add_transaction(::flatbuffers::Offset<nplex::msgs::Transaction> transaction) {
     fbb_.AddOffset(CommitResponse::VT_TRANSACTION, transaction);
@@ -1181,12 +1181,12 @@ struct CommitResponseBuilder {
 
 inline ::flatbuffers::Offset<CommitResponse> CreateCommitResponse(
     ::flatbuffers::FlatBufferBuilder &_fbb,
-    uint64_t crev = 0,
     uint64_t cid = 0,
+    uint64_t crev = 0,
     ::flatbuffers::Offset<nplex::msgs::Transaction> transaction = 0) {
   CommitResponseBuilder builder_(_fbb);
-  builder_.add_cid(cid);
   builder_.add_crev(crev);
+  builder_.add_cid(cid);
   builder_.add_transaction(transaction);
   return builder_.Finish();
 }
@@ -1775,8 +1775,8 @@ inline PingResponseT *PingResponse::UnPack(const ::flatbuffers::resolver_functio
 inline void PingResponse::UnPackTo(PingResponseT *_o, const ::flatbuffers::resolver_function_t *_resolver) const {
   (void)_o;
   (void)_resolver;
-  { auto _e = crev(); _o->crev = _e; }
   { auto _e = cid(); _o->cid = _e; }
+  { auto _e = crev(); _o->crev = _e; }
   { auto _e = payload(); if (_e) _o->payload = _e->str(); }
 }
 
@@ -1788,13 +1788,13 @@ inline ::flatbuffers::Offset<PingResponse> CreatePingResponse(::flatbuffers::Fla
   (void)_rehasher;
   (void)_o;
   struct _VectorArgs { ::flatbuffers::FlatBufferBuilder *__fbb; const PingResponseT* __o; const ::flatbuffers::rehasher_function_t *__rehasher; } _va = { &_fbb, _o, _rehasher}; (void)_va;
-  auto _crev = _o->crev;
   auto _cid = _o->cid;
+  auto _crev = _o->crev;
   auto _payload = _o->payload.empty() ? 0 : _fbb.CreateString(_o->payload);
   return nplex::msgs::CreatePingResponse(
       _fbb,
-      _crev,
       _cid,
+      _crev,
       _payload);
 }
 
@@ -1881,14 +1881,14 @@ inline ::flatbuffers::Offset<LoadResponse> CreateLoadResponse(::flatbuffers::Fla
 }
 
 inline CommitResponseT::CommitResponseT(const CommitResponseT &o)
-      : crev(o.crev),
-        cid(o.cid),
+      : cid(o.cid),
+        crev(o.crev),
         transaction((o.transaction) ? new nplex::msgs::TransactionT(*o.transaction) : nullptr) {
 }
 
 inline CommitResponseT &CommitResponseT::operator=(CommitResponseT o) FLATBUFFERS_NOEXCEPT {
-  std::swap(crev, o.crev);
   std::swap(cid, o.cid);
+  std::swap(crev, o.crev);
   std::swap(transaction, o.transaction);
   return *this;
 }
@@ -1902,8 +1902,8 @@ inline CommitResponseT *CommitResponse::UnPack(const ::flatbuffers::resolver_fun
 inline void CommitResponse::UnPackTo(CommitResponseT *_o, const ::flatbuffers::resolver_function_t *_resolver) const {
   (void)_o;
   (void)_resolver;
-  { auto _e = crev(); _o->crev = _e; }
   { auto _e = cid(); _o->cid = _e; }
+  { auto _e = crev(); _o->crev = _e; }
   { auto _e = transaction(); if (_e) { if(_o->transaction) { _e->UnPackTo(_o->transaction.get(), _resolver); } else { _o->transaction = std::unique_ptr<nplex::msgs::TransactionT>(_e->UnPack(_resolver)); } } else if (_o->transaction) { _o->transaction.reset(); } }
 }
 
@@ -1915,13 +1915,13 @@ inline ::flatbuffers::Offset<CommitResponse> CreateCommitResponse(::flatbuffers:
   (void)_rehasher;
   (void)_o;
   struct _VectorArgs { ::flatbuffers::FlatBufferBuilder *__fbb; const CommitResponseT* __o; const ::flatbuffers::rehasher_function_t *__rehasher; } _va = { &_fbb, _o, _rehasher}; (void)_va;
-  auto _crev = _o->crev;
   auto _cid = _o->cid;
+  auto _crev = _o->crev;
   auto _transaction = _o->transaction ? CreateTransaction(_fbb, _o->transaction.get(), _rehasher) : 0;
   return nplex::msgs::CreateCommitResponse(
       _fbb,
-      _crev,
       _cid,
+      _crev,
       _transaction);
 }
 

@@ -87,8 +87,8 @@ table PingRequest
 
 table PingResponse
 {
-    crev: uint64;                   // Current database revision
     cid: uint64;                    // Correlation id (pingRequest cid)
+    crev: uint64;                   // Current database revision
     payload: string;                // Payload (same as request)
 }
 
@@ -109,8 +109,8 @@ table LoadResponse
 
 table CommitResponse
 {
-    crev: uint64;                   // Current database revision
     cid: uint64;                    // Correlation id (loadRequest cid)
+    crev: uint64;                   // Current database revision
     transaction: Transaction;       // Transaction (if transaction.rev = crev -> client synced)
 }
 
