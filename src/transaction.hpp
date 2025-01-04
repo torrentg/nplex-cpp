@@ -2,28 +2,35 @@
 
 #include <map>
 #include <tuple>
+#include <atomic>
 #include <functional>
 #include <string_view>
 #include "types.hpp"
+
+#define CHECK_CREATE 1
+#define CHECK_UPDATE 2
+#define CHECK_DELETE 4
 
 namespace nplex {
 
 // Forward declaration.
 struct cache_t;
 
+// Forward declaration
+namespace msgs {
+    class Transaction;
+}
+
 /**
  * Database access can only be done through a transaction, which allows you to operate
  * according to an isolation level.
  * 
- * Transactions are updated on every database commit. Use the dirty() flag to check for
- * conflicts between the isolation level and the database update.
- * 
  * Isolation levels:
  *
- *   read-committed: Read always most recent data (value = always last rev).
+ *   read-committed: Read always most recent data (value = always last committed rev).
  *     - Pros: Minimal overhead; high performance.
- *     - Cons: Leads to non-repeatable reads, and phantoms.
- *     - Note: Invalidated if any new transaction alters the c-ud and 'checked'' keys.
+ *     - Cons: Leads to non-repeatable reads and phantoms.
+ *     - Note: Invalidated if any new transaction alters the c-ud.
  *  
  *   repeatable-reads: Read data will not change during the transaction (value = 1st read).
  *     - Pros: Prevents non-repeatable reads.
@@ -33,7 +40,7 @@ struct cache_t;
  *   serializable: All read data will not change during the transaction (value = tx creation).
  *     - Pros: Prevents non-repeatable reads, and phantoms.
  *     - Cons: Higher overhead.
- *     - Note: Invalidated if any new transaction alters the crud keys, or crud a modified key.
+ *     - Note: Invalidated if any new transaction alters the crud keys.
  * 
  * Dirty flag:
  * 
@@ -55,20 +62,13 @@ class transaction_t
   public:
 
     enum class state_e {
-        ONGOING,                                //!< Transaction is ongoing (user is fetching data).
+        OPEN,                                   //!< Transaction is ongoing (user is fetching data).
         SUBMITTED,                              //!< Transaction was submitted to the server.
         ACCEPTED,                               //!< Transaction was accepted by the server (pending to receive the commit).
         COMMITTED,                              //!< Transaction was committed.
-        REJECTED,                               //!< Transaction was rejected by the server.
-        DISCARDED                               //!< Transaction was discarded by the user.
-    };
-
-    enum class action_e {
-        CREATE,                                 //!< Create a key-value.
-        READ,                                   //!< Read a key-value.
-        UPDATE,                                 //!< Update a key-value.
-        DELETE,                                 //!< Remove a key-value.
-        CHECK                                   //!< At commit-time, checks that the key-value was not modified.
+        REJECTED,                               //!< Transaction was rejected by the server (commit was rejected).
+        DISCARDED,                              //!< Transaction was discarded by the user.
+        ABORTED                                 //!< Transaction was discarded by the server (ex. server disconnected).
     };
 
     enum class isolation_e {
@@ -81,32 +81,52 @@ class transaction_t
 
   private:
 
+    enum class action_e {
+        READ,                                   //!< Read a key-value.
+        UPSERT,                                 //!< Update or insert a key-value.
+        DELETE                                  //!< Remove a key-value.
+    };
+
     using cache_ptr = std::shared_ptr<cache_t>;
-    using entry_t = std::tuple<value_t, action_e>;
+    using entry_t = std::tuple<action_e, value_ptr>;
     using items_t = std::map<key_t, entry_t, key_cmp_less_t>;
+    using checks_t = std::map<std::string, uint8_t>;
 
     rev_t m_rev;                                //!< Database revision at tx creation.
-    std::mutex m_mutex;                         //!< Lock for the transaction.
-    cache_ptr m_data;                           //!< Database content.
+    cache_ptr m_cache;                          //!< Database content.
     items_t m_items;                            //!< Transaction items (depends on isolation level).
-    uint32_t m_type = 0;                        //! Transaction type (user-defined value).
+    checks_t m_checks;                          //!< Transaction checks.
     isolation_e m_isolation_level;              //!< Transaction isolation level.
-    state_e m_state;                            //!< Transaction state.
-    bool m_dirty = false;                       //!< Current tx conflicts with a commit.
+    std::atomic<uint32_t> m_type = 0;           //!< Transaction type (user-defined value).
+    std::atomic<state_e> m_state;               //!< Transaction state.
+    std::atomic<bool> m_dirty = false;          //!< Current tx conflicts with a commit.
     bool m_read_only = true;                    //!< Read-only flag.
+
+  private:
+
+    /**
+     * Updates current transaction with the changes from a commit.
+     * 
+     * The transaction becomes dirty if the commit conflicts with it.
+     * 
+     * @param[in] changes List of changes.
+     */
+    void update_serializable(const std::vector<change_t> &changes);
+    void update_default(const std::vector<change_t> &changes);
+    void update(const std::vector<change_t> &changes);
 
   public:
 
     /**
      * Create a new transaction.
      * 
-     * @param[in] data The database to use.
+     * @param[in] cache The database to use.
      * @param[in] isolation The isolation level to use.
      * @param[in] read_only If true, the transaction is read-only.
      * 
      * @exception std::invalid_argument Thrown if data is invalid.
      */
-    transaction_t(cache_ptr data, isolation_e isolation, bool read_only);
+    transaction_t(cache_ptr cache, isolation_e isolation, bool read_only);
 
     state_e state() const { return m_state; }
     isolation_e isolation() const { return m_isolation_level; }
@@ -114,19 +134,6 @@ class transaction_t
     bool dirty() const { return m_dirty; }
     uint32_t type() const { return m_type; }
     void type(uint32_t type) { this->m_type = type; }
-
-    /**
-     * Create a new key-value.
-     * 
-     * If the key-value already exists, the value will be updated.
-     * 
-     * @param[in] key The key to create or override.
-     * @param[in] value The value associated with the key.
-     * 
-     * @return true if the operation is successful,
-     *         false if the transaction is read-only, or if the key or value is invalid.
-     */
-    bool create(const key_t &key, const std::string_view &value);
 
     /**
      * Read a key-value pair.
@@ -158,31 +165,38 @@ class transaction_t
      * 
      * @param[in] key The key to read.
      * @param[in] check If true, checks at commit time that the key-value pair was not modified.
+     *                  Is equivalent to call 'check(key, CHECK_CREATE|CHECK_UPDATE|CHECK_DELETE)'.
      * 
-     * @return The value associated with the key.
-     * @exception std::out_of_range Thrown if the key is not found.
+     * @return The value associated with the key (empty if not found or previously deleted).
+     *         If the value was previously upsert, then its metadata is empty.
+     * 
+     * @exception std::invalid_argument Invalid key.
+     * @exception nplex_exception Transaction not open, or invalid key.
      */
-    value_t read(const key_t &key, bool check = false);
+    value_ptr read(const key_t &key, bool check = false);
 
     /**
-     * Update a key-value pair.
+     * Update a key-value or insert it if not exists.
      * 
-     * By default does nothing if the value is unchanged. 
-     * Use 'force' flag to update the revision.
+     * By default does nothing if the value is unchanged.
+     * Use the 'force' flag to update the revision.
      * 
      * @param[in] key The key to update.
-     * @param[in] value The new value associated with the key.
+     * @param[in] data The new data associated with the key.
      * @param[in] force Update revision even if value is unchanged.
      * 
-     * @return true if the operation is successful,
-     *         false if the transaction is read-only, or the key does not exist, or if the key or value is invalid.
+     * @return true if key created or updated,
+     *         false if existing key has same value and force = false.
+     * 
+     * @exception std::invalid_argument Invalid key or data.
+     * @exception nplex_exception Transaction is read-only, or not open.
      */
-    bool update(const key_t &key, const std::string_view &value, bool force = false);
+    bool upsert(const key_t &key, const std::string_view &data, bool force = false);
 
     /**
      * Remove a key-value pair.
      * 
-     * Glob patterns are supported (ex: '/users\/*\/error', '/users/jdoe\/**').
+     * Glob patterns are supported (ex: '/users/\*\/error', '/users/jdoe/\**').
      * When using a pattern, the operation is applied to all matching keys.
      * 
      * Caution, deletion using a pattern does not grant that all keys was removed at commit-time. 
@@ -194,24 +208,31 @@ class transaction_t
      * 
      * @param[in] key The key or pattern to remove.
      * 
-     * @return true if the operation is successful,
-     *         false if the transaction is read-only, or the key does not exist.
+     * @return true if some key was removed,
+     *         false if no key was removed.
+     * 
+     * @exception std::invalid_argument Invalid key.
+     * @exception nplex_exception Transaction is read-only, or not open, or invalid key.
      */
     bool remove(const key_t &key);
-    bool remove(const char *pattern);
+    std::size_t remove(const std::string_view &pattern);
 
     /**
-     * Condition to be checked at commit-time.
-     * The transaction will be rejected if the condition is not satisfied.
-     * Transaction condition checks applies even in 'force' mode.
-     * 
-     * Glob patterns are supported (ex: '/users\/*\/error', '/users/jdoe\/**').
+     * Appends a validation to be done at commit-time.
      * 
      * Deleting, creating, or updating a set of key-values matching a pattern does not 
      * guarantee that you delete, create, or update all database entries matching this 
      * pattern at commit time. This is because an intermediate commit may add, delete, 
      * or update an entry satisfying that pattern. To avoid these cases, you can add a 
      * check to validate that the condition is fulfilled.
+     * 
+     * A condition is considered fulfilled when no one has performed any of the 
+     * indicated actions from the time the conditions is established until the commit.
+     * 
+     * The transaction will be rejected if any of the conditions are not met.
+     * Transaction checks applies even in 'force' mode.
+     * 
+     * Glob patterns are supported (ex: '/users/\*\/error', '/users/jdoe/\**').
      * 
      * The behavior depends on the isolation level:
      * - read-committed:
@@ -222,16 +243,18 @@ class transaction_t
      *   - Condition applies to the database state at transaction creation time.
      * 
      * @example: Verify that nobody modified or deleted a fixed key.
-     *     tx.check("/users/jdoe/name", UPDATE | DELETE);
+     *     tx.check("/users/jdoe/name", CHECK_UPDATE | CHECK_DELETE);
      * 
      * @example: Verify that nobody altered a set of keys.
-     *     tx.check("/users/**", CREATE | UPDATE | DELETE);
+     *     tx.check("/users/\**", CHECK_CREATE | CHECK_UPDATE | CHECK_DELETE);
      *
      * @param[in] pattern The pattern to check.
-     * @param[in] actions The actions to check (1=CREATE, 2=UPDATE, 4=DELETE).
+     * @param[in] actions The actions to check (use CHECK_CREATE, CHECK_UPDATE, CHECK_DELETE).
      * 
      * @return true if the condition was set, 
      *         false otherwise (invalid-pattern, unrecognized-action).
+     * 
+     * @exception nplex_exception Transaction is not open.
      */
     bool check(const char *pattern, uint8_t actions);
 
@@ -242,7 +265,6 @@ class transaction_t
      * 
      * During iteration the database is locked (no external commits).
      * Iteration stops on the first false return value.
-     * Iteration does not fails on addition or removal.
      * 
      * @note Don't block the database for a long time, as this function locks the database.
      * 
@@ -253,7 +275,7 @@ class transaction_t
      *  });
      * 
      * @example: Search for a value.
-     *  tx.for_each("/users\/*\/name", "/path\/*\/name", [&id](const gto::cstring &key, const value_t &value) {
+     *  tx.for_each("/users/\*\/name", [&id](const gto::cstring &key, const value_t &value) {
      *      if (value.data().contains("mr_hacker")) {
      *          id = key;
      *          return false;
@@ -262,21 +284,23 @@ class transaction_t
      *  });
      * 
      * @example: Alter database content.
-     *  tx.for_each("/users\/*\/name", "/path\/*\/name", [&tx](const gto::cstring &key, const value_t &value) {
+     *  tx.for_each("/users/\*\/name", [&tx](const gto::cstring &key, const value_t &value) {
      *      if (value.data().contains("mr_hacker"))
      *          tx.delete(key);
      *      return true;
      *  });
      * 
-     * @param[in] from Key pattern (included).
-     * @param[in] to Key pattern (excluded).
+     * @param[in] pattern Key pattern.
      * @param[in] callback The callback function to execute. This function receives the key-value pair.
      *                     It must return true to continue the iteration, or false to stop it.
      * 
-     * @return Number of iterated elements.
+     * @return Number of iterated elements (0 if to < from).
+     * 
+     * @exception nplex_exception Transaction is not open, or empty callback function.
+     * @exception nplex_exception Transaction is read-only and callback function calls upsert or delete.
      */
-    size_t for_each(callback_t callback);
-    size_t for_each(const std::string_view &from, const std::string_view &to, callback_t callback);
+    std::size_t for_each(callback_t callback) { return for_each("**", callback); }
+    std::size_t for_each(const std::string_view &pattern, callback_t callback);
 };
 
 }; // namespace nplex

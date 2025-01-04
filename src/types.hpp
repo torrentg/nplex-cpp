@@ -28,19 +28,23 @@ struct meta_t
     std::uint32_t type;             //!< Transaction type (user-defined).
 };
 
+using meta_ptr = std::shared_ptr<meta_t>;
+
 //! Database value.
 class value_t
 {
+    static const gto::cstring EMPTY{};
+
   private:
     gto::cstring m_data;
-    std::shared_ptr<meta_t> m_meta;
+    meta_ptr m_meta;
 
   public:
     value_t(const gto::cstring &data, std::shared_ptr<meta_t> meta) : m_data{data}, m_meta{meta} {}
 
     // Metadata accessors
     rev_t rev() const { return (m_meta ? m_meta->rev : 0); }
-    const gto::cstring & user() const { return (m_meta ? m_meta->user : gto::cstring{}); }
+    const gto::cstring & user() const { return (m_meta ? m_meta->user : EMPTY); }
     millis_t timestamp() const { return (m_meta ? m_meta->timestamp : millis_t{0}); }
     uint32_t type() const { return (m_meta ? m_meta->type : 0); }
 
@@ -57,6 +61,23 @@ class value_t
             throw std::invalid_argument("Invalid conversion to the requested type");
         return value;
     }
+};
+
+using value_ptr = std::shared_ptr<value_t>;
+
+// Database change.
+struct change_t
+{
+    enum class action_e {
+        CREATE,
+        UPDATE,
+        DELETE
+    };
+
+    action_e action;
+    key_t key;
+    value_ptr value;
+    value_ptr old_value;  // CREATE = empty, UPDATE = previous value, DELETE = same as value
 };
 
 // Key support functions.
@@ -80,6 +101,10 @@ struct key_cmp_less_t
     // key_t vs std::string
     bool operator()(const key_t &lhs, const std::string &rhs) const { return (lhs.view() < rhs); }
     bool operator()(const std::string &lhs, const key_t &rhs) const { return (lhs < rhs.view()); }
+
+    // key_t vs std::string_view
+    bool operator()(const key_t &lhs, const std::string_view &rhs) const { return (lhs.view() < rhs); }
+    bool operator()(const std::string_view &lhs, const key_t &rhs) const { return (lhs < rhs.view()); }
 };
 
 }; // namespace nplex

@@ -1,21 +1,21 @@
 // ========================================================
-// Nplex flatbuffers schema file
+// Nplex flatbuffers schema file.
 // @see https://github.com/google/flatbuffers
 // > flatc --cpp --filename-suffix "" --filename-ext hpp --cpp-std c++17 --scoped-enums --gen-object-api messages.fbs
 // ========================================================
 
-namespace nplex;
+namespace nplex.msgs;
 
 // ========================================================
 // Enums
 
-enum LoginResp: byte {
+enum LoginCode: byte {
     UNKNOW,
     AUTHORIZED,
-    NOT_LEADER,
-    COMPAT_MISMATCH,
     INVALID_CREDENTIALS,
+    COMPAT_MISMATCH,
     ALREADY_LOGGED,
+    NOT_LEADER,
     DBID_MISMATCH
 }
 
@@ -27,46 +27,35 @@ enum LoadMode: byte
     ONLY_UPDATES_FROM_REV
 }
 
-enum ErrorCode: byte
-{
-    UNKNOW,
-    INVALID_REQUEST,
-    DATA_NOT_AVAILABLE
-}
-
-enum CompressionAlgorithm: byte
-{
-    NONE,
-    LZ4
-}
-
 // ========================================================
 // Structures
 
-table Snapshot
-{
-    // Revision
-    rev: uint64;
-    // Compression algorithm
-    algo: CompressionAlgorithm = NONE;
-    // Snapshot data
-    data: [ubyte];
-}
-
 table KeyValue
 {
-    // Key
-    key: string;
-    // Value
-    value: [ubyte];
+    key: string;                    // Key
+    value: [ubyte];                 // Value
+}
+
+table Transaction
+{
+    rev: uint64;                    // Transaction revision
+    user: string;                   // Creator
+    timestamp: uint64;              // Creation timestamp
+    type: uint32;                   // Transaction type (user-defined value)
+    upserts: [KeyValue];            // List of creates and updates
+    deletes: [string];              // List of deletes
+}
+
+table Snapshot
+{
+    rev: uint64;                    // Snapshot revision
+    transactions: [Transaction];    // Snapshot data (sorted by rev from oldest to newest)
 }
 
 table Check
 {
-    // Pattern (glob)
-    pattern: string;
-    // Mode (1=CREATE, 2=UPDATE, 4=DELETE)
-    mode: ubyte;
+    pattern: string;                // Pattern (glob)
+    mode: ubyte;                    // Mode (1=CREATE, 2=UPDATE, 4=DELETE)
 }
 
 // ========================================================
@@ -74,149 +63,78 @@ table Check
 
 table LoginRequest
 {
-    // Correlation id (used to match responses to requests)
-    cid: uint64;
-    // Libray version (major.minor.patch)
-    compat: string;
-    // User name
-    user: string;
-    // User password
-    password: string;
+    cid: uint64;                    // Correlation id (used to match responses to requests)
+    user: string;                   // User name
+    password: string;               // User password
+
 }
 
 table LoginResponse
 {
-    // Correlation id (loginRequest cid)
-    cid: uint64;
-    // Server version
-    version: uint64;
-    // Server response to login attempt
-    resp: LoginResp = UNKNOW;
-    // Session assigned (when resp = authorized)
-    session: string;
-    // Oldest revision available
-    rev0: uint64;
-    // Current database revision
-    crev: uint64;
+    cid: uint64;                    // Correlation id (loginRequest cid)
+    code: LoginCode = UNKNOW;       // Response code
+    session: string;                // Session assigned
+    rev0: uint64;                   // Oldest revision available
+    crev: uint64;                   // Current database revision
+    // TODO: add timeout + keepalive
 }
 
 table PingRequest
 {
-    // Correlation id (used to match responses to requests)
-    cid: uint64;
-    // Payload
-    payload: string;
+    cid: uint64;                    // Correlation id (used to match responses to requests)
+    payload: string;                // Payload
 }
 
 table PingResponse
 {
-    // Current database revision
-    crev: uint64;
-    // Correlation id (pingRequest cid)
-    cid: uint64;
-    // Payload (same as request)
-    payload: string;
+    crev: uint64;                   // Current database revision
+    cid: uint64;                    // Correlation id (pingRequest cid)
+    payload: string;                // Payload (same as request)
 }
 
 table LoadRequest
 {
-    // Correlation id (used to match responses to requests)
-    cid: uint64;
-    // Load mode
-    mode: LoadMode = UNKNOW;
-    // Requested revision
-    rev: uint64;
+    cid: uint64;                    // Correlation id (used to match responses to requests)
+    mode: LoadMode = UNKNOW;        // Load mode
+    rev: uint64;                    // Requested revision
 }
 
 table LoadResponse
 {
-    // Correlation id (loadRequest cid)
-    cid: uint64;
-    // Current revision
-    crev: uint64;
-    // Request accepted
-    accepted: bool;
-    // Snapshot (if requested)
-    snapshot: Snapshot = null;
+    cid: uint64;                    // Correlation id (loadRequest cid)
+    crev: uint64;                   // Current revision
+    accepted: bool;                 // Request accepted
+    snapshot: Snapshot;             // Snapshot (if requested)
 }
 
 table CommitResponse
 {
-    // Current database revision
-    crev: uint64;
-    // Correlation id (loadRequest cid)
-    cid: uint64;
-    // Transaction revision (client synced if crev = rev)
-    rev: uint64;
-    // Creator
-    user: string;
-    // Creation timestamp
-    timestamp: uint64;
-    // Transaction type
-    type: uint32;
-    // Creates and updates
-    upserts: [KeyValue];
-    // Deletes
-    deletes: [string];
+    crev: uint64;                   // Current database revision
+    cid: uint64;                    // Correlation id (loadRequest cid)
+    transaction: Transaction;       // Transaction (if transaction.rev = crev -> client synced)
 }
 
 table SubmitRequest
 {
-    // Correlation id (used to match responses to requests)
-    cid: uint64;
-    // Client current revision (used to grant serialization)
-    crev: uint64;
-    // Transaction type
-    type: uint32;
-    // Creates
-    creates: [KeyValue];
-    // Updates
-    updates: [KeyValue];
-    // Deletes
-    deletes: [string];
-    // Checks
-    checks: [Check];
+    cid: uint64;                    // Correlation id (used to match responses to requests)
+    crev: uint64;                   // Client current revision (used to grant serialization)
+    type: uint32;                   // Transaction type (user-defined value)
+    upserts: [KeyValue];            // List of updates and inserts
+    deletes: [string];              // List of deletes
+    checks: [Check];                // List of checks
 }
 
 table SubmitResponse
 {
-    // Correlation id (submitRequest cid)
-    cid: uint64;
-    // Current database revision
-    crev: uint64;
-    // Expected commit revision (0 means error)
-    erev: uint64;
-    // Error message (if any)
-    error: string;
+    cid: uint64;                    // Correlation id (submitRequest cid)
+    crev: uint64;                   // Current database revision
+    erev: uint64;                   // Expected commit revision (0 means error)
+    error: string;                  // Error message (if any)
 }
 
-table ErrorResponse
+table KeepAliveRequest
 {
-    // Correlation id (used to match responses to requests)
-    cid: uint64;
-    // Error code
-    code: ErrorCode = UNKNOW;
-    // Error message
-    message: string;
+    crev: uint64;                   // Current database revision
 }
 
-// ========================================================
-// Generic message
-
-union Content {
-    LOGIN_REQUEST: LoginRequest,
-    LOGIN_RESPONSE: LoginResponse,
-    PING_REQUEST: PingRequest,
-    PING_RESPONSE: PingResponse,
-    LOAD_REQUEST: LoadRequest,
-    LOAD_RESPONSE: LoadResponse,
-    COMMIT: CommitResponse, 
-    SUBMIT_REQUEST: SubmitRequest,
-    SUBMIT_RESPONSE: SubmitResponse,
-}
-
-table Msg {
-    content: Content;
-}
-
-root_type Msg;
+//root_type Snapshot;

@@ -13,6 +13,7 @@ target_sources(
     tests
     PRIVATE
     ${CMAKE_CURRENT_LIST_DIR}/exception_test.cpp
+    ${CMAKE_CURRENT_LIST_DIR}/messages_test.cpp
     ${CMAKE_CURRENT_LIST_DIR}/mqueue_test.cpp
     ${CMAKE_CURRENT_LIST_DIR}/main.cpp
 )

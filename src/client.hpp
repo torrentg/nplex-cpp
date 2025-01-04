@@ -62,22 +62,6 @@ class event_t
     };
 };
 
-struct change_t
-{
-    using value_ptr = std::shared_ptr<value_t>;
-
-    enum class action_e {
-        CREATE,
-        UPDATE,
-        DELETE
-    };
-
-    key_t key;
-    value_ptr value;
-    value_ptr old_value;
-    action_e action;
-};
-
 /**
  * Async nplex client.
  * 
@@ -127,7 +111,6 @@ class client_t
 {
     using cache_ptr = std::shared_ptr<cache_t>;
     using tx_ptr = std::shared_ptr<transaction_t>;
-    using meta_ptr = std::shared_ptr<meta_t>;
 
     enum class state_e {
         CONNECTING,                                 //!< Connecting to the server.

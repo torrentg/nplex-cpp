@@ -2,9 +2,17 @@
 
 #include <map>
 #include <set>
+#include <mutex>
+#include <vector>
 #include "types.hpp"
 
 namespace nplex {
+
+// Forward declarations
+namespace msgs {
+    class Snapshot;
+    class Transaction;
+}
 
 /**
  * In-memory database content.
@@ -17,17 +25,35 @@ namespace nplex {
  */
 struct cache_t
 {
-    using value_ptr = std::shared_ptr<value_t>;
-    using meta_ptr = std::shared_ptr<meta_t>;
-
     rev_t m_rev = 0;
-    std::mutex m_mutex{};
+    std::recursive_mutex m_mutex{};
     std::map<key_t, value_ptr, key_cmp_less_t> m_data{};
-    std::map<rev_t, meta_ptr> m_meta{};
+    std::map<rev_t, meta_ptr> m_metas{};
     std::set<gto::cstring> m_users{};
 
-    // void update(const snapshot_t &snapshot);
-    // void commit(const transaction_t &transaction);
+    /**
+     * Restore the database content from a snapshot.
+     * 
+     * On exception, the database is left in an inconsistent state.
+     * 
+     * @param[in] snapshot Content to restore.
+     * 
+     * @exception nplex_exception Invalid snapshot.
+     */
+    void restore(const msgs::Snapshot *snapshot);
+
+    /**
+     * Apply a commit to the database.
+     * 
+     * On exception, the database is left in an inconsistent state.
+     * 
+     * @param[in] transaction Transaction to apply.
+     * 
+     * @return List of applied changes.
+     * 
+     * @exception nplex_exception Invalid transaction.
+     */
+    std::vector<change_t> update(const msgs::Transaction *transaction);
 };
 
 }; // namespace nplex
