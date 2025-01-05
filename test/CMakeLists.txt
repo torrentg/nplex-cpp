@@ -12,9 +12,11 @@ target_include_directories(
 target_sources(
     tests
     PRIVATE
+    ${PROJECT_SOURCE_DIR}/src/cache.cpp
     ${CMAKE_CURRENT_LIST_DIR}/exception_test.cpp
     ${CMAKE_CURRENT_LIST_DIR}/messages_test.cpp
     ${CMAKE_CURRENT_LIST_DIR}/mqueue_test.cpp
+    ${CMAKE_CURRENT_LIST_DIR}/cache_test.cpp
     ${CMAKE_CURRENT_LIST_DIR}/main.cpp
 )
 

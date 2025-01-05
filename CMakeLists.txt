@@ -38,7 +38,7 @@ add_compile_options(
     -Wall
     -Wextra
     -Wshadow
-    -Wpedantic
+    #-Wpedantic
     -Wconversion
     -Wsign-conversion
     -Wnull-dereference

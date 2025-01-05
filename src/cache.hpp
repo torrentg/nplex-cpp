@@ -1,7 +1,6 @@
 #pragma once
 
 #include <map>
-#include <set>
 #include <mutex>
 #include <vector>
 #include "types.hpp"
@@ -29,18 +28,18 @@ struct cache_t
     std::recursive_mutex m_mutex{};
     std::map<key_t, value_ptr, key_cmp_less_t> m_data{};
     std::map<rev_t, meta_ptr> m_metas{};
-    std::set<gto::cstring> m_users{};
+    std::map<gto::cstring, std::uint32_t> m_users{}; // value=num_refs
 
     /**
      * Restore the database content from a snapshot.
      * 
      * On exception, the database is left in an inconsistent state.
      * 
-     * @param[in] snapshot Content to restore.
+     * @param[in] snapshot Content to restore (nullptr reset cache).
      * 
      * @exception nplex_exception Invalid snapshot.
      */
-    void restore(const msgs::Snapshot *snapshot);
+    void restore(const msgs::Snapshot *snapshot = nullptr);
 
     /**
      * Apply a commit to the database.
@@ -54,6 +53,47 @@ struct cache_t
      * @exception nplex_exception Invalid transaction.
      */
     std::vector<change_t> update(const msgs::Transaction *transaction);
+
+  private:
+
+    /**
+     * Creates a transaction metadata object.
+     * Updates metas and users cache objects.
+     * Caution, internal function not guarded by the mutex.
+     * 
+     * @param[in] transaction Transaction to process.
+     * 
+     * @return The inserted metadata.
+     */
+    meta_ptr create_meta(const msgs::Transaction *transaction);
+
+    /**
+     * Release a metadata decreasing the ref counters and removing 
+     * entries in metas and users if required.
+     * 
+     * @param[in] meta Metadata to release.
+     */
+    void release_meta(const meta_ptr &meta);
+
+    /**
+     * Upsert an entry updating content accordingly.
+     * 
+     * @param[in] key Key to insert or update.
+     * @param[in] value Value to set.
+     * 
+     * @return The change done.
+     */
+    change_t upsert_entry(const char *key, const value_ptr &value);
+
+    /**
+     * Delete an entry updating content accordingly.
+     * 
+     * @param[in] key Key to delete.
+     * 
+     * @return The change done (empty key if nothing removed).
+     */
+    change_t delete_entry(const char *key);
+
 };
 
 }; // namespace nplex

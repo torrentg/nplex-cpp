@@ -1,6 +1,3 @@
-#include <memory>
-#include <vector>
-#include <type_traits>
 #include <doctest.h>
 #include "test_utils.hpp"
 #include "messages.hpp"
@@ -119,7 +116,7 @@ TEST_CASE("LoadResponse")
                     },
                     {}  // there are no deletes on snapshots
                 ),
-                make_transaction(546, "jdoe", 1234567999, 7,
+                make_transaction(546, "ljohnson", 1234567999, 7,
                     {
                         { .key = "key5", .value = {1, 2, 3}},
                         { .key = "key6", .value = {4, 5, 6}}

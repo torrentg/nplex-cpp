@@ -10,83 +10,118 @@ namespace {
 
 using namespace nplex;
 
-/**
- * Creates a transaction metadata object and inserts it into the cache.
- * Caution, internal function not guarded by the mutex.
- * 
- * @param[in] cache Cache to update.
- * @param[in] transaction Transaction to process.
- * @return The inserted metadata.
- */
-meta_ptr create_meta(cache_t &cache, const msgs::Transaction *transaction)
-{
-    gto::cstring user;
-    rev_t rev = transaction->rev();
-    auto user_it = cache.m_users.find(transaction->user()->c_str());
-
-    if (user_it == cache.m_users.end())
-    {
-        user = transaction->user()->c_str();
-        cache.m_users.insert(user);
-    }
-    else
-    {
-        user = *user_it;
-    }
-
-    millis_t timestamp = std::chrono::milliseconds{transaction->timestamp()};
-    auto meta = std::make_shared<meta_t>((meta_t){rev, user, timestamp, transaction->type()});
-    cache.m_metas[rev] = meta;
-
-    return meta;
-}
-
-/**
- * Apply a transaction to the cache without tracking changes.
- * Caution, internal function not guarded by the mutex.
- * 
- * @param[in] cache Cache to update.
- * @param[in] transaction Transaction to apply.
- * 
- * @exception nplex_exception Invalid transaction.
- */
-void apply_tx(cache_t &cache, const msgs::Transaction *transaction)
-{
-    if (transaction->rev() <= cache.m_rev)
-        throw nplex_exception("invalid transaction revision");
-
-    rev_t rev = transaction->rev();
-    auto meta = create_meta(cache, transaction);
-
-    auto upserts = transaction->upserts();
-
-    for (flatbuffers::uoffset_t i = 0; i < upserts->size(); i++)
-    {
-        auto keyval = upserts->Get(i);
-
-        gto::cstring val{reinterpret_cast<const char *>(keyval->value()->data()), static_cast<size_t>(keyval->value()->size())};
-        auto value = std::make_shared<value_t>(val, meta);
-
-        auto it = cache.m_data.find(keyval->key()->c_str());
-        if (it != cache.m_data.end())
-            it->second = value;
-        else
-            cache.m_data[keyval->key()->c_str()] = value;
-    }
-
-    auto deletes = transaction->deletes();
-
-    for (flatbuffers::uoffset_t i = 0; i < deletes->size(); i++)
-        cache.m_data.erase(deletes->Get(i)->c_str());
-
-    cache.m_rev = rev;
+gto::cstring create_cstring(const flatbuffers::Vector<uint8_t> *value) {
+    return gto::cstring{reinterpret_cast<const char *>(value->data()), static_cast<size_t>(value->size())};
 }
 
 }; // unnamed namespace
 
+nplex::meta_ptr nplex::cache_t::create_meta(const msgs::Transaction *transaction)
+{
+    gto::cstring user;
+    rev_t rev = transaction->rev();
+    auto user_it = m_users.find(transaction->user()->c_str());
+
+    if (user_it == m_users.end())
+    {
+        user = transaction->user()->c_str();
+        m_users.emplace(user, 1);
+    }
+    else
+    {
+        user = user_it->first;
+        user_it->second++;
+    }
+
+    millis_t timestamp = std::chrono::milliseconds{transaction->timestamp()};
+
+    return std::make_shared<meta_t>((meta_t){rev, user, timestamp, transaction->type(), 0});
+}
+
+void nplex::cache_t::release_meta(const meta_ptr &meta)
+{
+    if (meta->nrefs > 0)
+        meta->nrefs--;
+
+    if (meta->nrefs == 0)
+    {
+        auto it = m_users.find(meta->user);
+
+        if (it != m_users.end())
+        {
+            if (it->second > 1)
+                it->second--;
+            else
+                m_users.erase(it);
+        }
+
+        m_metas.erase(meta->rev);
+    }
+}
+
+nplex::change_t nplex::cache_t::upsert_entry(const char *key, const value_ptr &value)
+{
+    assert(value && value->m_meta);
+
+    if (!is_valid_key(key))
+        throw nplex_exception("Invalid key");
+
+    change_t change;
+    auto it = m_data.find(key);
+
+    if (it != m_data.end())
+    {
+        change.action = change_t::action_e::UPDATE;
+        change.key = it->first;
+        change.value = value;
+        change.old_value = it->second;
+
+        release_meta(it->second->m_meta);
+
+        it->second = value;
+    }
+    else
+    {
+        nplex::key_t ckey = key;
+
+        change.action = change_t::action_e::CREATE;
+        change.key = ckey;
+        change.value = value;
+        change.old_value = nullptr;
+
+        m_data[ckey] = value;
+    }
+
+    value->m_meta->nrefs++;
+
+    return change;
+}
+
+nplex::change_t nplex::cache_t::delete_entry(const char *key)
+{
+    if (!is_valid_key(key))
+        throw nplex_exception("Invalid key (delete)");
+
+    change_t change = {change_t::action_e::DELETE, nullptr, nullptr, nullptr};
+    auto it = m_data.find(key);
+
+    if (it == m_data.end()) {
+        return change;
+    }
+
+    change.key = it->first;
+    change.value = it->second;
+    change.old_value = it->second;
+
+    release_meta(it->second->m_meta);
+
+    m_data.erase(it);
+
+    return change;
+}
+
 void nplex::cache_t::restore(const msgs::Snapshot *snapshot)
 {
-    assert(snapshot);
     std::lock_guard<decltype(m_mutex)> lock(m_mutex);
 
     m_rev = 0;
@@ -94,85 +129,82 @@ void nplex::cache_t::restore(const msgs::Snapshot *snapshot)
     m_metas.clear();
     m_users.clear();
 
+    if (!snapshot)
+        return;
+
     auto transactions = snapshot->transactions();
 
-    for (flatbuffers::uoffset_t i = 0; i < transactions->size(); i++)
-        apply_tx(*this, transactions->Get(i));
+    if (transactions)
+    {
+        for (flatbuffers::uoffset_t i = 0; i < transactions->size(); i++)
+            update(transactions->Get(i));
+    }
 
     m_rev = snapshot->rev();
 }
 
 std::vector<change_t> nplex::cache_t::update(const msgs::Transaction *transaction)
 {
-    assert(transaction);
+    if (!transaction) {
+        assert(false);
+        return {};
+    }
 
     std::vector<change_t> changes;
     auto upserts = transaction->upserts();
     auto deletes = transaction->deletes();
 
-    changes.reserve(upserts->size() + deletes->size());
+    changes.reserve((upserts ? upserts->size() : 0) + (deletes ? deletes->size() : 0));
 
     std::lock_guard<decltype(m_mutex)> lock(m_mutex);
 
-    if (transaction->rev() <= m_rev)
+    rev_t rev = transaction->rev();
+
+    if (rev <= m_rev)
         throw nplex_exception("invalid transaction revision");
 
-    auto meta = create_meta(*this, transaction);
+    auto meta = create_meta(transaction);
 
-    m_rev = transaction->rev();
+    m_rev = rev;
 
-    for (flatbuffers::uoffset_t i = 0; i < upserts->size(); i++)
+    if (upserts)
     {
-        auto keyval = upserts->Get(i);
-
-        gto::cstring val{reinterpret_cast<const char *>(keyval->value()->data()), static_cast<size_t>(keyval->value()->size())};
-        auto value = std::make_shared<value_t>(val, meta);
-
-        auto it = m_data.find(keyval->key()->c_str());
-
-        if (it != m_data.end())
+        for (flatbuffers::uoffset_t i = 0; i < upserts->size(); i++)
         {
-            change_t change;
+            auto keyval = upserts->Get(i);
 
-            change.action = change_t::action_e::UPDATE;
-            change.key = it->first;
-            change.old_value = it->second;
-            change.value = value;
-            changes.push_back(change);
+            if (!keyval || !keyval->key() || !keyval->value())
+                throw nplex_exception("Invalid key-value");
 
-            it->second = value;
-        }
-        else
-        {
-            change_t change;
-            key_t key = keyval->key()->c_str();
+            auto key = keyval->key()->c_str();
+            gto::cstring data = create_cstring(keyval->value());
+            auto value = std::make_shared<value_t>(data, meta);
 
-            change.action = change_t::action_e::CREATE;
-            change.key = key;
-            change.value = value;
-            changes.push_back(change);
+            auto change = upsert_entry(key, value);
 
-            m_data[key] = value;
+            if (change.key)
+                changes.push_back(change);
         }
     }
 
-    for (flatbuffers::uoffset_t i = 0; i < deletes->size(); i++)
+    if (deletes)
     {
-        auto it = m_data.find(deletes->Get(i)->c_str());
-
-        if (it != m_data.end())
+        for (flatbuffers::uoffset_t i = 0; i < deletes->size(); i++)
         {
-            change_t change;
+            auto key = deletes->Get(i);
 
-            change.action = change_t::action_e::DELETE;
-            change.key = it->first;
-            change.value = it->second;
-            change.old_value = it->second;
-            changes.push_back(change);
+            if (!key || !key->c_str())
+                throw nplex_exception("Invalid key (delete)");
 
-            m_data.erase(it);
+            auto change = delete_entry(key->c_str());
+
+            if (change.key)
+                changes.push_back(change);
         }
     }
+
+    if (meta->nrefs)
+        m_metas[rev] = meta;
 
     return changes;
 }

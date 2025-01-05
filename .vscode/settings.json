@@ -73,7 +73,10 @@
     "type_traits": "cpp",
     "utility": "cpp",
     "format": "cpp",
-    "typeindex": "cpp"
+    "typeindex": "cpp",
+    "cfenv": "cpp",
+    "codecvt": "cpp",
+    "stdfloat": "cpp"
   },
   "C_Cpp.default.cStandard": "c17",
   "C_Cpp.default.includePath": [

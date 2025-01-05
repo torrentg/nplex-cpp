@@ -4,6 +4,7 @@
 #include <memory>
 #include <cstddef>
 #include <cstdint>
+#include <string_view>
 #include "cstring.hpp"
 
 #define KEY_DELIMITER '/'
@@ -26,6 +27,7 @@ struct meta_t
     gto::cstring user;              //!< Transaction creator.
     millis_t timestamp;             //!< Timestamp at transaction creation.
     std::uint32_t type;             //!< Transaction type (user-defined).
+    uint32_t nrefs;                 //!< Number of references in the cache (internal use).
 };
 
 using meta_ptr = std::shared_ptr<meta_t>;
@@ -33,7 +35,8 @@ using meta_ptr = std::shared_ptr<meta_t>;
 //! Database value.
 class value_t
 {
-    static const gto::cstring EMPTY{};
+    static const gto::cstring EMPTY;
+    friend class cache_t;
 
   private:
     gto::cstring m_data;
@@ -81,7 +84,9 @@ struct change_t
 };
 
 // Key support functions.
-bool is_valid_key(const key_t &key);
+inline bool is_valid_key(const std::string_view &key) { return !key.empty(); }
+inline bool is_valid_key(const char *key) { return is_valid_key(std::string_view{key}); }
+inline bool is_valid_key(const key_t &key) { return is_valid_key(key.view()); }
 std::string_view key_part(const key_t &key, std::size_t index, char delimiter = KEY_DELIMITER);
 std::string_view key_prefix(const key_t &key, std::size_t index, char delimiter = KEY_DELIMITER);
 std::string_view key_suffix(const key_t &key, std::size_t index, char delimiter = KEY_DELIMITER);

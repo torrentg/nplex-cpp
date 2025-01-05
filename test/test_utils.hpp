@@ -31,7 +31,7 @@ namespace tests {
         return result;
     }
 
-    nplex::msgs::TransactionT make_transaction(size_t rev, const char *user, uint64_t timestamp, uint32_t type, std::vector<nplex::msgs::KeyValueT> upserts = {}, std::vector<std::string> deletes = {})
+    inline nplex::msgs::TransactionT make_transaction(size_t rev, const char *user, uint64_t timestamp, uint32_t type, std::vector<nplex::msgs::KeyValueT> upserts = {}, std::vector<std::string> deletes = {})
     {
         nplex::msgs::TransactionT tx;
         tx.rev = rev;
@@ -43,7 +43,7 @@ namespace tests {
         return tx;
     }
 
-    nplex::msgs::SnapshotT make_snapshot(size_t rev, std::vector<nplex::msgs::TransactionT> transactions)
+    inline nplex::msgs::SnapshotT make_snapshot(size_t rev, std::vector<nplex::msgs::TransactionT> transactions)
     {
         nplex::msgs::SnapshotT snapshot;
         snapshot.rev = rev;
@@ -51,7 +51,7 @@ namespace tests {
         return snapshot;
     }
 
-    nplex::msgs::LoadResponseT make_load_response(size_t cid, size_t crev, bool accepted, const nplex::msgs::SnapshotT &snapshot)
+    inline nplex::msgs::LoadResponseT make_load_response(size_t cid, size_t crev, bool accepted, const nplex::msgs::SnapshotT &snapshot)
     {
         nplex::msgs::LoadResponseT resp;
         resp.cid = cid;
@@ -61,7 +61,7 @@ namespace tests {
         return resp;
     }
 
-    nplex::msgs::CommitResponseT make_commit(size_t cid, size_t crev, const nplex::msgs::TransactionT &transaction)
+    inline nplex::msgs::CommitResponseT make_commit(size_t cid, size_t crev, const nplex::msgs::TransactionT &transaction)
     {
         nplex::msgs::CommitResponseT resp;
         resp.cid = cid;
@@ -70,7 +70,7 @@ namespace tests {
         return resp;
     }
 
-    nplex::msgs::SubmitRequestT make_submit_request(size_t cid, size_t crev, uint32_t type, std::vector<nplex::msgs::KeyValueT> upserts, std::vector<std::string> deletes, std::vector<nplex::msgs::CheckT> checks)
+    inline nplex::msgs::SubmitRequestT make_submit_request(size_t cid, size_t crev, uint32_t type, std::vector<nplex::msgs::KeyValueT> upserts, std::vector<std::string> deletes, std::vector<nplex::msgs::CheckT> checks)
     {
         nplex::msgs::SubmitRequestT req;
         req.cid = cid;
