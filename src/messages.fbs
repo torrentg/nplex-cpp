@@ -36,11 +36,11 @@ table KeyValue
     value: [ubyte];                 // Value
 }
 
-table Transaction
+table Update
 {
-    rev: uint64;                    // Transaction revision
+    rev: uint64;                    // Commit revision
     user: string;                   // Creator
-    timestamp: uint64;              // Creation timestamp
+    timestamp: uint64;              // Timestamp
     type: uint32;                   // Transaction type (user-defined value)
     upserts: [KeyValue];            // List of creates and updates
     deletes: [string];              // List of deletes
@@ -49,7 +49,7 @@ table Transaction
 table Snapshot
 {
     rev: uint64;                    // Snapshot revision
-    transactions: [Transaction];    // Snapshot data (sorted by rev from oldest to newest)
+    updates: [Update];              // List of updates sorted by commit revision (oldest to newest)
 }
 
 table Check
@@ -107,11 +107,11 @@ table LoadResponse
     snapshot: Snapshot;             // Snapshot (if requested)
 }
 
-table CommitResponse
+table UpdatePush
 {
     cid: uint64;                    // Correlation id (loadRequest cid)
     crev: uint64;                   // Current database revision
-    transaction: Transaction;       // Transaction (if transaction.rev = crev -> client synced)
+    update: Update;                 // Database update (if commit.rev = crev -> client synced)
 }
 
 table SubmitRequest
@@ -132,7 +132,7 @@ table SubmitResponse
     error: string;                  // Error message (if any)
 }
 
-table KeepAliveRequest
+table KeepAlivePush
 {
     crev: uint64;                   // Current database revision
 }

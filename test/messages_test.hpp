@@ -31,9 +31,9 @@ namespace tests {
         return result;
     }
 
-    inline nplex::msgs::TransactionT make_transaction(size_t rev, const char *user, uint64_t timestamp, uint32_t type, std::vector<nplex::msgs::KeyValueT> upserts = {}, std::vector<std::string> deletes = {})
+    inline nplex::msgs::UpdateT make_update(size_t rev, const char *user, uint64_t timestamp, uint32_t type, std::vector<nplex::msgs::KeyValueT> upserts = {}, std::vector<std::string> deletes = {})
     {
-        nplex::msgs::TransactionT tx;
+        nplex::msgs::UpdateT tx;
         tx.rev = rev;
         tx.user = user;
         tx.timestamp = timestamp;
@@ -43,11 +43,11 @@ namespace tests {
         return tx;
     }
 
-    inline nplex::msgs::SnapshotT make_snapshot(size_t rev, std::vector<nplex::msgs::TransactionT> transactions)
+    inline nplex::msgs::SnapshotT make_snapshot(size_t rev, std::vector<nplex::msgs::UpdateT> updates)
     {
         nplex::msgs::SnapshotT snapshot;
         snapshot.rev = rev;
-        snapshot.transactions = make_vector_unique_ptr(transactions);
+        snapshot.updates = make_vector_unique_ptr(updates);
         return snapshot;
     }
 
@@ -61,13 +61,13 @@ namespace tests {
         return resp;
     }
 
-    inline nplex::msgs::CommitResponseT make_commit(size_t cid, size_t crev, const nplex::msgs::TransactionT &transaction)
+    inline nplex::msgs::UpdatePushT make_update_push(size_t cid, size_t crev, const nplex::msgs::UpdateT &update)
     {
-        nplex::msgs::CommitResponseT resp;
-        resp.cid = cid;
-        resp.crev = crev;
-        resp.transaction = std::make_unique<nplex::msgs::TransactionT>(transaction);
-        return resp;
+        nplex::msgs::UpdatePushT push;
+        push.cid = cid;
+        push.crev = crev;
+        push.update = std::make_unique<nplex::msgs::UpdateT>(update);
+        return push;
     }
 
     inline nplex::msgs::SubmitRequestT make_submit_request(size_t cid, size_t crev, uint32_t type, std::vector<nplex::msgs::KeyValueT> upserts, std::vector<std::string> deletes, std::vector<nplex::msgs::CheckT> checks)

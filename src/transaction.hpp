@@ -16,11 +16,6 @@ namespace nplex {
 // Forward declaration.
 struct cache_t;
 
-// Forward declaration
-namespace msgs {
-    class Transaction;
-}
-
 /**
  * Database access can only be done through a transaction, which allows you to operate
  * according to an isolation level.

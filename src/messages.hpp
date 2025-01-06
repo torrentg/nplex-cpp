@@ -20,9 +20,9 @@ struct KeyValue;
 struct KeyValueBuilder;
 struct KeyValueT;
 
-struct Transaction;
-struct TransactionBuilder;
-struct TransactionT;
+struct Update;
+struct UpdateBuilder;
+struct UpdateT;
 
 struct Snapshot;
 struct SnapshotBuilder;
@@ -56,9 +56,9 @@ struct LoadResponse;
 struct LoadResponseBuilder;
 struct LoadResponseT;
 
-struct CommitResponse;
-struct CommitResponseBuilder;
-struct CommitResponseT;
+struct UpdatePush;
+struct UpdatePushBuilder;
+struct UpdatePushT;
 
 struct SubmitRequest;
 struct SubmitRequestBuilder;
@@ -68,9 +68,9 @@ struct SubmitResponse;
 struct SubmitResponseBuilder;
 struct SubmitResponseT;
 
-struct KeepAliveRequest;
-struct KeepAliveRequestBuilder;
-struct KeepAliveRequestT;
+struct KeepAlivePush;
+struct KeepAlivePushBuilder;
+struct KeepAlivePushT;
 
 enum class LoginCode : int8_t {
   UNKNOW = 0,
@@ -236,23 +236,23 @@ inline ::flatbuffers::Offset<KeyValue> CreateKeyValueDirect(
 
 ::flatbuffers::Offset<KeyValue> CreateKeyValue(::flatbuffers::FlatBufferBuilder &_fbb, const KeyValueT *_o, const ::flatbuffers::rehasher_function_t *_rehasher = nullptr);
 
-struct TransactionT : public ::flatbuffers::NativeTable {
-  typedef Transaction TableType;
+struct UpdateT : public ::flatbuffers::NativeTable {
+  typedef Update TableType;
   uint64_t rev = 0;
   std::string user{};
   uint64_t timestamp = 0;
   uint32_t type = 0;
   std::vector<std::unique_ptr<nplex::msgs::KeyValueT>> upserts{};
   std::vector<std::string> deletes{};
-  TransactionT() = default;
-  TransactionT(const TransactionT &o);
-  TransactionT(TransactionT&&) FLATBUFFERS_NOEXCEPT = default;
-  TransactionT &operator=(TransactionT o) FLATBUFFERS_NOEXCEPT;
+  UpdateT() = default;
+  UpdateT(const UpdateT &o);
+  UpdateT(UpdateT&&) FLATBUFFERS_NOEXCEPT = default;
+  UpdateT &operator=(UpdateT o) FLATBUFFERS_NOEXCEPT;
 };
 
-struct Transaction FLATBUFFERS_FINAL_CLASS : private ::flatbuffers::Table {
-  typedef TransactionT NativeTableType;
-  typedef TransactionBuilder Builder;
+struct Update FLATBUFFERS_FINAL_CLASS : private ::flatbuffers::Table {
+  typedef UpdateT NativeTableType;
+  typedef UpdateBuilder Builder;
   struct Traits;
   enum FlatBuffersVTableOffset FLATBUFFERS_VTABLE_UNDERLYING_TYPE {
     VT_REV = 4,
@@ -295,45 +295,45 @@ struct Transaction FLATBUFFERS_FINAL_CLASS : private ::flatbuffers::Table {
            verifier.VerifyVectorOfStrings(deletes()) &&
            verifier.EndTable();
   }
-  TransactionT *UnPack(const ::flatbuffers::resolver_function_t *_resolver = nullptr) const;
-  void UnPackTo(TransactionT *_o, const ::flatbuffers::resolver_function_t *_resolver = nullptr) const;
-  static ::flatbuffers::Offset<Transaction> Pack(::flatbuffers::FlatBufferBuilder &_fbb, const TransactionT* _o, const ::flatbuffers::rehasher_function_t *_rehasher = nullptr);
+  UpdateT *UnPack(const ::flatbuffers::resolver_function_t *_resolver = nullptr) const;
+  void UnPackTo(UpdateT *_o, const ::flatbuffers::resolver_function_t *_resolver = nullptr) const;
+  static ::flatbuffers::Offset<Update> Pack(::flatbuffers::FlatBufferBuilder &_fbb, const UpdateT* _o, const ::flatbuffers::rehasher_function_t *_rehasher = nullptr);
 };
 
-struct TransactionBuilder {
-  typedef Transaction Table;
+struct UpdateBuilder {
+  typedef Update Table;
   ::flatbuffers::FlatBufferBuilder &fbb_;
   ::flatbuffers::uoffset_t start_;
   void add_rev(uint64_t rev) {
-    fbb_.AddElement<uint64_t>(Transaction::VT_REV, rev, 0);
+    fbb_.AddElement<uint64_t>(Update::VT_REV, rev, 0);
   }
   void add_user(::flatbuffers::Offset<::flatbuffers::String> user) {
-    fbb_.AddOffset(Transaction::VT_USER, user);
+    fbb_.AddOffset(Update::VT_USER, user);
   }
   void add_timestamp(uint64_t timestamp) {
-    fbb_.AddElement<uint64_t>(Transaction::VT_TIMESTAMP, timestamp, 0);
+    fbb_.AddElement<uint64_t>(Update::VT_TIMESTAMP, timestamp, 0);
   }
   void add_type(uint32_t type) {
-    fbb_.AddElement<uint32_t>(Transaction::VT_TYPE, type, 0);
+    fbb_.AddElement<uint32_t>(Update::VT_TYPE, type, 0);
   }
   void add_upserts(::flatbuffers::Offset<::flatbuffers::Vector<::flatbuffers::Offset<nplex::msgs::KeyValue>>> upserts) {
-    fbb_.AddOffset(Transaction::VT_UPSERTS, upserts);
+    fbb_.AddOffset(Update::VT_UPSERTS, upserts);
   }
   void add_deletes(::flatbuffers::Offset<::flatbuffers::Vector<::flatbuffers::Offset<::flatbuffers::String>>> deletes) {
-    fbb_.AddOffset(Transaction::VT_DELETES, deletes);
+    fbb_.AddOffset(Update::VT_DELETES, deletes);
   }
-  explicit TransactionBuilder(::flatbuffers::FlatBufferBuilder &_fbb)
+  explicit UpdateBuilder(::flatbuffers::FlatBufferBuilder &_fbb)
         : fbb_(_fbb) {
     start_ = fbb_.StartTable();
   }
-  ::flatbuffers::Offset<Transaction> Finish() {
+  ::flatbuffers::Offset<Update> Finish() {
     const auto end = fbb_.EndTable(start_);
-    auto o = ::flatbuffers::Offset<Transaction>(end);
+    auto o = ::flatbuffers::Offset<Update>(end);
     return o;
   }
 };
 
-inline ::flatbuffers::Offset<Transaction> CreateTransaction(
+inline ::flatbuffers::Offset<Update> CreateUpdate(
     ::flatbuffers::FlatBufferBuilder &_fbb,
     uint64_t rev = 0,
     ::flatbuffers::Offset<::flatbuffers::String> user = 0,
@@ -341,7 +341,7 @@ inline ::flatbuffers::Offset<Transaction> CreateTransaction(
     uint32_t type = 0,
     ::flatbuffers::Offset<::flatbuffers::Vector<::flatbuffers::Offset<nplex::msgs::KeyValue>>> upserts = 0,
     ::flatbuffers::Offset<::flatbuffers::Vector<::flatbuffers::Offset<::flatbuffers::String>>> deletes = 0) {
-  TransactionBuilder builder_(_fbb);
+  UpdateBuilder builder_(_fbb);
   builder_.add_timestamp(timestamp);
   builder_.add_rev(rev);
   builder_.add_deletes(deletes);
@@ -351,12 +351,12 @@ inline ::flatbuffers::Offset<Transaction> CreateTransaction(
   return builder_.Finish();
 }
 
-struct Transaction::Traits {
-  using type = Transaction;
-  static auto constexpr Create = CreateTransaction;
+struct Update::Traits {
+  using type = Update;
+  static auto constexpr Create = CreateUpdate;
 };
 
-inline ::flatbuffers::Offset<Transaction> CreateTransactionDirect(
+inline ::flatbuffers::Offset<Update> CreateUpdateDirect(
     ::flatbuffers::FlatBufferBuilder &_fbb,
     uint64_t rev = 0,
     const char *user = nullptr,
@@ -367,7 +367,7 @@ inline ::flatbuffers::Offset<Transaction> CreateTransactionDirect(
   auto user__ = user ? _fbb.CreateString(user) : 0;
   auto upserts__ = upserts ? _fbb.CreateVector<::flatbuffers::Offset<nplex::msgs::KeyValue>>(*upserts) : 0;
   auto deletes__ = deletes ? _fbb.CreateVector<::flatbuffers::Offset<::flatbuffers::String>>(*deletes) : 0;
-  return nplex::msgs::CreateTransaction(
+  return nplex::msgs::CreateUpdate(
       _fbb,
       rev,
       user__,
@@ -377,12 +377,12 @@ inline ::flatbuffers::Offset<Transaction> CreateTransactionDirect(
       deletes__);
 }
 
-::flatbuffers::Offset<Transaction> CreateTransaction(::flatbuffers::FlatBufferBuilder &_fbb, const TransactionT *_o, const ::flatbuffers::rehasher_function_t *_rehasher = nullptr);
+::flatbuffers::Offset<Update> CreateUpdate(::flatbuffers::FlatBufferBuilder &_fbb, const UpdateT *_o, const ::flatbuffers::rehasher_function_t *_rehasher = nullptr);
 
 struct SnapshotT : public ::flatbuffers::NativeTable {
   typedef Snapshot TableType;
   uint64_t rev = 0;
-  std::vector<std::unique_ptr<nplex::msgs::TransactionT>> transactions{};
+  std::vector<std::unique_ptr<nplex::msgs::UpdateT>> updates{};
   SnapshotT() = default;
   SnapshotT(const SnapshotT &o);
   SnapshotT(SnapshotT&&) FLATBUFFERS_NOEXCEPT = default;
@@ -395,20 +395,20 @@ struct Snapshot FLATBUFFERS_FINAL_CLASS : private ::flatbuffers::Table {
   struct Traits;
   enum FlatBuffersVTableOffset FLATBUFFERS_VTABLE_UNDERLYING_TYPE {
     VT_REV = 4,
-    VT_TRANSACTIONS = 6
+    VT_UPDATES = 6
   };
   uint64_t rev() const {
     return GetField<uint64_t>(VT_REV, 0);
   }
-  const ::flatbuffers::Vector<::flatbuffers::Offset<nplex::msgs::Transaction>> *transactions() const {
-    return GetPointer<const ::flatbuffers::Vector<::flatbuffers::Offset<nplex::msgs::Transaction>> *>(VT_TRANSACTIONS);
+  const ::flatbuffers::Vector<::flatbuffers::Offset<nplex::msgs::Update>> *updates() const {
+    return GetPointer<const ::flatbuffers::Vector<::flatbuffers::Offset<nplex::msgs::Update>> *>(VT_UPDATES);
   }
   bool Verify(::flatbuffers::Verifier &verifier) const {
     return VerifyTableStart(verifier) &&
            VerifyField<uint64_t>(verifier, VT_REV, 8) &&
-           VerifyOffset(verifier, VT_TRANSACTIONS) &&
-           verifier.VerifyVector(transactions()) &&
-           verifier.VerifyVectorOfTables(transactions()) &&
+           VerifyOffset(verifier, VT_UPDATES) &&
+           verifier.VerifyVector(updates()) &&
+           verifier.VerifyVectorOfTables(updates()) &&
            verifier.EndTable();
   }
   SnapshotT *UnPack(const ::flatbuffers::resolver_function_t *_resolver = nullptr) const;
@@ -423,8 +423,8 @@ struct SnapshotBuilder {
   void add_rev(uint64_t rev) {
     fbb_.AddElement<uint64_t>(Snapshot::VT_REV, rev, 0);
   }
-  void add_transactions(::flatbuffers::Offset<::flatbuffers::Vector<::flatbuffers::Offset<nplex::msgs::Transaction>>> transactions) {
-    fbb_.AddOffset(Snapshot::VT_TRANSACTIONS, transactions);
+  void add_updates(::flatbuffers::Offset<::flatbuffers::Vector<::flatbuffers::Offset<nplex::msgs::Update>>> updates) {
+    fbb_.AddOffset(Snapshot::VT_UPDATES, updates);
   }
   explicit SnapshotBuilder(::flatbuffers::FlatBufferBuilder &_fbb)
         : fbb_(_fbb) {
@@ -440,10 +440,10 @@ struct SnapshotBuilder {
 inline ::flatbuffers::Offset<Snapshot> CreateSnapshot(
     ::flatbuffers::FlatBufferBuilder &_fbb,
     uint64_t rev = 0,
-    ::flatbuffers::Offset<::flatbuffers::Vector<::flatbuffers::Offset<nplex::msgs::Transaction>>> transactions = 0) {
+    ::flatbuffers::Offset<::flatbuffers::Vector<::flatbuffers::Offset<nplex::msgs::Update>>> updates = 0) {
   SnapshotBuilder builder_(_fbb);
   builder_.add_rev(rev);
-  builder_.add_transactions(transactions);
+  builder_.add_updates(updates);
   return builder_.Finish();
 }
 
@@ -455,12 +455,12 @@ struct Snapshot::Traits {
 inline ::flatbuffers::Offset<Snapshot> CreateSnapshotDirect(
     ::flatbuffers::FlatBufferBuilder &_fbb,
     uint64_t rev = 0,
-    const std::vector<::flatbuffers::Offset<nplex::msgs::Transaction>> *transactions = nullptr) {
-  auto transactions__ = transactions ? _fbb.CreateVector<::flatbuffers::Offset<nplex::msgs::Transaction>>(*transactions) : 0;
+    const std::vector<::flatbuffers::Offset<nplex::msgs::Update>> *updates = nullptr) {
+  auto updates__ = updates ? _fbb.CreateVector<::flatbuffers::Offset<nplex::msgs::Update>>(*updates) : 0;
   return nplex::msgs::CreateSnapshot(
       _fbb,
       rev,
-      transactions__);
+      updates__);
 }
 
 ::flatbuffers::Offset<Snapshot> CreateSnapshot(::flatbuffers::FlatBufferBuilder &_fbb, const SnapshotT *_o, const ::flatbuffers::rehasher_function_t *_rehasher = nullptr);
@@ -1113,25 +1113,25 @@ struct LoadResponse::Traits {
 
 ::flatbuffers::Offset<LoadResponse> CreateLoadResponse(::flatbuffers::FlatBufferBuilder &_fbb, const LoadResponseT *_o, const ::flatbuffers::rehasher_function_t *_rehasher = nullptr);
 
-struct CommitResponseT : public ::flatbuffers::NativeTable {
-  typedef CommitResponse TableType;
+struct UpdatePushT : public ::flatbuffers::NativeTable {
+  typedef UpdatePush TableType;
   uint64_t cid = 0;
   uint64_t crev = 0;
-  std::unique_ptr<nplex::msgs::TransactionT> transaction{};
-  CommitResponseT() = default;
-  CommitResponseT(const CommitResponseT &o);
-  CommitResponseT(CommitResponseT&&) FLATBUFFERS_NOEXCEPT = default;
-  CommitResponseT &operator=(CommitResponseT o) FLATBUFFERS_NOEXCEPT;
+  std::unique_ptr<nplex::msgs::UpdateT> update{};
+  UpdatePushT() = default;
+  UpdatePushT(const UpdatePushT &o);
+  UpdatePushT(UpdatePushT&&) FLATBUFFERS_NOEXCEPT = default;
+  UpdatePushT &operator=(UpdatePushT o) FLATBUFFERS_NOEXCEPT;
 };
 
-struct CommitResponse FLATBUFFERS_FINAL_CLASS : private ::flatbuffers::Table {
-  typedef CommitResponseT NativeTableType;
-  typedef CommitResponseBuilder Builder;
+struct UpdatePush FLATBUFFERS_FINAL_CLASS : private ::flatbuffers::Table {
+  typedef UpdatePushT NativeTableType;
+  typedef UpdatePushBuilder Builder;
   struct Traits;
   enum FlatBuffersVTableOffset FLATBUFFERS_VTABLE_UNDERLYING_TYPE {
     VT_CID = 4,
     VT_CREV = 6,
-    VT_TRANSACTION = 8
+    VT_UPDATE = 8
   };
   uint64_t cid() const {
     return GetField<uint64_t>(VT_CID, 0);
@@ -1139,64 +1139,64 @@ struct CommitResponse FLATBUFFERS_FINAL_CLASS : private ::flatbuffers::Table {
   uint64_t crev() const {
     return GetField<uint64_t>(VT_CREV, 0);
   }
-  const nplex::msgs::Transaction *transaction() const {
-    return GetPointer<const nplex::msgs::Transaction *>(VT_TRANSACTION);
+  const nplex::msgs::Update *update() const {
+    return GetPointer<const nplex::msgs::Update *>(VT_UPDATE);
   }
   bool Verify(::flatbuffers::Verifier &verifier) const {
     return VerifyTableStart(verifier) &&
            VerifyField<uint64_t>(verifier, VT_CID, 8) &&
            VerifyField<uint64_t>(verifier, VT_CREV, 8) &&
-           VerifyOffset(verifier, VT_TRANSACTION) &&
-           verifier.VerifyTable(transaction()) &&
+           VerifyOffset(verifier, VT_UPDATE) &&
+           verifier.VerifyTable(update()) &&
            verifier.EndTable();
   }
-  CommitResponseT *UnPack(const ::flatbuffers::resolver_function_t *_resolver = nullptr) const;
-  void UnPackTo(CommitResponseT *_o, const ::flatbuffers::resolver_function_t *_resolver = nullptr) const;
-  static ::flatbuffers::Offset<CommitResponse> Pack(::flatbuffers::FlatBufferBuilder &_fbb, const CommitResponseT* _o, const ::flatbuffers::rehasher_function_t *_rehasher = nullptr);
+  UpdatePushT *UnPack(const ::flatbuffers::resolver_function_t *_resolver = nullptr) const;
+  void UnPackTo(UpdatePushT *_o, const ::flatbuffers::resolver_function_t *_resolver = nullptr) const;
+  static ::flatbuffers::Offset<UpdatePush> Pack(::flatbuffers::FlatBufferBuilder &_fbb, const UpdatePushT* _o, const ::flatbuffers::rehasher_function_t *_rehasher = nullptr);
 };
 
-struct CommitResponseBuilder {
-  typedef CommitResponse Table;
+struct UpdatePushBuilder {
+  typedef UpdatePush Table;
   ::flatbuffers::FlatBufferBuilder &fbb_;
   ::flatbuffers::uoffset_t start_;
   void add_cid(uint64_t cid) {
-    fbb_.AddElement<uint64_t>(CommitResponse::VT_CID, cid, 0);
+    fbb_.AddElement<uint64_t>(UpdatePush::VT_CID, cid, 0);
   }
   void add_crev(uint64_t crev) {
-    fbb_.AddElement<uint64_t>(CommitResponse::VT_CREV, crev, 0);
+    fbb_.AddElement<uint64_t>(UpdatePush::VT_CREV, crev, 0);
   }
-  void add_transaction(::flatbuffers::Offset<nplex::msgs::Transaction> transaction) {
-    fbb_.AddOffset(CommitResponse::VT_TRANSACTION, transaction);
+  void add_update(::flatbuffers::Offset<nplex::msgs::Update> update) {
+    fbb_.AddOffset(UpdatePush::VT_UPDATE, update);
   }
-  explicit CommitResponseBuilder(::flatbuffers::FlatBufferBuilder &_fbb)
+  explicit UpdatePushBuilder(::flatbuffers::FlatBufferBuilder &_fbb)
         : fbb_(_fbb) {
     start_ = fbb_.StartTable();
   }
-  ::flatbuffers::Offset<CommitResponse> Finish() {
+  ::flatbuffers::Offset<UpdatePush> Finish() {
     const auto end = fbb_.EndTable(start_);
-    auto o = ::flatbuffers::Offset<CommitResponse>(end);
+    auto o = ::flatbuffers::Offset<UpdatePush>(end);
     return o;
   }
 };
 
-inline ::flatbuffers::Offset<CommitResponse> CreateCommitResponse(
+inline ::flatbuffers::Offset<UpdatePush> CreateUpdatePush(
     ::flatbuffers::FlatBufferBuilder &_fbb,
     uint64_t cid = 0,
     uint64_t crev = 0,
-    ::flatbuffers::Offset<nplex::msgs::Transaction> transaction = 0) {
-  CommitResponseBuilder builder_(_fbb);
+    ::flatbuffers::Offset<nplex::msgs::Update> update = 0) {
+  UpdatePushBuilder builder_(_fbb);
   builder_.add_crev(crev);
   builder_.add_cid(cid);
-  builder_.add_transaction(transaction);
+  builder_.add_update(update);
   return builder_.Finish();
 }
 
-struct CommitResponse::Traits {
-  using type = CommitResponse;
-  static auto constexpr Create = CreateCommitResponse;
+struct UpdatePush::Traits {
+  using type = UpdatePush;
+  static auto constexpr Create = CreateUpdatePush;
 };
 
-::flatbuffers::Offset<CommitResponse> CreateCommitResponse(::flatbuffers::FlatBufferBuilder &_fbb, const CommitResponseT *_o, const ::flatbuffers::rehasher_function_t *_rehasher = nullptr);
+::flatbuffers::Offset<UpdatePush> CreateUpdatePush(::flatbuffers::FlatBufferBuilder &_fbb, const UpdatePushT *_o, const ::flatbuffers::rehasher_function_t *_rehasher = nullptr);
 
 struct SubmitRequestT : public ::flatbuffers::NativeTable {
   typedef SubmitRequest TableType;
@@ -1449,14 +1449,14 @@ inline ::flatbuffers::Offset<SubmitResponse> CreateSubmitResponseDirect(
 
 ::flatbuffers::Offset<SubmitResponse> CreateSubmitResponse(::flatbuffers::FlatBufferBuilder &_fbb, const SubmitResponseT *_o, const ::flatbuffers::rehasher_function_t *_rehasher = nullptr);
 
-struct KeepAliveRequestT : public ::flatbuffers::NativeTable {
-  typedef KeepAliveRequest TableType;
+struct KeepAlivePushT : public ::flatbuffers::NativeTable {
+  typedef KeepAlivePush TableType;
   uint64_t crev = 0;
 };
 
-struct KeepAliveRequest FLATBUFFERS_FINAL_CLASS : private ::flatbuffers::Table {
-  typedef KeepAliveRequestT NativeTableType;
-  typedef KeepAliveRequestBuilder Builder;
+struct KeepAlivePush FLATBUFFERS_FINAL_CLASS : private ::flatbuffers::Table {
+  typedef KeepAlivePushT NativeTableType;
+  typedef KeepAlivePushBuilder Builder;
   struct Traits;
   enum FlatBuffersVTableOffset FLATBUFFERS_VTABLE_UNDERLYING_TYPE {
     VT_CREV = 4
@@ -1469,43 +1469,43 @@ struct KeepAliveRequest FLATBUFFERS_FINAL_CLASS : private ::flatbuffers::Table {
            VerifyField<uint64_t>(verifier, VT_CREV, 8) &&
            verifier.EndTable();
   }
-  KeepAliveRequestT *UnPack(const ::flatbuffers::resolver_function_t *_resolver = nullptr) const;
-  void UnPackTo(KeepAliveRequestT *_o, const ::flatbuffers::resolver_function_t *_resolver = nullptr) const;
-  static ::flatbuffers::Offset<KeepAliveRequest> Pack(::flatbuffers::FlatBufferBuilder &_fbb, const KeepAliveRequestT* _o, const ::flatbuffers::rehasher_function_t *_rehasher = nullptr);
+  KeepAlivePushT *UnPack(const ::flatbuffers::resolver_function_t *_resolver = nullptr) const;
+  void UnPackTo(KeepAlivePushT *_o, const ::flatbuffers::resolver_function_t *_resolver = nullptr) const;
+  static ::flatbuffers::Offset<KeepAlivePush> Pack(::flatbuffers::FlatBufferBuilder &_fbb, const KeepAlivePushT* _o, const ::flatbuffers::rehasher_function_t *_rehasher = nullptr);
 };
 
-struct KeepAliveRequestBuilder {
-  typedef KeepAliveRequest Table;
+struct KeepAlivePushBuilder {
+  typedef KeepAlivePush Table;
   ::flatbuffers::FlatBufferBuilder &fbb_;
   ::flatbuffers::uoffset_t start_;
   void add_crev(uint64_t crev) {
-    fbb_.AddElement<uint64_t>(KeepAliveRequest::VT_CREV, crev, 0);
+    fbb_.AddElement<uint64_t>(KeepAlivePush::VT_CREV, crev, 0);
   }
-  explicit KeepAliveRequestBuilder(::flatbuffers::FlatBufferBuilder &_fbb)
+  explicit KeepAlivePushBuilder(::flatbuffers::FlatBufferBuilder &_fbb)
         : fbb_(_fbb) {
     start_ = fbb_.StartTable();
   }
-  ::flatbuffers::Offset<KeepAliveRequest> Finish() {
+  ::flatbuffers::Offset<KeepAlivePush> Finish() {
     const auto end = fbb_.EndTable(start_);
-    auto o = ::flatbuffers::Offset<KeepAliveRequest>(end);
+    auto o = ::flatbuffers::Offset<KeepAlivePush>(end);
     return o;
   }
 };
 
-inline ::flatbuffers::Offset<KeepAliveRequest> CreateKeepAliveRequest(
+inline ::flatbuffers::Offset<KeepAlivePush> CreateKeepAlivePush(
     ::flatbuffers::FlatBufferBuilder &_fbb,
     uint64_t crev = 0) {
-  KeepAliveRequestBuilder builder_(_fbb);
+  KeepAlivePushBuilder builder_(_fbb);
   builder_.add_crev(crev);
   return builder_.Finish();
 }
 
-struct KeepAliveRequest::Traits {
-  using type = KeepAliveRequest;
-  static auto constexpr Create = CreateKeepAliveRequest;
+struct KeepAlivePush::Traits {
+  using type = KeepAlivePush;
+  static auto constexpr Create = CreateKeepAlivePush;
 };
 
-::flatbuffers::Offset<KeepAliveRequest> CreateKeepAliveRequest(::flatbuffers::FlatBufferBuilder &_fbb, const KeepAliveRequestT *_o, const ::flatbuffers::rehasher_function_t *_rehasher = nullptr);
+::flatbuffers::Offset<KeepAlivePush> CreateKeepAlivePush(::flatbuffers::FlatBufferBuilder &_fbb, const KeepAlivePushT *_o, const ::flatbuffers::rehasher_function_t *_rehasher = nullptr);
 
 inline KeyValueT *KeyValue::UnPack(const ::flatbuffers::resolver_function_t *_resolver) const {
   auto _o = std::make_unique<KeyValueT>();
@@ -1536,7 +1536,7 @@ inline ::flatbuffers::Offset<KeyValue> CreateKeyValue(::flatbuffers::FlatBufferB
       _value);
 }
 
-inline TransactionT::TransactionT(const TransactionT &o)
+inline UpdateT::UpdateT(const UpdateT &o)
       : rev(o.rev),
         user(o.user),
         timestamp(o.timestamp),
@@ -1546,7 +1546,7 @@ inline TransactionT::TransactionT(const TransactionT &o)
   for (const auto &upserts_ : o.upserts) { upserts.emplace_back((upserts_) ? new nplex::msgs::KeyValueT(*upserts_) : nullptr); }
 }
 
-inline TransactionT &TransactionT::operator=(TransactionT o) FLATBUFFERS_NOEXCEPT {
+inline UpdateT &UpdateT::operator=(UpdateT o) FLATBUFFERS_NOEXCEPT {
   std::swap(rev, o.rev);
   std::swap(user, o.user);
   std::swap(timestamp, o.timestamp);
@@ -1556,13 +1556,13 @@ inline TransactionT &TransactionT::operator=(TransactionT o) FLATBUFFERS_NOEXCEP
   return *this;
 }
 
-inline TransactionT *Transaction::UnPack(const ::flatbuffers::resolver_function_t *_resolver) const {
-  auto _o = std::make_unique<TransactionT>();
+inline UpdateT *Update::UnPack(const ::flatbuffers::resolver_function_t *_resolver) const {
+  auto _o = std::make_unique<UpdateT>();
   UnPackTo(_o.get(), _resolver);
   return _o.release();
 }
 
-inline void Transaction::UnPackTo(TransactionT *_o, const ::flatbuffers::resolver_function_t *_resolver) const {
+inline void Update::UnPackTo(UpdateT *_o, const ::flatbuffers::resolver_function_t *_resolver) const {
   (void)_o;
   (void)_resolver;
   { auto _e = rev(); _o->rev = _e; }
@@ -1573,21 +1573,21 @@ inline void Transaction::UnPackTo(TransactionT *_o, const ::flatbuffers::resolve
   { auto _e = deletes(); if (_e) { _o->deletes.resize(_e->size()); for (::flatbuffers::uoffset_t _i = 0; _i < _e->size(); _i++) { _o->deletes[_i] = _e->Get(_i)->str(); } } else { _o->deletes.resize(0); } }
 }
 
-inline ::flatbuffers::Offset<Transaction> Transaction::Pack(::flatbuffers::FlatBufferBuilder &_fbb, const TransactionT* _o, const ::flatbuffers::rehasher_function_t *_rehasher) {
-  return CreateTransaction(_fbb, _o, _rehasher);
+inline ::flatbuffers::Offset<Update> Update::Pack(::flatbuffers::FlatBufferBuilder &_fbb, const UpdateT* _o, const ::flatbuffers::rehasher_function_t *_rehasher) {
+  return CreateUpdate(_fbb, _o, _rehasher);
 }
 
-inline ::flatbuffers::Offset<Transaction> CreateTransaction(::flatbuffers::FlatBufferBuilder &_fbb, const TransactionT *_o, const ::flatbuffers::rehasher_function_t *_rehasher) {
+inline ::flatbuffers::Offset<Update> CreateUpdate(::flatbuffers::FlatBufferBuilder &_fbb, const UpdateT *_o, const ::flatbuffers::rehasher_function_t *_rehasher) {
   (void)_rehasher;
   (void)_o;
-  struct _VectorArgs { ::flatbuffers::FlatBufferBuilder *__fbb; const TransactionT* __o; const ::flatbuffers::rehasher_function_t *__rehasher; } _va = { &_fbb, _o, _rehasher}; (void)_va;
+  struct _VectorArgs { ::flatbuffers::FlatBufferBuilder *__fbb; const UpdateT* __o; const ::flatbuffers::rehasher_function_t *__rehasher; } _va = { &_fbb, _o, _rehasher}; (void)_va;
   auto _rev = _o->rev;
   auto _user = _o->user.empty() ? 0 : _fbb.CreateString(_o->user);
   auto _timestamp = _o->timestamp;
   auto _type = _o->type;
   auto _upserts = _o->upserts.size() ? _fbb.CreateVector<::flatbuffers::Offset<nplex::msgs::KeyValue>> (_o->upserts.size(), [](size_t i, _VectorArgs *__va) { return CreateKeyValue(*__va->__fbb, __va->__o->upserts[i].get(), __va->__rehasher); }, &_va ) : 0;
   auto _deletes = _o->deletes.size() ? _fbb.CreateVectorOfStrings(_o->deletes) : 0;
-  return nplex::msgs::CreateTransaction(
+  return nplex::msgs::CreateUpdate(
       _fbb,
       _rev,
       _user,
@@ -1599,13 +1599,13 @@ inline ::flatbuffers::Offset<Transaction> CreateTransaction(::flatbuffers::FlatB
 
 inline SnapshotT::SnapshotT(const SnapshotT &o)
       : rev(o.rev) {
-  transactions.reserve(o.transactions.size());
-  for (const auto &transactions_ : o.transactions) { transactions.emplace_back((transactions_) ? new nplex::msgs::TransactionT(*transactions_) : nullptr); }
+  updates.reserve(o.updates.size());
+  for (const auto &updates_ : o.updates) { updates.emplace_back((updates_) ? new nplex::msgs::UpdateT(*updates_) : nullptr); }
 }
 
 inline SnapshotT &SnapshotT::operator=(SnapshotT o) FLATBUFFERS_NOEXCEPT {
   std::swap(rev, o.rev);
-  std::swap(transactions, o.transactions);
+  std::swap(updates, o.updates);
   return *this;
 }
 
@@ -1619,7 +1619,7 @@ inline void Snapshot::UnPackTo(SnapshotT *_o, const ::flatbuffers::resolver_func
   (void)_o;
   (void)_resolver;
   { auto _e = rev(); _o->rev = _e; }
-  { auto _e = transactions(); if (_e) { _o->transactions.resize(_e->size()); for (::flatbuffers::uoffset_t _i = 0; _i < _e->size(); _i++) { if(_o->transactions[_i]) { _e->Get(_i)->UnPackTo(_o->transactions[_i].get(), _resolver); } else { _o->transactions[_i] = std::unique_ptr<nplex::msgs::TransactionT>(_e->Get(_i)->UnPack(_resolver)); }; } } else { _o->transactions.resize(0); } }
+  { auto _e = updates(); if (_e) { _o->updates.resize(_e->size()); for (::flatbuffers::uoffset_t _i = 0; _i < _e->size(); _i++) { if(_o->updates[_i]) { _e->Get(_i)->UnPackTo(_o->updates[_i].get(), _resolver); } else { _o->updates[_i] = std::unique_ptr<nplex::msgs::UpdateT>(_e->Get(_i)->UnPack(_resolver)); }; } } else { _o->updates.resize(0); } }
 }
 
 inline ::flatbuffers::Offset<Snapshot> Snapshot::Pack(::flatbuffers::FlatBufferBuilder &_fbb, const SnapshotT* _o, const ::flatbuffers::rehasher_function_t *_rehasher) {
@@ -1631,11 +1631,11 @@ inline ::flatbuffers::Offset<Snapshot> CreateSnapshot(::flatbuffers::FlatBufferB
   (void)_o;
   struct _VectorArgs { ::flatbuffers::FlatBufferBuilder *__fbb; const SnapshotT* __o; const ::flatbuffers::rehasher_function_t *__rehasher; } _va = { &_fbb, _o, _rehasher}; (void)_va;
   auto _rev = _o->rev;
-  auto _transactions = _o->transactions.size() ? _fbb.CreateVector<::flatbuffers::Offset<nplex::msgs::Transaction>> (_o->transactions.size(), [](size_t i, _VectorArgs *__va) { return CreateTransaction(*__va->__fbb, __va->__o->transactions[i].get(), __va->__rehasher); }, &_va ) : 0;
+  auto _updates = _o->updates.size() ? _fbb.CreateVector<::flatbuffers::Offset<nplex::msgs::Update>> (_o->updates.size(), [](size_t i, _VectorArgs *__va) { return CreateUpdate(*__va->__fbb, __va->__o->updates[i].get(), __va->__rehasher); }, &_va ) : 0;
   return nplex::msgs::CreateSnapshot(
       _fbb,
       _rev,
-      _transactions);
+      _updates);
 }
 
 inline CheckT *Check::UnPack(const ::flatbuffers::resolver_function_t *_resolver) const {
@@ -1880,49 +1880,49 @@ inline ::flatbuffers::Offset<LoadResponse> CreateLoadResponse(::flatbuffers::Fla
       _snapshot);
 }
 
-inline CommitResponseT::CommitResponseT(const CommitResponseT &o)
+inline UpdatePushT::UpdatePushT(const UpdatePushT &o)
       : cid(o.cid),
         crev(o.crev),
-        transaction((o.transaction) ? new nplex::msgs::TransactionT(*o.transaction) : nullptr) {
+        update((o.update) ? new nplex::msgs::UpdateT(*o.update) : nullptr) {
 }
 
-inline CommitResponseT &CommitResponseT::operator=(CommitResponseT o) FLATBUFFERS_NOEXCEPT {
+inline UpdatePushT &UpdatePushT::operator=(UpdatePushT o) FLATBUFFERS_NOEXCEPT {
   std::swap(cid, o.cid);
   std::swap(crev, o.crev);
-  std::swap(transaction, o.transaction);
+  std::swap(update, o.update);
   return *this;
 }
 
-inline CommitResponseT *CommitResponse::UnPack(const ::flatbuffers::resolver_function_t *_resolver) const {
-  auto _o = std::make_unique<CommitResponseT>();
+inline UpdatePushT *UpdatePush::UnPack(const ::flatbuffers::resolver_function_t *_resolver) const {
+  auto _o = std::make_unique<UpdatePushT>();
   UnPackTo(_o.get(), _resolver);
   return _o.release();
 }
 
-inline void CommitResponse::UnPackTo(CommitResponseT *_o, const ::flatbuffers::resolver_function_t *_resolver) const {
+inline void UpdatePush::UnPackTo(UpdatePushT *_o, const ::flatbuffers::resolver_function_t *_resolver) const {
   (void)_o;
   (void)_resolver;
   { auto _e = cid(); _o->cid = _e; }
   { auto _e = crev(); _o->crev = _e; }
-  { auto _e = transaction(); if (_e) { if(_o->transaction) { _e->UnPackTo(_o->transaction.get(), _resolver); } else { _o->transaction = std::unique_ptr<nplex::msgs::TransactionT>(_e->UnPack(_resolver)); } } else if (_o->transaction) { _o->transaction.reset(); } }
+  { auto _e = update(); if (_e) { if(_o->update) { _e->UnPackTo(_o->update.get(), _resolver); } else { _o->update = std::unique_ptr<nplex::msgs::UpdateT>(_e->UnPack(_resolver)); } } else if (_o->update) { _o->update.reset(); } }
 }
 
-inline ::flatbuffers::Offset<CommitResponse> CommitResponse::Pack(::flatbuffers::FlatBufferBuilder &_fbb, const CommitResponseT* _o, const ::flatbuffers::rehasher_function_t *_rehasher) {
-  return CreateCommitResponse(_fbb, _o, _rehasher);
+inline ::flatbuffers::Offset<UpdatePush> UpdatePush::Pack(::flatbuffers::FlatBufferBuilder &_fbb, const UpdatePushT* _o, const ::flatbuffers::rehasher_function_t *_rehasher) {
+  return CreateUpdatePush(_fbb, _o, _rehasher);
 }
 
-inline ::flatbuffers::Offset<CommitResponse> CreateCommitResponse(::flatbuffers::FlatBufferBuilder &_fbb, const CommitResponseT *_o, const ::flatbuffers::rehasher_function_t *_rehasher) {
+inline ::flatbuffers::Offset<UpdatePush> CreateUpdatePush(::flatbuffers::FlatBufferBuilder &_fbb, const UpdatePushT *_o, const ::flatbuffers::rehasher_function_t *_rehasher) {
   (void)_rehasher;
   (void)_o;
-  struct _VectorArgs { ::flatbuffers::FlatBufferBuilder *__fbb; const CommitResponseT* __o; const ::flatbuffers::rehasher_function_t *__rehasher; } _va = { &_fbb, _o, _rehasher}; (void)_va;
+  struct _VectorArgs { ::flatbuffers::FlatBufferBuilder *__fbb; const UpdatePushT* __o; const ::flatbuffers::rehasher_function_t *__rehasher; } _va = { &_fbb, _o, _rehasher}; (void)_va;
   auto _cid = _o->cid;
   auto _crev = _o->crev;
-  auto _transaction = _o->transaction ? CreateTransaction(_fbb, _o->transaction.get(), _rehasher) : 0;
-  return nplex::msgs::CreateCommitResponse(
+  auto _update = _o->update ? CreateUpdate(_fbb, _o->update.get(), _rehasher) : 0;
+  return nplex::msgs::CreateUpdatePush(
       _fbb,
       _cid,
       _crev,
-      _transaction);
+      _update);
 }
 
 inline SubmitRequestT::SubmitRequestT(const SubmitRequestT &o)
@@ -2022,28 +2022,28 @@ inline ::flatbuffers::Offset<SubmitResponse> CreateSubmitResponse(::flatbuffers:
       _error);
 }
 
-inline KeepAliveRequestT *KeepAliveRequest::UnPack(const ::flatbuffers::resolver_function_t *_resolver) const {
-  auto _o = std::make_unique<KeepAliveRequestT>();
+inline KeepAlivePushT *KeepAlivePush::UnPack(const ::flatbuffers::resolver_function_t *_resolver) const {
+  auto _o = std::make_unique<KeepAlivePushT>();
   UnPackTo(_o.get(), _resolver);
   return _o.release();
 }
 
-inline void KeepAliveRequest::UnPackTo(KeepAliveRequestT *_o, const ::flatbuffers::resolver_function_t *_resolver) const {
+inline void KeepAlivePush::UnPackTo(KeepAlivePushT *_o, const ::flatbuffers::resolver_function_t *_resolver) const {
   (void)_o;
   (void)_resolver;
   { auto _e = crev(); _o->crev = _e; }
 }
 
-inline ::flatbuffers::Offset<KeepAliveRequest> KeepAliveRequest::Pack(::flatbuffers::FlatBufferBuilder &_fbb, const KeepAliveRequestT* _o, const ::flatbuffers::rehasher_function_t *_rehasher) {
-  return CreateKeepAliveRequest(_fbb, _o, _rehasher);
+inline ::flatbuffers::Offset<KeepAlivePush> KeepAlivePush::Pack(::flatbuffers::FlatBufferBuilder &_fbb, const KeepAlivePushT* _o, const ::flatbuffers::rehasher_function_t *_rehasher) {
+  return CreateKeepAlivePush(_fbb, _o, _rehasher);
 }
 
-inline ::flatbuffers::Offset<KeepAliveRequest> CreateKeepAliveRequest(::flatbuffers::FlatBufferBuilder &_fbb, const KeepAliveRequestT *_o, const ::flatbuffers::rehasher_function_t *_rehasher) {
+inline ::flatbuffers::Offset<KeepAlivePush> CreateKeepAlivePush(::flatbuffers::FlatBufferBuilder &_fbb, const KeepAlivePushT *_o, const ::flatbuffers::rehasher_function_t *_rehasher) {
   (void)_rehasher;
   (void)_o;
-  struct _VectorArgs { ::flatbuffers::FlatBufferBuilder *__fbb; const KeepAliveRequestT* __o; const ::flatbuffers::rehasher_function_t *__rehasher; } _va = { &_fbb, _o, _rehasher}; (void)_va;
+  struct _VectorArgs { ::flatbuffers::FlatBufferBuilder *__fbb; const KeepAlivePushT* __o; const ::flatbuffers::rehasher_function_t *__rehasher; } _va = { &_fbb, _o, _rehasher}; (void)_va;
   auto _crev = _o->crev;
-  return nplex::msgs::CreateKeepAliveRequest(
+  return nplex::msgs::CreateKeepAlivePush(
       _fbb,
       _crev);
 }

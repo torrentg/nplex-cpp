@@ -109,14 +109,14 @@ TEST_CASE("LoadResponse")
         make_snapshot(
             1024,
             {
-                make_transaction(42, "jdoe", 1234567890, 15,
+                make_update(42, "jdoe", 1234567890, 15,
                     {
                         { .key = "key1", .value = {1, 2, 3}},
                         { .key = "key2", .value = {4, 5, 6}}
                     },
                     {}  // there are no deletes on snapshots
                 ),
-                make_transaction(546, "ljohnson", 1234567999, 7,
+                make_update(546, "ljohnson", 1234567999, 7,
                     {
                         { .key = "key5", .value = {1, 2, 3}},
                         { .key = "key6", .value = {4, 5, 6}}
@@ -137,31 +137,31 @@ TEST_CASE("LoadResponse")
 
     REQUIRE(ptr->snapshot());
     CHECK(ptr->snapshot()->rev() == 1024);
-    REQUIRE(ptr->snapshot()->transactions());
-    REQUIRE(ptr->snapshot()->transactions()->size() == 2);
+    REQUIRE(ptr->snapshot()->updates());
+    REQUIRE(ptr->snapshot()->updates()->size() == 2);
 
-    for (uoffset_t i = 0; i < ptr->snapshot()->transactions()->size(); i++)
+    for (uoffset_t i = 0; i < ptr->snapshot()->updates()->size(); i++)
     {
-        auto tx = ptr->snapshot()->transactions()->Get(i);
+        auto tx = ptr->snapshot()->updates()->Get(i);
 
-        CHECK(tx->rev() == resp.snapshot->transactions[i]->rev);
-        CHECK(tx->user()->str() == resp.snapshot->transactions[i]->user);
-        CHECK(tx->timestamp() == resp.snapshot->transactions[i]->timestamp);
-        CHECK(tx->type() == resp.snapshot->transactions[i]->type);
+        CHECK(tx->rev() == resp.snapshot->updates[i]->rev);
+        CHECK(tx->user()->str() == resp.snapshot->updates[i]->user);
+        CHECK(tx->timestamp() == resp.snapshot->updates[i]->timestamp);
+        CHECK(tx->type() == resp.snapshot->updates[i]->type);
 
         REQUIRE(tx->upserts());
-        REQUIRE(tx->upserts()->size() == resp.snapshot->transactions[i]->upserts.size());
+        REQUIRE(tx->upserts()->size() == resp.snapshot->updates[i]->upserts.size());
 
         for (uoffset_t j = 0; j < tx->upserts()->size(); j++)
         {
             auto kv = tx->upserts()->Get(j);
 
-            CHECK(kv->key()->str() == resp.snapshot->transactions[i]->upserts[j]->key);
-            CHECK(kv->value()->size() == resp.snapshot->transactions[i]->upserts[j]->value.size());
+            CHECK(kv->key()->str() == resp.snapshot->updates[i]->upserts[j]->key);
+            CHECK(kv->value()->size() == resp.snapshot->updates[i]->upserts[j]->value.size());
 
             for (uoffset_t k = 0; k < kv->value()->size(); k++)
             {
-                CHECK(kv->value()->Get(k) == resp.snapshot->transactions[i]->upserts[j]->value[k]);
+                CHECK(kv->value()->Get(k) == resp.snapshot->updates[i]->upserts[j]->value[k]);
             }
         }
 
@@ -169,12 +169,12 @@ TEST_CASE("LoadResponse")
     }
 }
 
-TEST_CASE("CommitResponse")
+TEST_CASE("UpdatePush")
 {
-    CommitResponseT resp = make_commit(
+    UpdatePushT push = make_update_push(
         3,          // cid
         2048,       // crev
-        make_transaction(1056, "akay", 1234568000, 4,
+        make_update(1056, "akay", 1234568000, 4,
             {
                 { .key = "key1", .value = {97, 98, 99}},
                 { .key = "key6", .value = {10}}
@@ -185,41 +185,41 @@ TEST_CASE("CommitResponse")
         )
     );
 
-    auto buf = serialize(resp);
-    auto *ptr = ::GetRoot<nplex::msgs::CommitResponse>(buf.data());
+    auto buf = serialize(push);
+    auto *ptr = ::GetRoot<nplex::msgs::UpdatePush>(buf.data());
 
     REQUIRE(ptr);
     CHECK(ptr->cid() == 3);
     CHECK(ptr->crev() == 2048);
 
-    REQUIRE(ptr->transaction());
-    CHECK(ptr->transaction()->rev() == resp.transaction->rev);
-    CHECK(ptr->transaction()->user()->str() == resp.transaction->user);
-    CHECK(ptr->transaction()->timestamp() == resp.transaction->timestamp);
-    CHECK(ptr->transaction()->type() == resp.transaction->type);
+    REQUIRE(ptr->update());
+    CHECK(ptr->update()->rev() == push.update->rev);
+    CHECK(ptr->update()->user()->str() == push.update->user);
+    CHECK(ptr->update()->timestamp() == push.update->timestamp);
+    CHECK(ptr->update()->type() == push.update->type);
 
-    REQUIRE(ptr->transaction()->upserts());
-    REQUIRE(ptr->transaction()->upserts()->size() == resp.transaction->upserts.size());
+    REQUIRE(ptr->update()->upserts());
+    REQUIRE(ptr->update()->upserts()->size() == push.update->upserts.size());
 
-    for (uoffset_t i = 0; i < ptr->transaction()->upserts()->size(); i++)
+    for (uoffset_t i = 0; i < ptr->update()->upserts()->size(); i++)
     {
-        auto kv = ptr->transaction()->upserts()->Get(i);
+        auto kv = ptr->update()->upserts()->Get(i);
 
-        CHECK(kv->key()->str() == resp.transaction->upserts[i]->key);
-        CHECK(kv->value()->size() == resp.transaction->upserts[i]->value.size());
+        CHECK(kv->key()->str() == push.update->upserts[i]->key);
+        CHECK(kv->value()->size() == push.update->upserts[i]->value.size());
 
         for (uoffset_t j = 0; j < kv->value()->size(); j++)
         {
-            CHECK(kv->value()->Get(j) == resp.transaction->upserts[i]->value[j]);
+            CHECK(kv->value()->Get(j) == push.update->upserts[i]->value[j]);
         }
     }
 
-    REQUIRE(ptr->transaction()->deletes());
-    REQUIRE(ptr->transaction()->deletes()->size() == resp.transaction->deletes.size());
+    REQUIRE(ptr->update()->deletes());
+    REQUIRE(ptr->update()->deletes()->size() == push.update->deletes.size());
 
-    for (uoffset_t i = 0; i < ptr->transaction()->deletes()->size(); i++)
+    for (uoffset_t i = 0; i < ptr->update()->deletes()->size(); i++)
     {
-        CHECK(ptr->transaction()->deletes()->Get(i)->str() == resp.transaction->deletes[i]);
+        CHECK(ptr->update()->deletes()->Get(i)->str() == push.update->deletes[i]);
     }
 }
 
@@ -304,15 +304,15 @@ TEST_CASE("SubmitResponse")
     CHECK(!ptr->error());
 }
 
-TEST_CASE("KeepAlive")
+TEST_CASE("KeepAlivePush")
 {
-    KeepAliveRequestT req = {
+    KeepAlivePushT req = {
         {},         // Native table
         2049        // crev
     };
 
     auto buf = serialize(req);
-    auto *ptr = ::GetRoot<nplex::msgs::KeepAliveRequest>(buf.data());
+    auto *ptr = ::GetRoot<nplex::msgs::KeepAlivePush>(buf.data());
 
     REQUIRE(ptr);
     CHECK(ptr->crev() == 2049);

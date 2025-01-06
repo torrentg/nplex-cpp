@@ -10,7 +10,7 @@ namespace nplex {
 // Forward declarations
 namespace msgs {
     class Snapshot;
-    class Transaction;
+    class Update;
 }
 
 /**
@@ -50,13 +50,13 @@ struct cache_t
      * 
      * On exception, the database is left in an inconsistent state.
      * 
-     * @param[in] transaction Transaction to apply.
+     * @param[in] updmsg Update to apply.
      * 
      * @return List of applied changes.
      * 
-     * @exception nplex_exception Invalid transaction.
+     * @exception nplex_exception Invalid update (ex: update.rev < cache.rev, or invalid-key).
      */
-    std::vector<change_t> update(const msgs::Transaction *transaction);
+    std::vector<change_t> update(const msgs::Update *updmsg);
 
   private:
 
@@ -65,11 +65,11 @@ struct cache_t
      * Updates metas and users cache objects.
      * Caution, internal function not guarded by the mutex.
      * 
-     * @param[in] transaction Transaction to process.
+     * @param[in] updmsg Update to process.
      * 
      * @return The inserted metadata.
      */
-    meta_ptr create_meta(const msgs::Transaction *transaction);
+    meta_ptr create_meta(const msgs::Update *updmsg);
 
     /**
      * Release a metadata decreasing the ref counters and removing 

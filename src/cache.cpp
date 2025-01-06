@@ -4,8 +4,6 @@
 #include "messages.hpp"
 #include "cache.hpp"
 
-// g++ -Wall -Wextra -Wshadow  -Wconversion -std=c++20 -I../deps -c cache.cpp
-
 namespace {
 
 using namespace nplex;
@@ -16,15 +14,15 @@ gto::cstring create_cstring(const flatbuffers::Vector<uint8_t> *value) {
 
 }; // unnamed namespace
 
-nplex::meta_ptr nplex::cache_t::create_meta(const msgs::Transaction *transaction)
+nplex::meta_ptr nplex::cache_t::create_meta(const msgs::Update *updmsg)
 {
     gto::cstring user;
-    rev_t rev = transaction->rev();
-    auto user_it = m_users.find(transaction->user()->c_str());
+    rev_t rev = updmsg->rev();
+    auto user_it = m_users.find(updmsg->user()->c_str());
 
     if (user_it == m_users.end())
     {
-        user = transaction->user()->c_str();
+        user = updmsg->user()->c_str();
         m_users.emplace(user, 1);
     }
     else
@@ -33,9 +31,9 @@ nplex::meta_ptr nplex::cache_t::create_meta(const msgs::Transaction *transaction
         user_it->second++;
     }
 
-    millis_t timestamp = std::chrono::milliseconds{transaction->timestamp()};
+    millis_t timestamp = std::chrono::milliseconds{updmsg->timestamp()};
 
-    return std::make_shared<meta_t>((meta_t){rev, user, timestamp, transaction->type(), 0});
+    return std::make_shared<meta_t>((meta_t){rev, user, timestamp, updmsg->type(), 0});
 }
 
 void nplex::cache_t::release_meta(const meta_ptr &meta)
@@ -132,13 +130,13 @@ void nplex::cache_t::restore(const msgs::Snapshot *snapshot)
     if (!snapshot)
         return;
 
-    auto transactions = snapshot->transactions();
+    auto updates = snapshot->updates();
 
-    if (transactions)
+    if (updates)
     {
-        for (flatbuffers::uoffset_t i = 0; i < transactions->size(); i++)
+        for (flatbuffers::uoffset_t i = 0; i < updates->size(); i++)
         {
-            update(transactions->Get(i));
+            update(updates->Get(i));
 
             if (m_rev > snapshot->rev())
                 throw nplex_exception("invalid snapshot revision");
@@ -148,27 +146,27 @@ void nplex::cache_t::restore(const msgs::Snapshot *snapshot)
     m_rev = snapshot->rev();
 }
 
-std::vector<change_t> nplex::cache_t::update(const msgs::Transaction *transaction)
+std::vector<change_t> nplex::cache_t::update(const msgs::Update *updmsg)
 {
-    if (!transaction) {
+    if (!updmsg) {
         assert(false);
         return {};
     }
 
     std::vector<change_t> changes;
-    auto upserts = transaction->upserts();
-    auto deletes = transaction->deletes();
+    auto upserts = updmsg->upserts();
+    auto deletes = updmsg->deletes();
 
     changes.reserve((upserts ? upserts->size() : 0) + (deletes ? deletes->size() : 0));
 
     std::lock_guard<decltype(m_mutex)> lock(m_mutex);
 
-    rev_t rev = transaction->rev();
+    rev_t rev = updmsg->rev();
 
     if (rev <= m_rev)
-        throw nplex_exception("invalid transaction revision");
+        throw nplex_exception("invalid update revision");
 
-    auto meta = create_meta(transaction);
+    auto meta = create_meta(updmsg);
 
     m_rev = rev;
 

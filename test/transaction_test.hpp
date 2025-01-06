@@ -29,12 +29,12 @@ namespace tests {
      *      key8 = 82
      * }
      * 
-     * transactions = {
+     * tx-metadatas = {
      *     { rev = 1, user = jdoe },
      *     { rev = 2, user = ljohnson }
      * }
      * 
-     * users = { 
+     * tx-users = { 
      *      jdoe, 
      *      ljohnson
      * }
@@ -48,9 +48,9 @@ namespace tests {
     {
         flatbuffers::DetachedBuffer buf;
         cache_ptr cache = std::make_shared<cache_t>();
-        const msgs::Transaction *ptr = nullptr;
+        const msgs::Update *ptr = nullptr;
 
-        auto transaction1 = make_transaction(1, "jdoe", 1234567890, 15,
+        auto transaction1 = make_update(1, "jdoe", 1234567890, 15,
             {
                 { .key = "key1", .value = {11}},
                 { .key = "key2", .value = {21}},
@@ -63,12 +63,12 @@ namespace tests {
         );
 
         buf = serialize(transaction1);
-        ptr = flatbuffers::GetRoot<nplex::msgs::Transaction>(buf.data());
+        ptr = flatbuffers::GetRoot<nplex::msgs::Update>(buf.data());
 
         REQUIRE_NOTHROW(cache->update(ptr));
         CHECK(cache->m_rev == 1);
 
-        auto transaction2 = make_transaction(2, "ljohnson", 1234567895, 7,
+        auto transaction2 = make_update(2, "ljohnson", 1234567895, 7,
             {
                 { .key = "key3", .value = {32}},
                 { .key = "key4", .value = {42}},
@@ -79,7 +79,7 @@ namespace tests {
         );
 
         buf = serialize(transaction2);
-        ptr = flatbuffers::GetRoot<nplex::msgs::Transaction>(buf.data());
+        ptr = flatbuffers::GetRoot<nplex::msgs::Update>(buf.data());
 
         REQUIRE_NOTHROW(cache->update(ptr));
         CHECK(cache->m_rev == 2);

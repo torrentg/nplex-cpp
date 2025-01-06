@@ -14,14 +14,14 @@ TEST_CASE("cache_restore")
     auto snapshot = make_snapshot(
         1024,
         {
-            make_transaction(42, "jdoe", 1234567890, 15,
+            make_update(42, "jdoe", 1234567890, 15,
                 {
                     { .key = "key1", .value = {1, 2, 3}},
                     { .key = "key2", .value = {4, 5, 6}}
                 },
                 {}  // there are no deletes on snapshots
             ),
-            make_transaction(546, "ljohnson", 1234567999, 7,
+            make_update(546, "ljohnson", 1234567999, 7,
                 {
                     { .key = "key5", .value = {7, 8}},
                     { .key = "key6", .value = {9}}
@@ -86,7 +86,7 @@ TEST_CASE("cache_restore_empty")
 {
     auto snapshot = make_snapshot(
         1024,
-        {}      // no transactions
+        {}      // no updates
     );
 
     auto buf = serialize(snapshot);
@@ -118,14 +118,14 @@ TEST_CASE("cache_restore_error_has_tx_rev_gt_rev")
     auto snapshot = make_snapshot(
         100,
         {
-            make_transaction(42, "jdoe", 1234567890, 15,
+            make_update(42, "jdoe", 1234567890, 15,
                 {
                     { .key = "key1", .value = {1, 2, 3}},
                     { .key = "key2", .value = {4, 5, 6}}
                 },
                 {}  // there are no deletes on snapshots
             ),
-            make_transaction(546, "ljohnson", 1234567999, 7,
+            make_update(546, "ljohnson", 1234567999, 7,
                 {
                     { .key = "key5", .value = {7, 8}},
                     { .key = "key6", .value = {9}}
@@ -147,14 +147,14 @@ TEST_CASE("cache_restore_error_unsorted_tx")
     auto snapshot = make_snapshot(
         1024,
         {
-            make_transaction(546, "jdoe", 1234567890, 15,
+            make_update(546, "jdoe", 1234567890, 15,
                 {
                     { .key = "key1", .value = {1, 2, 3}},
                     { .key = "key2", .value = {4, 5, 6}}
                 },
                 {}  // there are no deletes on snapshots
             ),
-            make_transaction(42, "ljohnson", 1234567999, 7,
+            make_update(42, "ljohnson", 1234567999, 7,
                 {
                     { .key = "key5", .value = {7, 8}},
                     { .key = "key6", .value = {9}}
@@ -176,7 +176,7 @@ TEST_CASE("cache_restore_error_invalid_key")
     auto snapshot = make_snapshot(
         1024,
         {
-            make_transaction(546, "jdoe", 1234567890, 15,
+            make_update(546, "jdoe", 1234567890, 15,
                 {
                     { .key = "", .value = {1, 2, 3}},
                 },
@@ -197,7 +197,7 @@ TEST_CASE("cache_restore_error_invalid_value")
     auto snapshot = make_snapshot(
         1024,
         {
-            make_transaction(546, "jdoe", 1234567890, 15,
+            make_update(546, "jdoe", 1234567890, 15,
                 {
                     { .key = "key1", .value = {}},
                 },
@@ -218,12 +218,12 @@ TEST_CASE("cache_update")
     cache_t cache;
     std::vector<change_t> changes;
     flatbuffers::DetachedBuffer detached_buf;
-    const nplex::msgs::Transaction *transaction_ptr = nullptr;
+    const nplex::msgs::Update *update_ptr = nullptr;
 
     auto snapshot = make_snapshot(
         1024,
         {
-            make_transaction(42, "jdoe", 1234567890, 15,
+            make_update(42, "jdoe", 1234567890, 15,
                 {
                     { .key = "key1", .value = {1, 2, 3}},
                     { .key = "key2", .value = {4, 5, 6}},
@@ -243,7 +243,7 @@ TEST_CASE("cache_update")
     CHECK(cache.m_rev == 1024);
     CHECK(cache.m_data.size() == 3);
 
-    auto transaction1 = make_transaction(1032, "ljohnson", 1234567891, 16,
+    auto update1 = make_update(1032, "ljohnson", 1234567891, 16,
         {
             { .key = "key2", .value = {9, 9, 9}},
             { .key = "key4", .value = {10, 11, 12}}
@@ -253,10 +253,10 @@ TEST_CASE("cache_update")
         }
     );
 
-    detached_buf = serialize(transaction1);
-    transaction_ptr = ::GetRoot<nplex::msgs::Transaction>(detached_buf.data());
+    detached_buf = serialize(update1);
+    update_ptr = ::GetRoot<nplex::msgs::Update>(detached_buf.data());
 
-    REQUIRE_NOTHROW(changes = cache.update(transaction_ptr));
+    REQUIRE_NOTHROW(changes = cache.update(update_ptr));
 
     REQUIRE(changes.size() == 3);
     CHECK(changes[0].action == change_t::action_e::UPDATE);
@@ -298,17 +298,17 @@ TEST_CASE("cache_update")
     CHECK(data_it->second->rev() == 1032);
     CHECK(data_it->second->data() == gto::cstring((const char[]){10, 11, 12, 0}));
 
-    auto transaction2 = make_transaction(1033, "ljohnson", 1234567892, 14,
+    auto update2 = make_update(1033, "ljohnson", 1234567892, 14,
         {}, // no upserts
         {
             "key3" // Delete key3
         }
     );
 
-    detached_buf = serialize(transaction2);
-    transaction_ptr = ::GetRoot<nplex::msgs::Transaction>(detached_buf.data());
+    detached_buf = serialize(update2);
+    update_ptr = ::GetRoot<nplex::msgs::Update>(detached_buf.data());
 
-    REQUIRE_NOTHROW(changes = cache.update(transaction_ptr));
+    REQUIRE_NOTHROW(changes = cache.update(update_ptr));
 
     REQUIRE(changes.size() == 1);
     CHECK(changes[0].action == change_t::action_e::DELETE);
@@ -334,17 +334,17 @@ TEST_CASE("cache_update_no_changes")
     cache_t cache;
     std::vector<change_t> changes;
 
-    auto transaction = make_transaction(1024, "ljohnson", 1234567891, 16,
+    auto update = make_update(1024, "ljohnson", 1234567891, 16,
         {},
         {}
     );
 
-    auto detached_buf = serialize(transaction);
-    auto transaction_ptr = ::GetRoot<nplex::msgs::Transaction>(detached_buf.data());
+    auto detached_buf = serialize(update);
+    auto update_ptr = ::GetRoot<nplex::msgs::Update>(detached_buf.data());
 
     cache.m_rev = 42;
 
-    REQUIRE_NOTHROW(changes = cache.update(transaction_ptr));
+    REQUIRE_NOTHROW(changes = cache.update(update_ptr));
 
     CHECK(changes.empty());
     CHECK(cache.m_rev == 1024);
@@ -354,35 +354,35 @@ TEST_CASE("cache_update_error_prev_rev")
 {
     cache_t cache;
 
-    auto transaction = make_transaction(10, "ljohnson", 1234567891, 16,
+    auto update = make_update(10, "ljohnson", 1234567891, 16,
         {
             { .key = "key1", .value = {9, 9, 9}},
         },
         {}
     );
 
-    auto detached_buf = serialize(transaction);
-    auto transaction_ptr = ::GetRoot<nplex::msgs::Transaction>(detached_buf.data());
+    auto detached_buf = serialize(update);
+    auto update_ptr = ::GetRoot<nplex::msgs::Update>(detached_buf.data());
 
     cache.m_rev = 42;
 
     // trying to commit a tx with rev less than current rev
-    CHECK_THROWS(cache.update(transaction_ptr));
+    CHECK_THROWS(cache.update(update_ptr));
 }
 
 TEST_CASE("cache_update_invalid_key")
 {
     cache_t cache;
 
-    auto transaction = make_transaction(10, "ljohnson", 1234567891, 16,
+    auto update = make_update(10, "ljohnson", 1234567891, 16,
         {
             { .key = "", .value = {9, 9, 9}},
         },
         {}
     );
 
-    auto detached_buf = serialize(transaction);
-    auto transaction_ptr = ::GetRoot<nplex::msgs::Transaction>(detached_buf.data());
+    auto detached_buf = serialize(update);
+    auto update_ptr = ::GetRoot<nplex::msgs::Update>(detached_buf.data());
 
-    CHECK_THROWS(cache.update(transaction_ptr));
+    CHECK_THROWS(cache.update(update_ptr));
 }

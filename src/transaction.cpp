@@ -3,8 +3,6 @@
 #include "exception.hpp"
 #include "transaction.hpp"
 
-// g++ -Wall -Wextra -Wshadow  -Wconversion -std=c++20 -I../deps -c transaction.cpp
-
 nplex::transaction_t::transaction_t(cache_ptr cache, isolation_e isolation, bool read_only) : 
     m_cache{cache}, m_isolation_level{isolation}, m_read_only{read_only}
 {
