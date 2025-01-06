@@ -2,6 +2,10 @@
 
 #include <stdbool.h>
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 /**
  * Wildcard string matching and globbing.
  * 
@@ -13,5 +17,9 @@
  *         false otherwise
  */
 bool glob_match(const char *text, const char *glob);
+
+#ifdef __cplusplus
+}
+#endif
 
 #endif

@@ -126,7 +126,7 @@ class transaction_t
      * 
      * @exception std::invalid_argument Thrown if data is invalid.
      */
-    transaction_t(cache_ptr cache, isolation_e isolation, bool read_only);
+    transaction_t(cache_ptr cache, isolation_e isolation, bool read_only = false);
 
     state_e state() const { return m_state; }
     isolation_e isolation() const { return m_isolation_level; }

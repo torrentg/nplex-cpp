@@ -137,7 +137,12 @@ void nplex::cache_t::restore(const msgs::Snapshot *snapshot)
     if (transactions)
     {
         for (flatbuffers::uoffset_t i = 0; i < transactions->size(); i++)
+        {
             update(transactions->Get(i));
+
+            if (m_rev > snapshot->rev())
+                throw nplex_exception("invalid snapshot revision");
+        }
     }
 
     m_rev = snapshot->rev();

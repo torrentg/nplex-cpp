@@ -1,5 +1,5 @@
 #include <doctest.h>
-#include "test_utils.hpp"
+#include "messages_test.hpp"
 #include "messages.hpp"
 
 using namespace std;

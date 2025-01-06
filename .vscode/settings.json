@@ -101,5 +101,29 @@
   "c-cpp-flylint.excludeFromWorkspacePaths": [
     "${workspaceFolder}/deps"
   ],
-  "C_Cpp.default.cppStandard": "c++20"
+  "C_Cpp.default.cppStandard": "c++20",
+  "C_Cpp.default.intelliSenseMode": "linux-gcc-x64",
+  "C_Cpp.default.configurationProvider": "ms-vscode.cpptools",
+  "C_Cpp.default.compilerPath": "/usr/bin/g++",
+  "C_Cpp.default.compilerArgs": [
+    "-std=c++20",
+    "-I${workspaceFolder}/deps",
+    "-I/usr/include/tirpc"
+  ],
+  "[c]": {
+      "editor.tabSize": 4,
+      "editor.insertSpaces": true
+  },
+  "[cpp]": {
+      "editor.tabSize": 4,
+      "editor.insertSpaces": true
+  },
+  "[h]": {
+      "editor.tabSize": 4,
+      "editor.insertSpaces": true
+  },
+  "[hpp]": {
+      "editor.tabSize": 4,
+      "editor.insertSpaces": true
+  }
 }

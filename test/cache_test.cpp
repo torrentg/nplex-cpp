@@ -1,6 +1,6 @@
 #include <doctest.h>
-#include "test_utils.hpp"
 #include "exception.hpp"
+#include "messages_test.hpp"
 #include "cache.hpp"
 
 using namespace std;
@@ -111,6 +111,35 @@ TEST_CASE("cache_restore_nullptr")
     CHECK(cache.m_users.size() == 0);
     CHECK(cache.m_metas.size() == 0);
     CHECK(cache.m_data.size() == 0);
+}
+
+TEST_CASE("cache_restore_error_has_tx_rev_gt_rev")
+{
+    auto snapshot = make_snapshot(
+        100,
+        {
+            make_transaction(42, "jdoe", 1234567890, 15,
+                {
+                    { .key = "key1", .value = {1, 2, 3}},
+                    { .key = "key2", .value = {4, 5, 6}}
+                },
+                {}  // there are no deletes on snapshots
+            ),
+            make_transaction(546, "ljohnson", 1234567999, 7,
+                {
+                    { .key = "key5", .value = {7, 8}},
+                    { .key = "key6", .value = {9}}
+                },
+                {}  // there are no deletes on snapshots
+            )
+        }
+    );
+
+    auto buf = serialize(snapshot);
+    auto *ptr = ::GetRoot<nplex::msgs::Snapshot>(buf.data());
+    cache_t cache;
+
+    CHECK_THROWS_AS(cache.restore(ptr), nplex_exception);
 }
 
 TEST_CASE("cache_restore_error_unsorted_tx")

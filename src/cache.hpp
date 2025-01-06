@@ -17,10 +17,14 @@ namespace msgs {
  * In-memory database content.
  * 
  * This is an internal class whose contents are updated by the server.
+ * The user has not direct access to this class.
  * 
  * The server streams commits to maintain the clients' cache in sync.
  * This structure holds the in-memory representation of the database,
  * including the current revision, data and transactions metadata.
+ * 
+ * @note This class is not copyable nor movable due to mutex.
+ * @note This class is not thread-safe, the user must lock the mutex.
  */
 struct cache_t
 {
