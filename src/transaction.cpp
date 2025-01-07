@@ -1,3 +1,4 @@
+#include <cstring>
 #include "match.h"
 #include "cache.hpp"
 #include "exception.hpp"
@@ -128,7 +129,7 @@ bool nplex::transaction_t::remove(const key_t &key)
         if (std::get<action_e>(it_tx->second) == action_e::DELETE)
             return false;
 
-        // Case: Perviously read or upserted
+        // Case: Previously read or upserted
         std::get<action_e>(it_tx->second) = action_e::DELETE;
         std::get<value_ptr>(it_tx->second) = nullptr;
         return true;
@@ -146,7 +147,7 @@ bool nplex::transaction_t::remove(const key_t &key)
     return true;
 }
 
-std::size_t nplex::transaction_t::remove(const std::string_view &pattern)
+std::size_t nplex::transaction_t::remove(const char *pattern)
 {
     std::lock_guard<decltype(m_cache->m_mutex)> lock_cache(m_cache->m_mutex);
 
@@ -161,15 +162,15 @@ std::size_t nplex::transaction_t::remove(const std::string_view &pattern)
     return ret;
 }
 
-std::size_t nplex::transaction_t::for_each(const std::string_view &pattern, callback_t callback)
+std::size_t nplex::transaction_t::for_each(const char *pattern, callback_t callback)
 {
     if (!callback)
         throw nplex_exception("Invalid argument");
 
-    if (pattern.empty())
+    if (!pattern || *pattern == '\0')
         return 0;
 
-    std::string_view prefix = pattern.substr(0, pattern.find_first_of("*?"));
+    std::string_view prefix = std::string_view{pattern, strcspn(pattern, "*?")};
     std::lock_guard<decltype(m_cache->m_mutex)> lock_cache(m_cache->m_mutex);
 
     if (m_state != state_e::OPEN)
@@ -183,10 +184,10 @@ std::size_t nplex::transaction_t::for_each(const std::string_view &pattern, call
 
     while (it_tx != it_tx_end && it_cache != it_cache_end)
     {
-        while (it_tx != it_tx_end && !glob_match(it_tx->first.data(), pattern.data()))
+        while (it_tx != it_tx_end && !glob_match(it_tx->first.data(), pattern))
             it_tx++;
 
-        while (it_cache != it_cache_end && !glob_match(it_cache->first.data(), pattern.data()))
+        while (it_cache != it_cache_end && !glob_match(it_cache->first.data(), pattern))
             it_cache++;
 
         if (it_tx != it_tx_end && it_cache != it_cache_end)

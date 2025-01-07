@@ -97,7 +97,7 @@ class transaction_t
     std::atomic<bool> m_dirty = false;          //!< Current tx conflicts with a commit.
     bool m_read_only = true;                    //!< Read-only flag.
 
-  private:
+  protected:
 
     /**
      * Updates current transaction with the changes from a commit.
@@ -201,16 +201,15 @@ class transaction_t
      * 
      * @see check()
      * 
-     * @param[in] key The key or pattern to remove.
+     * @param[in] pattern The key or pattern to remove.
      * 
-     * @return true if some key was removed,
-     *         false if no key was removed.
+     * @return Number of removals.
      * 
      * @exception std::invalid_argument Invalid key.
      * @exception nplex_exception Transaction is read-only, or not open, or invalid key.
      */
     bool remove(const key_t &key);
-    std::size_t remove(const std::string_view &pattern);
+    std::size_t remove(const char *pattern);
 
     /**
      * Appends a validation to be done at commit-time.
@@ -295,7 +294,7 @@ class transaction_t
      * @exception nplex_exception Transaction is read-only and callback function calls upsert or delete.
      */
     std::size_t for_each(callback_t callback) { return for_each("**", callback); }
-    std::size_t for_each(const std::string_view &pattern, callback_t callback);
+    std::size_t for_each(const char *pattern, callback_t callback);
 };
 
 }; // namespace nplex

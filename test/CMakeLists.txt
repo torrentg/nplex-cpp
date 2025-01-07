@@ -31,7 +31,7 @@ target_link_libraries(
     Threads::Threads
     libuv::uv
     fmt::fmt
-    flatbuffers
+    flatbuffers::flatbuffers_shared
 )
 
 add_test(
