@@ -11,6 +11,7 @@ namespace {
 struct tx_test_t : public transaction_t {
     using transaction_t::transaction_t;
     void update(const std::vector<change_t> &changes) { transaction_t::update(changes); }
+    void set_dirty(bool dirty) { m_dirty = dirty; }
 };
 
 using tx_ptr = std::shared_ptr<tx_test_t>;
@@ -227,5 +228,68 @@ TEST_CASE("transaction_test")
         REQUIRE(tx->read("key99"));
         CHECK(tx->read("key99")->data()[0] == 99);
         CHECK(tx->read("key99")->rev() == 3);
+    }
+}
+
+TEST_CASE("transaction_for_each")
+{
+    cache_ptr cache = make_basic_cache();
+    auto tx = std::make_shared<tx_test_t>(cache, transaction_t::isolation_e::READ_COMMITTED);
+
+    SUBCASE("iterate_all_only_cache")
+    {
+        const char *keys[] = { "key1", "key2", "key3", "key4", "key7", "key8" };
+        std::size_t pos = 0;
+        std::size_t count = 0;
+        bool success = true;
+
+        REQUIRE_NOTHROW(count = tx->for_each("*", [&keys, &pos, &success]([[maybe_unused]] const gto::cstring &key, [[maybe_unused]] const value_t &value) {
+            if (pos >= 6 || key != keys[pos++])
+                success = false;
+            return true;
+        }));
+
+        CHECK(count == 6);
+        CHECK(success);
+    }
+
+    SUBCASE("iterate_all_tx_and_cache")
+    {
+        const char *keys[] = { "key1", "key10", "key2", "key4", "key7", "key8" };
+        std::size_t pos = 0;
+        std::size_t count = 0;
+        bool success = true;
+
+        basic_step_1(tx);
+
+        // removed key3 and added key10
+        REQUIRE_NOTHROW(count = tx->for_each("*", [&keys, &pos, &success]([[maybe_unused]] const gto::cstring &key, [[maybe_unused]] const value_t &value) {
+            if (pos >= 6 || key != keys[pos++])
+                success = false;
+            return true;
+        }));
+
+        CHECK(count == 6);
+        CHECK(success);
+    }
+
+    SUBCASE("iterate_some_tx_and_cache")
+    {
+        const char *keys[] = { "key1", "key10" };
+        std::size_t pos = 0;
+        std::size_t count = 0;
+        bool success = true;
+
+        basic_step_1(tx);
+
+        // removed key3 and added key10
+        REQUIRE_NOTHROW(count = tx->for_each("key1*", [&keys, &pos, &success]([[maybe_unused]] const gto::cstring &key, [[maybe_unused]] const value_t &value) {
+            if (pos >= 2 || key != keys[pos++])
+                success = false;
+            return true;
+        }));
+
+        CHECK(count == 2);
+        CHECK(success);
     }
 }

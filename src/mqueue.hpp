@@ -1,6 +1,8 @@
 #pragma once
 
 #include <mutex>
+#include <cstddef>
+#include <stdexcept>
 #include <condition_variable>
 #include "cqueue.hpp"
 #include "exception.hpp"
@@ -21,9 +23,9 @@ class mqueue
 {
   private:
 
-    std::condition_variable m_cond_not_empty{};
-    gto::cqueue<T> m_queue{};
-    std::mutex m_mutex{};
+    std::condition_variable m_cond_not_empty;
+    gto::cqueue<T> m_queue;
+    std::mutex m_mutex;
 
   public:
 
@@ -32,7 +34,7 @@ class mqueue
      * 
      * @param[in] capacity Maximum queue capacity (0 means unlimited).
      */
-    mqueue(size_t capacity = 0) : m_queue(capacity) {}
+    mqueue(std::size_t capacity = 0) : m_queue(capacity) {}
 
     /**
      * Remove all queue items.

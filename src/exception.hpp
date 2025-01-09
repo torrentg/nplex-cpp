@@ -2,7 +2,6 @@
 
 #include <ostream>
 #include <stdexcept>
-#include <string_view>
 #include <fmt/core.h>
 
 namespace nplex {
@@ -32,11 +31,11 @@ struct nplex_mqueue_exceeded : public nplex_exception {
 /**
  * @details Prints the Exception in an output stream.
  * @param[out] os Output stream.
- * @param[in] e Exception to write.
+ * @param[in] excp Exception to write.
  * @return Reference to the output stream.
  */
-inline std::ostream & operator<<(std::ostream &os, const nplex::nplex_exception &e) {
-    return os << e.what();
+inline std::ostream & operator<<(std::ostream &os, const nplex::nplex_exception &excp) {
+    return os << excp.what();
 }
 
 } // namespace nplex

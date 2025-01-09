@@ -1,3 +1,4 @@
 
 * NETWORK MSG = LEN + TYPE + ALGO + CONTENT + CHECKSUM
 * cloc --exclude-content="automatically generated" src test
+* cppcheck --enable=all --inconclusive --std=c++17 --force --suppress=missingIncludeSystem --suppress=unusedFunction -Ideps -Isrc src &> removeme.txt

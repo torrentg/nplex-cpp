@@ -24,7 +24,7 @@ nplex::value_ptr nplex::transaction_t::read(const key_t &key, bool check)
     std::lock_guard<decltype(m_cache->m_mutex)> lock_cache(m_cache->m_mutex);
 
     if (m_state != state_e::OPEN)
-        throw nplex_exception("Invalid transaction state");
+        throw nplex_exception("Transaction is not open");
 
     // Search for the key in the transaction
     auto it_tx = m_items.find(key);
@@ -64,14 +64,16 @@ bool nplex::transaction_t::upsert(const key_t &key, const std::string_view &data
         throw std::invalid_argument("Invalid key or invalid data");
 
     auto value = std::make_shared<value_t>(
-        (gto::cstring){data.data(), data.size()}, 
+        gto::cstring{data.data(), data.size()}, 
         meta_ptr{}  // Metadata is empty because the current transaction was not committed
     );
 
     std::lock_guard<decltype(m_cache->m_mutex)> lock_cache(m_cache->m_mutex);
 
-    if (m_read_only || m_state != state_e::OPEN)
-        throw nplex_exception("Invalid transaction state");
+    if (m_state != state_e::OPEN)
+        throw nplex_exception("Transaction is not open");
+    if (m_read_only)
+        throw nplex_exception("Transaction is read-only");
 
     // Search for the key in the transaction
     auto it_tx = m_items.find(key);
@@ -116,8 +118,10 @@ bool nplex::transaction_t::remove(const key_t &key)
 
     std::lock_guard<decltype(m_cache->m_mutex)> lock_cache(m_cache->m_mutex);
 
-    if (m_read_only || m_state != state_e::OPEN)
-        throw nplex_exception("Invalid transaction state");
+    if (m_state != state_e::OPEN)
+        throw nplex_exception("Transaction is not open");
+    if (m_read_only)
+        throw nplex_exception("Transaction is read-only");
 
     // Search for the key in the transaction
     auto it_tx = m_items.find(key);
@@ -151,8 +155,10 @@ std::size_t nplex::transaction_t::remove(const char *pattern)
 {
     std::lock_guard<decltype(m_cache->m_mutex)> lock_cache(m_cache->m_mutex);
 
-    if (m_read_only || m_state != state_e::OPEN)
-        throw nplex_exception("Invalid transaction state or key");
+    if (m_state != state_e::OPEN)
+        throw nplex_exception("Transaction is not open");
+    if (m_read_only)
+        throw nplex_exception("Transaction is read-only");
 
     auto ret = for_each(pattern, [this](const gto::cstring &key, [[maybe_unused]] const value_t &value) {
         remove(key);
@@ -174,21 +180,36 @@ std::size_t nplex::transaction_t::for_each(const char *pattern, callback_t callb
     std::lock_guard<decltype(m_cache->m_mutex)> lock_cache(m_cache->m_mutex);
 
     if (m_state != state_e::OPEN)
-        throw nplex_exception("Transaction not open");
+        throw nplex_exception("Transaction is not open");
 
     std::size_t ret = 0;
     auto it_tx = (prefix.empty() ? m_items.begin() : m_items.lower_bound(prefix));
-    auto it_tx_end = (prefix.empty() ? m_items.end() : m_items.upper_bound(prefix));
+    auto it_tx_end = m_items.end();
     auto it_cache = (prefix.empty() ? m_cache->m_data.begin() : m_cache->m_data.lower_bound(prefix));
-    auto it_cache_end = (prefix.empty() ? m_cache->m_data.end() : m_cache->m_data.upper_bound(prefix));
+    auto it_cache_end = m_cache->m_data.end();
 
-    while (it_tx != it_tx_end && it_cache != it_cache_end)
+    while (it_tx != it_tx_end || it_cache != it_cache_end)
     {
-        while (it_tx != it_tx_end && !glob_match(it_tx->first.data(), pattern))
-            it_tx++;
+        while (it_tx != it_tx_end)
+        {
+            if (!it_tx->first.starts_with(prefix))
+                it_tx = it_tx_end;
+            else if (glob_match(it_tx->first.data(), pattern))
+                break;
+            else
+                it_tx++;
+        }
 
-        while (it_cache != it_cache_end && !glob_match(it_cache->first.data(), pattern))
-            it_cache++;
+        while (it_cache != it_cache_end)
+        {
+            auto xxx = it_cache->first;
+            if (!it_cache->first.starts_with(prefix))
+                it_cache = it_cache_end;
+            else if (glob_match(it_cache->first.data(), pattern))
+                break;
+            else
+                it_cache++;
+        }
 
         if (it_tx != it_tx_end && it_cache != it_cache_end)
         {
@@ -243,7 +264,7 @@ std::size_t nplex::transaction_t::for_each(const char *pattern, callback_t callb
     return ret;
 }
 
-bool nplex::transaction_t::check(const char *pattern, uint8_t actions)
+bool nplex::transaction_t::check(const char *pattern, std::uint8_t actions)
 {
     actions &= (CHECK_CREATE | CHECK_UPDATE | CHECK_DELETE);
 
@@ -291,14 +312,14 @@ void nplex::transaction_t::update(const std::vector<change_t> &changes)
     // Checking validations
     for (const auto &change : changes)
     {
-        for (const auto &check : m_checks)
+        for (const auto &item : m_checks)
         {
-            if (!glob_match(change.key.data(), check.first.data()))
+            if (!glob_match(change.key.data(), item.first.data()))
                 continue;
 
-            if (((check.second & CHECK_CREATE) && change.action == change_t::action_e::CREATE) ||
-                ((check.second & CHECK_UPDATE) && change.action == change_t::action_e::UPDATE) ||
-                ((check.second & CHECK_DELETE) && change.action == change_t::action_e::DELETE)) {
+            if (((item.second & CHECK_CREATE) && change.action == change_t::action_e::CREATE) ||
+                ((item.second & CHECK_UPDATE) && change.action == change_t::action_e::UPDATE) ||
+                ((item.second & CHECK_DELETE) && change.action == change_t::action_e::DELETE)) {
                 m_dirty = true;
                 break;
             }

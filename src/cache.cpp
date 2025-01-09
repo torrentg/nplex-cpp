@@ -8,7 +8,7 @@ namespace {
 
 using namespace nplex;
 
-gto::cstring create_cstring(const flatbuffers::Vector<uint8_t> *value) {
+gto::cstring create_cstring(const flatbuffers::Vector<std::uint8_t> *value) {
     return gto::cstring{reinterpret_cast<const char *>(value->data()), static_cast<size_t>(value->size())};
 }
 
@@ -33,7 +33,7 @@ nplex::meta_ptr nplex::cache_t::create_meta(const msgs::Update *updmsg)
 
     millis_t timestamp = std::chrono::milliseconds{updmsg->timestamp()};
 
-    return std::make_shared<meta_t>((meta_t){rev, user, timestamp, updmsg->type(), 0});
+    return std::make_shared<meta_t>(meta_t{rev, user, timestamp, updmsg->type(), 0});
 }
 
 void nplex::cache_t::release_meta(const meta_ptr &meta)
@@ -177,7 +177,7 @@ std::vector<change_t> nplex::cache_t::update(const msgs::Update *updmsg)
             auto keyval = upserts->Get(i);
 
             if (!keyval || !keyval->key() || !keyval->value())
-                throw nplex_exception("Invalid key-value");
+                throw nplex_exception("Invalid key-value (upsert)");
 
             auto key = keyval->key()->c_str();
             gto::cstring data = create_cstring(keyval->value());

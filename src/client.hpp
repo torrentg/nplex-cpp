@@ -32,7 +32,7 @@ class params_t
 
 struct load_cmd_t
 {
-    enum class mode_e {
+    enum class mode_e : std::uint8_t {
         SNAPSHOT_AT_FIXED_REV,                  //!< Sends snapshot at a fixed revision. and subsequent commits.
         SNAPSHOT_AT_LAST_REV,                   //!< Sends snapshot at the last revision and subsequent commits.   
         ONLY_UPDATES_FROM_REV                   //!< Sends only updates from a revision.   
@@ -44,7 +44,7 @@ struct load_cmd_t
 
 class command_t
 {
-    enum class type_e {
+    enum class type_e : std::uint8_t {
         LOAD,
         SUBMIT,
         PING,
@@ -54,7 +54,7 @@ class command_t
 
 class event_t
 {
-    enum class type_e {
+    enum class type_e : std::uint8_t {
         SNAPSHOT,
         COMMIT,
         SUBMIT_RESPONSE,
@@ -112,7 +112,7 @@ class client_t
     using cache_ptr = std::shared_ptr<cache_t>;
     using tx_ptr = std::shared_ptr<transaction_t>;
 
-    enum class state_e {
+    enum class state_e : std::uint8_t {
         CONNECTING,                                 //!< Connecting to the server.
         SYNCHRONIZING,                              //!< Initializing the cache.
         SYNCED,                                     //!< Client is synced with the server.

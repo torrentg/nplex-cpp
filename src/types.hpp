@@ -2,9 +2,13 @@
 
 #include <chrono>
 #include <memory>
+#include <string>
 #include <cstddef>
 #include <cstdint>
+#include <stdexcept>
 #include <string_view>
+#include <type_traits>
+#include <system_error>
 #include "cstring.hpp"
 
 #define KEY_DELIMITER '/'
@@ -27,7 +31,7 @@ struct meta_t
     gto::cstring user;              //!< Transaction creator.
     millis_t timestamp;             //!< Timestamp at transaction creation.
     std::uint32_t type;             //!< Transaction type (user-defined).
-    uint32_t nrefs;                 //!< Number of references in the cache (internal use).
+    std::uint32_t nrefs;            //!< Number of references in the cache (internal use).
 };
 
 using meta_ptr = std::shared_ptr<meta_t>;
@@ -49,7 +53,7 @@ class value_t
     rev_t rev() const { return (m_meta ? m_meta->rev : 0); }
     const gto::cstring & user() const { return (m_meta ? m_meta->user : EMPTY); }
     millis_t timestamp() const { return (m_meta ? m_meta->timestamp : millis_t{0}); }
-    uint32_t type() const { return (m_meta ? m_meta->type : 0); }
+    std::uint32_t type() const { return (m_meta ? m_meta->type : 0); }
 
     // Data accessors
     const gto::cstring & data() const { return m_data; }
@@ -71,7 +75,7 @@ using value_ptr = std::shared_ptr<value_t>;
 // Database change.
 struct change_t
 {
-    enum class action_e {
+    enum class action_e : std::uint8_t {
         CREATE,
         UPDATE,
         DELETE

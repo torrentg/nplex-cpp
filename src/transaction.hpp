@@ -56,7 +56,7 @@ class transaction_t
 {
   public:
 
-    enum class state_e {
+    enum class state_e : std::uint8_t {
         OPEN,                                   //!< Transaction is ongoing (user is fetching data).
         SUBMITTED,                              //!< Transaction was submitted to the server.
         ACCEPTED,                               //!< Transaction was accepted by the server (pending to receive the commit).
@@ -66,7 +66,7 @@ class transaction_t
         ABORTED                                 //!< Transaction was discarded by the server (ex. server disconnected).
     };
 
-    enum class isolation_e {
+    enum class isolation_e : std::uint8_t {
         READ_COMMITTED,                         //!< Read always most recent data.
         REPEATABLE_READS,                       //!< Read data will not change during the transaction.
         SERIALIZABLE                            //!< All read data will not change during the transaction.
@@ -74,9 +74,9 @@ class transaction_t
 
     using callback_t = std::function<bool(const gto::cstring &key, const value_t &value)>;
 
-  private:
+  protected:
 
-    enum class action_e {
+    enum class action_e : std::uint8_t {
         READ,                                   //!< Read a key-value.
         UPSERT,                                 //!< Update or insert a key-value.
         DELETE                                  //!< Remove a key-value.
@@ -85,14 +85,14 @@ class transaction_t
     using cache_ptr = std::shared_ptr<cache_t>;
     using entry_t = std::tuple<action_e, value_ptr>;
     using items_t = std::map<key_t, entry_t, key_cmp_less_t>;
-    using checks_t = std::map<std::string, uint8_t>;
+    using checks_t = std::map<std::string, std::uint8_t>;
 
     rev_t m_rev;                                //!< Database revision at tx creation.
     cache_ptr m_cache;                          //!< Database content.
     items_t m_items;                            //!< Transaction items (depends on isolation level).
     checks_t m_checks;                          //!< Transaction checks.
     isolation_e m_isolation_level;              //!< Transaction isolation level.
-    std::atomic<uint32_t> m_type = 0;           //!< Transaction type (user-defined value).
+    std::atomic<std::uint32_t> m_type = 0;      //!< Transaction type (user-defined value).
     std::atomic<state_e> m_state;               //!< Transaction state.
     std::atomic<bool> m_dirty = false;          //!< Current tx conflicts with a commit.
     bool m_read_only = true;                    //!< Read-only flag.
@@ -127,8 +127,8 @@ class transaction_t
     isolation_e isolation() const { return m_isolation_level; }
     bool read_only() const { return m_read_only; }
     bool dirty() const { return m_dirty; }
-    uint32_t type() const { return m_type; }
-    void type(uint32_t type) { this->m_type = type; }
+    std::uint32_t type() const { return m_type; }
+    void type(std::uint32_t type) { this->m_type = type; }
 
     /**
      * Read a key-value pair.
@@ -250,7 +250,7 @@ class transaction_t
      * 
      * @exception nplex_exception Transaction is not open.
      */
-    bool check(const char *pattern, uint8_t actions);
+    bool check(const char *pattern, std::uint8_t actions);
 
     /**
      * Executes the callback function for each key-value.

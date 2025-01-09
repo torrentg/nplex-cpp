@@ -16,15 +16,15 @@ TEST_CASE("cache_restore")
         {
             make_update(42, "jdoe", 1234567890, 15,
                 {
-                    { .key = "key1", .value = {1, 2, 3}},
-                    { .key = "key2", .value = {4, 5, 6}}
+                    { .key = "key1", .value = {'a'}},
+                    { .key = "key2", .value = {'b'}}
                 },
                 {}  // there are no deletes on snapshots
             ),
             make_update(546, "ljohnson", 1234567999, 7,
                 {
-                    { .key = "key5", .value = {7, 8}},
-                    { .key = "key6", .value = {9}}
+                    { .key = "key5", .value = {'e'}},
+                    { .key = "key6", .value = {'f'}}
                 },
                 {}  // there are no deletes on snapshots
             )
@@ -64,22 +64,22 @@ TEST_CASE("cache_restore")
     auto data_it = cache.m_data.find("key1");
     REQUIRE(data_it != cache.m_data.end());
     CHECK(data_it->second->rev() == 42);
-    CHECK(data_it->second->data() == gto::cstring((const char[]){1, 2, 3, 0}));
+    CHECK(data_it->second->data() == gto::cstring{"a"});
 
     data_it = cache.m_data.find("key2");
     REQUIRE(data_it != cache.m_data.end());
     CHECK(data_it->second->rev() == 42);
-    CHECK(data_it->second->data() == gto::cstring((const char[]){4, 5, 6, 0}));
+    CHECK(data_it->second->data() == gto::cstring{"b"});
 
     data_it = cache.m_data.find("key5");
     REQUIRE(data_it != cache.m_data.end());
     CHECK(data_it->second->rev() == 546);
-    CHECK(data_it->second->data() == gto::cstring((const char[]){7, 8, 0}));
+    CHECK(data_it->second->data() == gto::cstring{"e"});
 
     data_it = cache.m_data.find("key6");
     REQUIRE(data_it != cache.m_data.end());
     CHECK(data_it->second->rev() == 546);
-    CHECK(data_it->second->data() == gto::cstring((const char[]){9, 0}));
+    CHECK(data_it->second->data() == gto::cstring{"f"});
 }
 
 TEST_CASE("cache_restore_empty")
@@ -225,9 +225,9 @@ TEST_CASE("cache_update")
         {
             make_update(42, "jdoe", 1234567890, 15,
                 {
-                    { .key = "key1", .value = {1, 2, 3}},
-                    { .key = "key2", .value = {4, 5, 6}},
-                    { .key = "key3", .value = {7, 8, 9}}
+                    { .key = "key1", .value = {'a'}},
+                    { .key = "key2", .value = {'b'}},
+                    { .key = "key3", .value = {'c'}}
                 },
                 {}  // there are no deletes on snapshots
             )
@@ -245,8 +245,8 @@ TEST_CASE("cache_update")
 
     auto update1 = make_update(1032, "ljohnson", 1234567891, 16,
         {
-            { .key = "key2", .value = {9, 9, 9}},
-            { .key = "key4", .value = {10, 11, 12}}
+            { .key = "key2", .value = {'x'}},
+            { .key = "key4", .value = {'y'}}
         },
         {
             "key1" // Delete key1
@@ -262,17 +262,17 @@ TEST_CASE("cache_update")
     CHECK(changes[0].action == change_t::action_e::UPDATE);
     CHECK(changes[0].key == "key2");
     CHECK(changes[0].old_value->rev() == 42);
-    CHECK(changes[0].old_value->data() == gto::cstring((const char[]){4, 5, 6, 0}));
+    CHECK(changes[0].old_value->data() == gto::cstring("b"));
     CHECK(changes[0].value->rev() == 1032);
-    CHECK(changes[0].value->data() == gto::cstring((const char[]){9, 9, 9, 0}));
+    CHECK(changes[0].value->data() == gto::cstring("x"));
     CHECK(changes[1].action == change_t::action_e::CREATE);
     CHECK(changes[1].key == "key4");
     CHECK(changes[1].value->rev() == 1032);
-    CHECK(changes[1].value->data() == gto::cstring((const char[]){10, 11, 12, 0}));
+    CHECK(changes[1].value->data() == gto::cstring("y"));
     CHECK(changes[2].action == change_t::action_e::DELETE);
     CHECK(changes[2].key == "key1");
     CHECK(changes[2].old_value->rev() == 42);
-    CHECK(changes[2].old_value->data() == gto::cstring((const char[]){1, 2, 3, 0}));
+    CHECK(changes[2].old_value->data() == gto::cstring("a"));
 
     // content = {key2, key3, key4}
     CHECK(cache.m_rev == 1032);
@@ -286,17 +286,17 @@ TEST_CASE("cache_update")
     data_it = cache.m_data.find("key2");
     REQUIRE(data_it != cache.m_data.end());
     CHECK(data_it->second->rev() == 1032);
-    CHECK(data_it->second->data() == gto::cstring((const char[]){9, 9, 9, 0}));
+    CHECK(data_it->second->data() == gto::cstring("x"));
 
     data_it = cache.m_data.find("key3");
     REQUIRE(data_it != cache.m_data.end());
     CHECK(data_it->second->rev() == 42);
-    CHECK(data_it->second->data() == gto::cstring((const char[]){7, 8, 9, 0}));
+    CHECK(data_it->second->data() == gto::cstring("c"));
 
     data_it = cache.m_data.find("key4");
     REQUIRE(data_it != cache.m_data.end());
     CHECK(data_it->second->rev() == 1032);
-    CHECK(data_it->second->data() == gto::cstring((const char[]){10, 11, 12, 0}));
+    CHECK(data_it->second->data() == gto::cstring("y"));
 
     auto update2 = make_update(1033, "ljohnson", 1234567892, 14,
         {}, // no upserts
@@ -314,7 +314,7 @@ TEST_CASE("cache_update")
     CHECK(changes[0].action == change_t::action_e::DELETE);
     CHECK(changes[0].key == "key3");
     CHECK(changes[0].old_value->rev() == 42);
-    CHECK(changes[0].old_value->data() == gto::cstring((const char[]){7, 8, 9, 0}));
+    CHECK(changes[0].old_value->data() == gto::cstring("c"));
 
     // content = {key2, key4}
     CHECK(cache.m_rev == 1033);

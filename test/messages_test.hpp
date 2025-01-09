@@ -31,7 +31,7 @@ namespace tests {
         return result;
     }
 
-    inline nplex::msgs::UpdateT make_update(size_t rev, const char *user, uint64_t timestamp, uint32_t type, std::vector<nplex::msgs::KeyValueT> upserts = {}, std::vector<std::string> deletes = {})
+    inline nplex::msgs::UpdateT make_update(size_t rev, const char *user, std::uint64_t timestamp, std::uint32_t type, std::vector<nplex::msgs::KeyValueT> upserts = {}, std::vector<std::string> deletes = {})
     {
         nplex::msgs::UpdateT tx;
         tx.rev = rev;
@@ -70,7 +70,7 @@ namespace tests {
         return push;
     }
 
-    inline nplex::msgs::SubmitRequestT make_submit_request(size_t cid, size_t crev, uint32_t type, std::vector<nplex::msgs::KeyValueT> upserts, std::vector<std::string> deletes, std::vector<nplex::msgs::CheckT> checks)
+    inline nplex::msgs::SubmitRequestT make_submit_request(size_t cid, size_t crev, std::uint32_t type, std::vector<nplex::msgs::KeyValueT> upserts, std::vector<std::string> deletes, std::vector<nplex::msgs::CheckT> checks)
     {
         nplex::msgs::SubmitRequestT req;
         req.cid = cid;

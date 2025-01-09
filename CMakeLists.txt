@@ -33,12 +33,37 @@ find_package(
     flatbuffers REQUIRED
 )
 
+# Create messages_generated.hpp from schema (src/messages.fbs)
+flatbuffers_generate_headers(
+    TARGET flatbuffers_generated
+    SCHEMAS ${PROJECT_SOURCE_DIR}/src/messages.fbs
+    FLAGS --cpp --filename-ext hpp --cpp-std c++17 --scoped-enums --gen-object-api
+)
+
+# Replace the current src/messages.hpp by the generated file
+add_custom_command(
+    OUTPUT "${PROJECT_SOURCE_DIR}/src/messages_generated.hpp"
+    COMMAND ${CMAKE_COMMAND} -E copy
+        "${CMAKE_BINARY_DIR}/flatbuffers_generated/messages_generated.hpp"
+        "${PROJECT_SOURCE_DIR}/src/messages.hpp"
+    DEPENDS GENERATE_flatbuffers_generated
+    COMMENT "Copying generated messages.hpp to src directory"
+)
+
+# Target triggering the regeneration of src/messages.hpp
+add_custom_target(
+    CopyGeneratedHeaders ALL
+    DEPENDS "${PROJECT_SOURCE_DIR}/src/messages_generated.hpp"
+)
+
+#set(CMAKE_CXX_CLANG_TIDY "/usr/bin/clang-tidy")
+
 add_compile_options(
     -march=native
     -Wall
     -Wextra
     -Wshadow
-    #-Wpedantic
+    -Wpedantic
     -Wconversion
     -Wsign-conversion
     -Wnull-dereference
