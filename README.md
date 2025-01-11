@@ -1,4 +1,4 @@
-# nplex
+# nplex-cpp
 
 TODO
 
@@ -35,7 +35,7 @@ cmake -DENABLE_COVERAGE=ON ..
 
 ## Maintainers
 
-Nplex project is mantained by Gerard Torrent ([torrentg](https://github.com/torrentg/)).
+This project is mantained by Gerard Torrent ([torrentg](https://github.com/torrentg/)).
 
 ## License
 

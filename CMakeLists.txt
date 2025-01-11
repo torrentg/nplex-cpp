@@ -115,15 +115,16 @@ target_sources(
     ${CMAKE_CURRENT_LIST_DIR}/deps/match.c
     ${CMAKE_CURRENT_LIST_DIR}/src/cache.hpp
     ${CMAKE_CURRENT_LIST_DIR}/src/cache.cpp
+    ${CMAKE_CURRENT_LIST_DIR}/src/mqueue.hpp
     ${CMAKE_CURRENT_LIST_DIR}/src/messages.fbs
     ${CMAKE_CURRENT_LIST_DIR}/src/messages.hpp
-    ${CMAKE_CURRENT_LIST_DIR}/src/mqueue.hpp
     ${CMAKE_CURRENT_LIST_DIR}/src/transaction.cpp
     PUBLIC
+    ${CMAKE_CURRENT_LIST_DIR}/src/types.hpp
+    ${CMAKE_CURRENT_LIST_DIR}/src/params.hpp
     ${CMAKE_CURRENT_LIST_DIR}/src/client.hpp
     ${CMAKE_CURRENT_LIST_DIR}/src/exception.hpp
     ${CMAKE_CURRENT_LIST_DIR}/src/transaction.hpp
-    ${CMAKE_CURRENT_LIST_DIR}/src/types.hpp
 )
 
 set_target_properties(

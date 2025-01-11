@@ -1,9 +1,9 @@
 # TODO
 
-* rename project to nplex-cpp
 * NETWORK MSG = LEN + TYPE + ALGO + CONTENT + CHECKSUM
 * value_t::as_millis() convert from ISO-8601 string (instead of number)
 * create include/nplex directory containing public headers
+* Only a public header -> nplex-cpp.hpp
 * implement client.cpp
 * rename nplex::client_t to nplex::nplex_t ??
 * allow ssl connections (see project tlsuv)
