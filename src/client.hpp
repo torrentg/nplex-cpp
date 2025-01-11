@@ -1,49 +1,14 @@
 #pragma once
 
 #include <uv.h>
-#include <thread>
-#include "cqueue.hpp"
-#include "mqueue.hpp"
+#include <memory>
+#include <utility>
 #include "types.hpp"
 #include "params.hpp"
+#include "exception.hpp"
 #include "transaction.hpp"
 
 namespace nplex {
-
-// Forward declaration.
-struct cache_t;
-
-struct load_cmd_t
-{
-    enum class mode_e : std::uint8_t {
-        SNAPSHOT_AT_FIXED_REV,                  //!< Sends snapshot at a fixed revision. and subsequent commits.
-        SNAPSHOT_AT_LAST_REV,                   //!< Sends snapshot at the last revision and subsequent commits.   
-        ONLY_UPDATES_FROM_REV                   //!< Sends only updates from a revision.   
-    };
-
-    mode_e mode;                                //!< Data load mode.
-    rev_t rev;                                  //!< Receives all commits greater than this value.
-};
-
-class command_t
-{
-    enum class type_e : std::uint8_t {
-        LOAD,
-        SUBMIT,
-        PING,
-        CLOSE,
-    };
-};
-
-class event_t
-{
-    enum class type_e : std::uint8_t {
-        SNAPSHOT,
-        COMMIT,
-        SUBMIT_RESPONSE,
-        DISCONNECT
-    };
-};
 
 /**
  * Async nplex client.
@@ -86,38 +51,30 @@ class event_t
  *   - Strictly ordered event processing.
  *   - Thread-safe access to the database.
  *   - Database access according to the isolation level.
- * 
- * @example:
- *
- *   TODO: Add example.
  */
 class client_t
 {
-    using cache_ptr = std::shared_ptr<cache_t>;
-    using tx_ptr = std::shared_ptr<transaction_t>;
-
     enum class state_e : std::uint8_t {
-        CONNECTING,                                 //!< Connecting to the server.
-        SYNCHRONIZING,                              //!< Initializing the cache.
-        SYNCED,                                     //!< Client is synced with the server.
-        RECONNECTING,                               //!< Reconnecting to the server.
-        CLOSED                                      //!< Client is closed.
+        CONNECTING,                             //!< Connecting to the server.
+        SYNCHRONIZING,                          //!< Initializing the cache.
+        SYNCED,                                 //!< Client is synced with the server.
+        RECONNECTING,                           //!< Reconnecting to the server.
+        CLOSED                                  //!< Client is closed.
     };
 
-    //TODO: create synced() method ?
+    enum class load_mode_e : std::uint8_t {
+        SNAPSHOT_AT_FIXED_REV,                  //!< Sends snapshot at a fixed revision. and subsequent commits.
+        SNAPSHOT_AT_LAST_REV,                   //!< Sends snapshot at the last revision and subsequent commits.   
+        ONLY_UPDATES_FROM_REV                   //!< Sends only updates from a revision.   
+    };
+
+    using tx_ptr = std::shared_ptr<transaction_t>;
+    using load_cmd_t = std::pair<load_mode_e, rev_t>;
 
   private:
 
-    uv_loop_t *loop;                                //!< Event loop.
-    uv_async_t async;                               //!< Signals that there are input commands.
-    std::thread thread;                             //!< Worker thread, execute output commands.
-    mqueue<command_t> commands;                     //!< Commands pending to be digested by the event loop.
-    mqueue<event_t> events;                         //!< Events pending to be digested by the working thread.
-    gto::cqueue<tx_ptr> ongoing_tx;                 //!< List of ongoing transactions (user working on it).
-    gto::cqueue<tx_ptr> pending_tx;                 //!< List of pending transactions (awaiting server response).
-    cache_ptr data;                                 //!< Database content.
-    state_e state;                                  //!< Client state.
-    bool can_force = false;                         //!< User can force transactions (this grant is given by server at login).
+    struct impl_t;
+    std::unique_ptr<impl_t> m_impl;
 
   public:
 
@@ -130,9 +87,23 @@ class client_t
      * @param[in] params Connection parameters.
      * @param[in] loop Event loop (if NULL creates a new loop).
      * 
-     * @exception std::invalid_argument Thrown if the parameters are invalid.
+     * @exception nplex_exception Thrown if the parameters are invalid.
      */
     client_t(const params_t &params, uv_loop_t *loop = nullptr);
+
+    /**
+     * Returns current client state.
+     * 
+     * @return Current state.
+     */
+    state_e state() const;
+
+    /**
+     * Returns the local database revision.
+     * 
+     * @return Data revision.
+     */
+    rev_t rev() const;
 
     /**
      * Create a new transaction.
@@ -158,9 +129,14 @@ class client_t
      * @param[in] force Force to accept values even if the transaction is dirty.
      * 
      * @return true if the transaction was submitted, 
-     *         false otherwise (ex. dirty, tx-not-found, invalid-state, read-only, no-alter).
+     *         false otherwise (ex. dirty, read-only, no-alter).
+     * 
+     * @exception std::invalid_argument Transaction is empty (null).
+     * @exception nplex_exception client-not-synced, tx-not-found, tx-not-open.
      */
     bool submit_tx(tx_ptr tx, bool force = false);
+
+    //TODO: create a submit() method returning a future
 
     /**
      * Remove transaction from updates.
@@ -204,11 +180,28 @@ class client_t
      * 
      * @return The load command to send to the server.
      */
-    virtual load_cmd_t on_connect([[maybe_unused]] const char *server, rev_t oldest_rev, rev_t newest_rev) {
-        return {load_cmd_t::mode_e::SNAPSHOT_AT_LAST_REV, 0};
+    virtual load_cmd_t on_connect([[maybe_unused]] const char *server, [[maybe_unused]] rev_t oldest_rev, [[maybe_unused]] rev_t newest_rev) {
+        return {load_mode_e::SNAPSHOT_AT_LAST_REV, 0};
     }
 
-    // TODO: create on_reconnect() method ?
+    /**
+     * Callback function that is called when the client successfully reconnects to the server.
+     * 
+     * This function handles the reconnection event and determines the load command
+     * to send to the server.
+     * 
+     * @triggers on_snapshot() If snapshot was requested.
+     * @triggers on_commit() On every new commit.
+     * 
+     * @param[in] server Server identifier (host:port).
+     * @param[in] oldest_rev Oldest revision available on the server.
+     * @param[in] newest_rev Newest revision available on the server.
+     * 
+     * @return The load command to send to the server.
+     */
+    virtual load_cmd_t on_reconnect([[maybe_unused]] const char *server, [[maybe_unused]] rev_t oldest_rev, [[maybe_unused]] rev_t newest_rev) {
+        return {load_mode_e::ONLY_UPDATES_FROM_REV, rev()};
+    }
 
     /**
      * Callback function that is called when the client is disconnected from the server.
@@ -216,7 +209,7 @@ class client_t
      * This function handles the disconnection event, performing necessary cleanup and
      * attempting to reconnect if applicable.
      * 
-     * @triggers on_connect() If the client reconnects (returns true).
+     * @triggers on_reconnect() If the client reconnects (returns true).
      * @triggers on_close() If the client is closed (returns false).
      * 
      * @param[in] server Server identifier (host:port).
@@ -239,25 +232,24 @@ class client_t
     /**
      * Callback function that is called when a snapshot is received from the server.
      * 
-     * This function handles the snapshot event, updating the local in-memory database
-     * with the snapshot data.
+     * When this method is called, the client is in the SYNCHRONIZING state and the 
+     * local database was just reseted to the snapshot content.
      * 
-     * Local database just reseted to snapshot contents.
+     * Use this method to update your business objects.
      */
     virtual void on_snapshot() {}
 
     /**
-     * Callback function that is called when a commit is received from the server.
+     * Callback function that is called when an update is received from the server.
      * 
-     * This function handles the commit event, updating the local in-memory database
-     * with the commit data.
-     * 
-     * Local database just applied changes and its revisions is the commit revision.
-     * 
+     * When this method is called, changes was already applied to the local database.
+     * Use this method to update your business objects.
+     *
      * @param[in] meta Transaction metadata.
      * @param[in] changes List of changes.
+     * @param[in] tx User transaction that originated the changes (null if this update is not related to a user commit).
      */
-    virtual void on_commit(const meta_ptr &meta, const std::vector<change_t> &changes) {}
+    virtual void on_update([[maybe_unused]] const meta_ptr &meta, [[maybe_unused]] const std::vector<change_t> &changes, [[maybe_unused]] tx_ptr tx = nullptr) {}
 
     /**
      * Callback function that is called when a transaction is rejected by the server.
@@ -269,7 +261,7 @@ class client_t
      * 
      * @param[in] tx The transaction that was rejected.
      */
-    virtual void on_reject(tx_ptr tx) {}
+    virtual void on_reject([[maybe_unused]] tx_ptr tx) {}
 
     /**
      * Callback function that is called when an error occurs.
@@ -279,7 +271,7 @@ class client_t
      * 
      * @param[in] msg The error message describing the issue.
      */
-    virtual void on_error(const char *msg) {}
+    virtual void on_error([[maybe_unused]] const char *msg) {}
 };
 
 }; // namespace nplex

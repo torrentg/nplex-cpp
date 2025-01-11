@@ -5,7 +5,6 @@
 * create include/nplex directory containing public headers
 * Only a public header -> nplex-cpp.hpp
 * implement client.cpp
-* rename nplex::client_t to nplex::nplex_t ??
 * allow ssl connections (see project tlsuv)
 * add user permissions on login_response
 * README: explain nplex purpose
@@ -13,7 +12,6 @@
 * segregate params_t class in a file + set default values + setters returning ref to obj
 * submit_tx_fut returns a future (attached to tx.promise)
 * Rename Check to Pattern or Grant or ACL or AccessControl or similar
-* Pimplize client_t
 
 ## Useful commands
 
