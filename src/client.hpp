@@ -93,10 +93,11 @@ class event_t
  *   - Starts a thread to execute the server events.
  *   - Connects to the nplex server (login).
  *   - Receives events from server (ex: snapshot, commits).
- *   - Updates the local database contents.
- *   - Notifies changes to the user.
- *   - Allows to read/update db content using transactions.
+ *     - Updating the local database contents.
+ *     - Updating ongoing transactions.
+ *     - Notifying database changes to the user.
  *   - Manages connection-lost and reconnections.
+ *   - Allows to read/update db content using transactions.
  * 
  * Nplex client grants:
  *   - Strictly ordered event processing.
@@ -129,11 +130,11 @@ class client_t
     std::thread thread;                             //!< Worker thread, execute output commands.
     mqueue<command_t> commands;                     //!< Commands pending to be digested by the event loop.
     mqueue<event_t> events;                         //!< Events pending to be digested by the working thread.
-    gto::cqueue<tx_ptr> ongoing_tx;                 //!< List of ongoing transactions.
-    gto::cqueue<tx_ptr> pending_tx;                 //!< List of pending transactions.
+    gto::cqueue<tx_ptr> ongoing_tx;                 //!< List of ongoing transactions (user working on it).
+    gto::cqueue<tx_ptr> pending_tx;                 //!< List of pending transactions (awaiting server response).
     cache_ptr data;                                 //!< Database content.
     state_e state;                                  //!< Client state.
-    bool can_force = false;                         //!< User can force transactions.
+    bool can_force = false;                         //!< User can force transactions (this grant is given by server at login).
 
   public:
 

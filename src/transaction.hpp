@@ -7,9 +7,9 @@
 #include <string_view>
 #include "types.hpp"
 
-#define CHECK_CREATE 1
-#define CHECK_UPDATE 2
-#define CHECK_DELETE 4
+#define NPLEX_CREATE 1
+#define NPLEX_UPDATE 2
+#define NPLEX_DELETE 4
 
 namespace nplex {
 
@@ -85,12 +85,12 @@ class transaction_t
     using cache_ptr = std::shared_ptr<cache_t>;
     using entry_t = std::tuple<action_e, value_ptr>;
     using items_t = std::map<key_t, entry_t, key_cmp_less_t>;
-    using checks_t = std::map<std::string, std::uint8_t>;
+    using ensures_t = std::map<std::string, std::uint8_t>;
 
     rev_t m_rev;                                //!< Database revision at tx creation.
     cache_ptr m_cache;                          //!< Database content.
     items_t m_items;                            //!< Transaction items (depends on isolation level).
-    checks_t m_checks;                          //!< Transaction checks.
+    ensures_t m_ensures;                        //!< Transaction ensures.
     isolation_e m_isolation_level;              //!< Transaction isolation level.
     std::atomic<std::uint32_t> m_type = 0;      //!< Transaction type (user-defined value).
     std::atomic<state_e> m_state;               //!< Transaction state.
@@ -156,11 +156,11 @@ class transaction_t
      *   - If you don't mark 'a' and 'b' with 'check', a commit may have modified the value of 'a' or 'b' in between.
      *   - If you mark 'a' and 'b' with 'check', the commit will fail if 'a' or 'b' was modified in between.
      * 
-     * @see check()
+     * @see ensure()
      * 
      * @param[in] key The key to read.
      * @param[in] check If true, checks at commit time that the key-value pair was not modified.
-     *                  Is equivalent to call 'check(key, CHECK_CREATE|CHECK_UPDATE|CHECK_DELETE)'.
+     *                  Is equivalent to call 'ensure(key, NPLEX_CREATE|NPLEX_UPDATE|NPLEX_DELETE)'.
      * 
      * @return The value associated with the key (empty if not found or previously deleted).
      *         If the value was previously upsert, then its metadata is empty.
@@ -168,17 +168,17 @@ class transaction_t
      * @exception std::invalid_argument Invalid key.
      * @exception nplex_exception Transaction not open, or invalid key.
      */
-    value_ptr read(const key_t &key, bool check = false);
+    value_ptr read(const char *key, bool check = false);
 
     /**
      * Update a key-value or insert it if not exists.
      * 
      * By default does nothing if the value is unchanged.
-     * Use the 'force' flag to update the revision.
+     * Use the 'force' flag to update the revision on the unchanged value case.
      * 
      * @param[in] key The key to update.
      * @param[in] data The new data associated with the key.
-     * @param[in] force Update revision even if value is unchanged.
+     * @param[in] force Update entry revision even if value is unchanged.
      * 
      * @return true if key created or updated,
      *         false if existing key has same value and force = false.
@@ -186,7 +186,7 @@ class transaction_t
      * @exception std::invalid_argument Invalid key or data.
      * @exception nplex_exception Transaction is read-only, or not open.
      */
-    bool upsert(const key_t &key, const std::string_view &data, bool force = false);
+    bool upsert(const char *key, const std::string_view &data, bool force = false);
 
     /**
      * Remove a key-value pair.
@@ -197,9 +197,7 @@ class transaction_t
      * Caution, deletion using a pattern does not grant that all keys was removed at commit-time. 
      * For example, if you delete a range of values using a pattern, and then a commit adds 
      * a key satisfying the pattern, this new key continue to exists even if the current 
-     * transaction is committed succesfully.
-     * 
-     * @see check()
+     * transaction is committed succesfully. Use ensure() to avoid these cases.
      * 
      * @param[in] pattern The key or pattern to remove.
      * 
@@ -224,7 +222,7 @@ class transaction_t
      * indicated actions from the time the conditions is established until the commit.
      * 
      * The transaction will be rejected if any of the conditions are not met.
-     * Transaction checks applies even in 'force' mode.
+     * Transaction ensures applies even in 'force' mode.
      * 
      * Glob patterns are supported (ex: '/users/\*\/error', '/users/jdoe/\**').
      * 
@@ -237,20 +235,20 @@ class transaction_t
      *   - Condition applies to the database state at transaction creation time.
      * 
      * @example: Verify that nobody modified or deleted a fixed key.
-     *     tx.check("/users/jdoe/name", CHECK_UPDATE | CHECK_DELETE);
+     *     tx.ensure("/users/jdoe/name", NPLEX_UPDATE | NPLEX_DELETE);
      * 
      * @example: Verify that nobody altered a set of keys.
-     *     tx.check("/users/\**", CHECK_CREATE | CHECK_UPDATE | CHECK_DELETE);
+     *     tx.ensure("/users/\**", NPLEX_CREATE | NPLEX_UPDATE | NPLEX_DELETE);
      *
      * @param[in] pattern The pattern to check.
-     * @param[in] actions The actions to check (use CHECK_CREATE, CHECK_UPDATE, CHECK_DELETE).
+     * @param[in] actions The actions to check (use NPLEX_CREATE, NPLEX_UPDATE, NPLEX_DELETE).
      * 
      * @return true if the condition was set, 
      *         false otherwise (invalid-pattern, unrecognized-action).
      * 
      * @exception nplex_exception Transaction is not open.
      */
-    bool check(const char *pattern, std::uint8_t actions);
+    bool ensure(const char *pattern, std::uint8_t actions);
 
     /**
      * Executes the callback function for each key-value.
@@ -293,8 +291,8 @@ class transaction_t
      * @exception nplex_exception Transaction is not open, or empty callback function.
      * @exception nplex_exception Transaction is read-only and callback function calls upsert or delete.
      */
-    std::size_t for_each(callback_t callback) { return for_each("**", callback); }
-    std::size_t for_each(const char *pattern, callback_t callback);
+    std::size_t for_each(const callback_t &callback) { return for_each("**", callback); }
+    std::size_t for_each(const char *pattern, const callback_t &callback);
 };
 
 }; // namespace nplex

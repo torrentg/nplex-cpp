@@ -12,6 +12,7 @@ struct tx_test_t : public transaction_t {
     using transaction_t::transaction_t;
     void update(const std::vector<change_t> &changes) { transaction_t::update(changes); }
     void set_dirty(bool dirty) { m_dirty = dirty; }
+    void set_state(state_e state) { m_state = state; }
 };
 
 using tx_ptr = std::shared_ptr<tx_test_t>;
@@ -229,6 +230,15 @@ TEST_CASE("transaction_test")
         CHECK(tx->read("key99")->data()[0] == 99);
         CHECK(tx->read("key99")->rev() == 3);
     }
+
+    SUBCASE("read_upsert_remove_exceptions")
+    {
+        auto tx = std::make_shared<tx_test_t>(cache, transaction_t::isolation_e::SERIALIZABLE, true);
+        CHECK_THROWS_AS(tx->upsert("key1", "abc"), nplex_exception); // read-only exception
+        CHECK_THROWS_AS(tx->remove("key1"), nplex_exception); // read-only exception
+        tx->set_state(transaction_t::state_e::ABORTED);
+        CHECK_THROWS_AS(tx->read("key1"), nplex_exception); // not-open exception
+    }
 }
 
 TEST_CASE("transaction_for_each")
@@ -291,5 +301,109 @@ TEST_CASE("transaction_for_each")
 
         CHECK(count == 2);
         CHECK(success);
+    }
+
+    SUBCASE("iterate_exceptions")
+    {
+        tx->set_state(transaction_t::state_e::ABORTED);
+        CHECK_THROWS_AS(tx->for_each("key1", []([[maybe_unused]] const gto::cstring &key, [[maybe_unused]] const value_t &value) {
+                return true;
+            }), nplex_exception);
+
+        CHECK_THROWS_AS(tx->for_each("key1", transaction_t::callback_t{}), std::invalid_argument);
+
+    }
+}
+
+TEST_CASE("transaction_ensure")
+{
+    cache_ptr cache = make_basic_cache();
+    std::vector<nplex::change_t> changes;
+    auto tx = std::make_shared<tx_test_t>(cache, transaction_t::isolation_e::READ_COMMITTED);
+
+    SUBCASE("ensure_all")
+    {
+        // any change will make the transaction dirty
+        REQUIRE_NOTHROW(tx->ensure("**", NPLEX_CREATE | NPLEX_UPDATE | NPLEX_DELETE));
+
+        // updating key1
+        tx->set_dirty(false);
+        changes = update_cache(cache, 
+            make_update(3, "jdoe", 1234567890, 15, {
+                    { .key = "key1", .value = {13}}
+                },
+                {}
+            ));
+
+        tx->update(changes);
+        CHECK(tx->dirty());
+
+        // adding new key
+        tx->set_dirty(false);
+        changes = update_cache(cache, 
+            make_update(4, "jdoe", 1234567890, 15, {
+                    { .key = "key99", .value = {13}}
+                },
+                {}
+            ));
+
+        tx->update(changes);
+        CHECK(tx->dirty());
+
+        // deleting key2
+        tx->set_dirty(false);
+        changes = update_cache(cache, 
+            make_update(5, "jdoe", 1234567890, 15, 
+                {},
+                { "key2" }
+            ));
+
+        tx->update(changes);
+        CHECK(tx->dirty());
+    }
+
+    SUBCASE("ensure_some")
+    {
+        // any update or delete on keys match key1* will make the transaction dirty
+        REQUIRE_NOTHROW(tx->ensure("key1*", NPLEX_UPDATE | NPLEX_DELETE));
+
+        // updating key1
+        tx->set_dirty(false);
+        changes = update_cache(cache, 
+            make_update(3, "jdoe", 1234567890, 15, {
+                    { .key = "key1", .value = {13}}
+                },
+                {}
+            ));
+
+        // adding key11 does nothing
+        tx->set_dirty(false);
+        changes = update_cache(cache, 
+            make_update(4, "jdoe", 1234567890, 15, {
+                    { .key = "key11", .value = {13}}
+                },
+                {}
+            ));
+
+        tx->update(changes);
+        CHECK(!tx->dirty());
+
+        // deleting key11
+        tx->set_dirty(false);
+        changes = update_cache(cache, 
+            make_update(5, "jdoe", 1234567890, 15, {
+                    { .key = "key11", .value = {15}}
+                },
+                {}
+            ));
+
+        tx->update(changes);
+        CHECK(tx->dirty());
+    }
+
+    SUBCASE("ensure_error_not_open")
+    {
+        tx->set_state(transaction_t::state_e::COMMITTED);
+        CHECK_THROWS_AS(tx->ensure("key1", NPLEX_UPDATE), nplex_exception);
     }
 }

@@ -9,7 +9,7 @@ namespace {
 using namespace nplex;
 
 gto::cstring create_cstring(const flatbuffers::Vector<std::uint8_t> *value) {
-    return gto::cstring{reinterpret_cast<const char *>(value->data()), static_cast<size_t>(value->size())};
+    return gto::cstring{reinterpret_cast<const char *>(value->data()), static_cast<std::size_t>(value->size())};
 }
 
 }; // unnamed namespace
@@ -62,9 +62,9 @@ nplex::change_t nplex::cache_t::upsert_entry(const char *key, const value_ptr &v
     assert(value && value->m_meta);
 
     if (!is_valid_key(key))
-        throw nplex_exception("Invalid key");
+        throw nplex_exception("Trying to upsert an invalid key: {}", key);
 
-    change_t change;
+    change_t change = {change_t::action_e::UPDATE, nullptr, nullptr, nullptr};
     auto it = m_data.find(key);
 
     if (it != m_data.end())
@@ -98,7 +98,7 @@ nplex::change_t nplex::cache_t::upsert_entry(const char *key, const value_ptr &v
 nplex::change_t nplex::cache_t::delete_entry(const char *key)
 {
     if (!is_valid_key(key))
-        throw nplex_exception("Invalid key (delete)");
+        throw nplex_exception("Trying to delete an invalid key: {}", key);
 
     change_t change = {change_t::action_e::DELETE, nullptr, nullptr, nullptr};
     auto it = m_data.find(key);
@@ -139,7 +139,7 @@ void nplex::cache_t::restore(const msgs::Snapshot *snapshot)
             update(updates->Get(i));
 
             if (m_rev > snapshot->rev())
-                throw nplex_exception("invalid snapshot revision");
+                throw nplex_exception("Snapshot at r{} contains entries at r{}", snapshot->rev(), m_rev);
         }
     }
 
@@ -164,7 +164,7 @@ std::vector<change_t> nplex::cache_t::update(const msgs::Update *updmsg)
     rev_t rev = updmsg->rev();
 
     if (rev <= m_rev)
-        throw nplex_exception("invalid update revision");
+        throw nplex_exception("Received an update to r{} when cache is at r{}", rev, m_rev);
 
     auto meta = create_meta(updmsg);
 
@@ -177,7 +177,7 @@ std::vector<change_t> nplex::cache_t::update(const msgs::Update *updmsg)
             auto keyval = upserts->Get(i);
 
             if (!keyval || !keyval->key() || !keyval->value())
-                throw nplex_exception("Invalid key-value (upsert)");
+                throw nplex_exception("Malformed update message at r{}", rev);
 
             auto key = keyval->key()->c_str();
             gto::cstring data = create_cstring(keyval->value());
@@ -197,7 +197,7 @@ std::vector<change_t> nplex::cache_t::update(const msgs::Update *updmsg)
             auto key = deletes->Get(i);
 
             if (!key || !key->c_str())
-                throw nplex_exception("Invalid key (delete)");
+                throw nplex_exception("Malformed update message at r{}", rev);
 
             auto change = delete_entry(key->c_str());
 

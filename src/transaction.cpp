@@ -5,7 +5,7 @@
 #include "transaction.hpp"
 
 nplex::transaction_t::transaction_t(cache_ptr cache, isolation_e isolation, bool read_only) : 
-    m_cache{cache}, m_isolation_level{isolation}, m_read_only{read_only}
+    m_cache{std::move(cache)}, m_isolation_level{isolation}, m_read_only{read_only}
 {
     if (!m_cache)
         throw std::invalid_argument("Invalid database");
@@ -16,10 +16,10 @@ nplex::transaction_t::transaction_t(cache_ptr cache, isolation_e isolation, bool
     m_state = state_e::OPEN;
 }
 
-nplex::value_ptr nplex::transaction_t::read(const key_t &key, bool check)
+nplex::value_ptr nplex::transaction_t::read(const char *key, bool check)
 {
     if (!is_valid_key(key))
-        throw std::invalid_argument("Invalid key");
+        throw nplex_exception("Trying to read an invalid key: {}", key);
 
     std::lock_guard<decltype(m_cache->m_mutex)> lock_cache(m_cache->m_mutex);
 
@@ -36,7 +36,7 @@ nplex::value_ptr nplex::transaction_t::read(const key_t &key, bool check)
             return {};
 
         if (check)
-            transaction_t::check(key.data(), CHECK_CREATE | CHECK_UPDATE | CHECK_DELETE);
+            transaction_t::ensure(key, NPLEX_CREATE | NPLEX_UPDATE | NPLEX_DELETE);
 
         return std::get<value_ptr>(it_tx->second);
     }
@@ -53,12 +53,12 @@ nplex::value_ptr nplex::transaction_t::read(const key_t &key, bool check)
         m_items.emplace(it_cache->first, std::make_tuple(action_e::READ, it_cache->second));
 
     if (check)
-        transaction_t::check(key.data(), CHECK_CREATE | CHECK_UPDATE | CHECK_DELETE);
+        transaction_t::ensure(key, NPLEX_CREATE | NPLEX_UPDATE | NPLEX_DELETE);
 
     return it_cache->second;
 }
 
-bool nplex::transaction_t::upsert(const key_t &key, const std::string_view &data, bool force)
+bool nplex::transaction_t::upsert(const char *key, const std::string_view &data, bool force)
 {
     if (!is_valid_key(key) || data.empty())
         throw std::invalid_argument("Invalid key or invalid data");
@@ -168,10 +168,10 @@ std::size_t nplex::transaction_t::remove(const char *pattern)
     return ret;
 }
 
-std::size_t nplex::transaction_t::for_each(const char *pattern, callback_t callback)
+std::size_t nplex::transaction_t::for_each(const char *pattern, const callback_t &callback)
 {
     if (!callback)
-        throw nplex_exception("Invalid argument");
+        throw std::invalid_argument("Invalid callback function");
 
     if (!pattern || *pattern == '\0')
         return 0;
@@ -264,9 +264,9 @@ std::size_t nplex::transaction_t::for_each(const char *pattern, callback_t callb
     return ret;
 }
 
-bool nplex::transaction_t::check(const char *pattern, std::uint8_t actions)
+bool nplex::transaction_t::ensure(const char *pattern, std::uint8_t actions)
 {
-    actions &= (CHECK_CREATE | CHECK_UPDATE | CHECK_DELETE);
+    actions &= (NPLEX_CREATE | NPLEX_UPDATE | NPLEX_DELETE);
 
     if (!pattern || !actions)
         return false;
@@ -276,10 +276,10 @@ bool nplex::transaction_t::check(const char *pattern, std::uint8_t actions)
     if (m_state != state_e::OPEN)
         throw nplex_exception("Transaction is not open");
 
-    auto it = m_checks.find(pattern);
+    auto it = m_ensures.find(pattern);
 
-    if (it == m_checks.end())
-        m_checks.emplace(pattern, actions);
+    if (it == m_ensures.end())
+        m_ensures.emplace(pattern, actions);
     else
         it->second |= actions;
 
@@ -306,20 +306,20 @@ void nplex::transaction_t::update(const std::vector<change_t> &changes)
             break;
     }
 
-    if (m_dirty || m_checks.empty())
+    if (m_dirty || m_ensures.empty())
         return;
 
     // Checking validations
     for (const auto &change : changes)
     {
-        for (const auto &item : m_checks)
+        for (const auto &ensure : m_ensures)
         {
-            if (!glob_match(change.key.data(), item.first.data()))
+            if (!glob_match(change.key.data(), ensure.first.data()))
                 continue;
 
-            if (((item.second & CHECK_CREATE) && change.action == change_t::action_e::CREATE) ||
-                ((item.second & CHECK_UPDATE) && change.action == change_t::action_e::UPDATE) ||
-                ((item.second & CHECK_DELETE) && change.action == change_t::action_e::DELETE)) {
+            if (((ensure.second & NPLEX_CREATE) && change.action == change_t::action_e::CREATE) ||
+                ((ensure.second & NPLEX_UPDATE) && change.action == change_t::action_e::UPDATE) ||
+                ((ensure.second & NPLEX_DELETE) && change.action == change_t::action_e::DELETE)) {
                 m_dirty = true;
                 break;
             }

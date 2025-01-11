@@ -89,7 +89,7 @@ struct change_t
 
 // Key support functions.
 inline bool is_valid_key(const std::string_view &key) { return !key.empty(); }
-inline bool is_valid_key(const char *key) { return is_valid_key(std::string_view{key}); }
+inline bool is_valid_key(const char *key) { return (key && is_valid_key(std::string_view{key})); }
 inline bool is_valid_key(const key_t &key) { return is_valid_key(key.view()); }
 std::string_view key_part(const key_t &key, std::size_t index, char delimiter = KEY_DELIMITER);
 std::string_view key_prefix(const key_t &key, std::size_t index, char delimiter = KEY_DELIMITER);

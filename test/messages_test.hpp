@@ -31,7 +31,7 @@ namespace tests {
         return result;
     }
 
-    inline nplex::msgs::UpdateT make_update(size_t rev, const char *user, std::uint64_t timestamp, std::uint32_t type, std::vector<nplex::msgs::KeyValueT> upserts = {}, std::vector<std::string> deletes = {})
+    inline nplex::msgs::UpdateT make_update(std::size_t rev, const char *user, std::uint64_t timestamp, std::uint32_t type, std::vector<nplex::msgs::KeyValueT> upserts = {}, std::vector<std::string> deletes = {})
     {
         nplex::msgs::UpdateT tx;
         tx.rev = rev;
@@ -43,7 +43,7 @@ namespace tests {
         return tx;
     }
 
-    inline nplex::msgs::SnapshotT make_snapshot(size_t rev, std::vector<nplex::msgs::UpdateT> updates)
+    inline nplex::msgs::SnapshotT make_snapshot(std::size_t rev, std::vector<nplex::msgs::UpdateT> updates)
     {
         nplex::msgs::SnapshotT snapshot;
         snapshot.rev = rev;
@@ -51,7 +51,7 @@ namespace tests {
         return snapshot;
     }
 
-    inline nplex::msgs::LoadResponseT make_load_response(size_t cid, size_t crev, bool accepted, const nplex::msgs::SnapshotT &snapshot)
+    inline nplex::msgs::LoadResponseT make_load_response(std::size_t cid, std::size_t crev, bool accepted, const nplex::msgs::SnapshotT &snapshot)
     {
         nplex::msgs::LoadResponseT resp;
         resp.cid = cid;
@@ -61,7 +61,7 @@ namespace tests {
         return resp;
     }
 
-    inline nplex::msgs::UpdatePushT make_update_push(size_t cid, size_t crev, const nplex::msgs::UpdateT &update)
+    inline nplex::msgs::UpdatePushT make_update_push(std::size_t cid, std::size_t crev, const nplex::msgs::UpdateT &update)
     {
         nplex::msgs::UpdatePushT push;
         push.cid = cid;
@@ -70,7 +70,7 @@ namespace tests {
         return push;
     }
 
-    inline nplex::msgs::SubmitRequestT make_submit_request(size_t cid, size_t crev, std::uint32_t type, std::vector<nplex::msgs::KeyValueT> upserts, std::vector<std::string> deletes, std::vector<nplex::msgs::CheckT> checks)
+    inline nplex::msgs::SubmitRequestT make_submit_request(std::size_t cid, std::size_t crev, std::uint32_t type, std::vector<nplex::msgs::KeyValueT> upserts, std::vector<std::string> deletes, std::vector<nplex::msgs::CheckT> ensures)
     {
         nplex::msgs::SubmitRequestT req;
         req.cid = cid;
@@ -78,7 +78,7 @@ namespace tests {
         req.type = type;
         req.upserts = make_vector_unique_ptr(upserts);
         req.deletes = deletes;
-        req.checks = make_vector_unique_ptr(checks);
+        req.ensures = make_vector_unique_ptr(ensures);
         return req;
     }
 

@@ -40,23 +40,17 @@ flatbuffers_generate_headers(
     FLAGS --cpp --filename-ext hpp --cpp-std c++17 --scoped-enums --gen-object-api
 )
 
-# Replace the current src/messages.hpp by the generated file
+# Copy messages_generated.hpp to src/messages.hpp
 add_custom_command(
-    OUTPUT "${PROJECT_SOURCE_DIR}/src/messages_generated.hpp"
+    OUTPUT "${PROJECT_SOURCE_DIR}/src/messages.hpp"
     COMMAND ${CMAKE_COMMAND} -E copy
         "${CMAKE_BINARY_DIR}/flatbuffers_generated/messages_generated.hpp"
         "${PROJECT_SOURCE_DIR}/src/messages.hpp"
-    DEPENDS GENERATE_flatbuffers_generated
+    DEPENDS
+        GENERATE_flatbuffers_generated
+        ${PROJECT_SOURCE_DIR}/src/messages.fbs
     COMMENT "Copying generated messages.hpp to src directory"
 )
-
-# Target triggering the regeneration of src/messages.hpp
-add_custom_target(
-    CopyGeneratedHeaders ALL
-    DEPENDS "${PROJECT_SOURCE_DIR}/src/messages_generated.hpp"
-)
-
-#set(CMAKE_CXX_CLANG_TIDY "/usr/bin/clang-tidy")
 
 add_compile_options(
     -march=native
@@ -92,11 +86,70 @@ if (ENABLE_SANITIZERS)
     )
 endif()
 
+option(ENABLE_COVERAGE "Compile and link code for coverage" OFF)
+if (ENABLE_COVERAGE)
+    add_compile_options(
+        --coverage
+        -O0
+    )
+endif()
+
 set(CMAKE_INTERPROCEDURAL_OPTIMIZATION OFF)
 set(CMAKE_INTERPROCEDURAL_OPTIMIZATION_RELEASE ON)
 
-option(DEBUG "Compile sources in DEBUG mode" OFF)
-option(COVERAGE "Compile and link code for coverage" OFF)
+#set(
+#    # see https://clang.llvm.org/extra/clang-tidy/checks/list.html
+#    CMAKE_CXX_CLANG_TIDY
+#    clang-tidy
+#    -checks=-*,performance-*,portability-*,misc-*,clang-analyzer-*,bugprone-*,-misc-include-cleaner,-misc-const-correctness
+#)
+
+add_library(
+    nplex-cpp
+    STATIC
+)
+
+target_sources(
+    nplex-cpp
+    PRIVATE
+    ${CMAKE_CURRENT_LIST_DIR}/deps/match.c
+    ${CMAKE_CURRENT_LIST_DIR}/src/cache.hpp
+    ${CMAKE_CURRENT_LIST_DIR}/src/cache.cpp
+    ${CMAKE_CURRENT_LIST_DIR}/src/messages.fbs
+    ${CMAKE_CURRENT_LIST_DIR}/src/messages.hpp
+    ${CMAKE_CURRENT_LIST_DIR}/src/mqueue.hpp
+    ${CMAKE_CURRENT_LIST_DIR}/src/transaction.cpp
+    PUBLIC
+    ${CMAKE_CURRENT_LIST_DIR}/src/client.hpp
+    ${CMAKE_CURRENT_LIST_DIR}/src/exception.hpp
+    ${CMAKE_CURRENT_LIST_DIR}/src/transaction.hpp
+    ${CMAKE_CURRENT_LIST_DIR}/src/types.hpp
+)
+
+set_target_properties(
+    nplex-cpp
+    PROPERTIES
+    POSITION_INDEPENDENT_CODE 1
+    OUTPUT_NAME "nplex-cpp"
+)
+
+target_include_directories(
+    nplex-cpp
+    PRIVATE
+    ${CMAKE_CURRENT_SOURCE_DIR}/deps/
+    PUBLIC
+    ${CMAKE_CURRENT_LIST_DIR}/include
+)
+
+target_link_libraries(
+    nplex-cpp
+    "$<$<STREQUAL:${ENABLE_SANITIZERS},ON>:-lasan>"
+    "$<$<STREQUAL:${ENABLE_SANITIZERS},ON>:-lubsan>"
+    Threads::Threads
+    libuv::uv
+    fmt::fmt
+    flatbuffers::flatbuffers_shared
+)
 
 include(CTest)
 enable_testing()

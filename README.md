@@ -14,13 +14,13 @@ cmake -DENABLE_SANITIZERS=ON ..
 make VERBOSE=1
 ctest -V
 valgrind --tool=memcheck --leak-check=yes test/tests
+cmake -DENABLE_COVERAGE=ON ..
 ```
 
 ## Dependencies
 
 ### Static
 
-* [{fmt}](https://github.com/fmtlib/fmt). A string formatting library. MIT license.
 * [cstring](https://github.com/torrentg/cstring). A C++ immutable C-string with reference counting. LGPL-3.0 license.
 * [cqueue](https://github.com/torrentg/cqueue). A C++20 header-only circular queue container. LGPL-3.0 license.
 * [doctest](https://github.com/doctest/doctest). The fastest feature-rich C++11/14/17/20/23 single-header testing framework. MIT license.
@@ -28,6 +28,7 @@ valgrind --tool=memcheck --leak-check=yes test/tests
 
 ### Shared
 
+* [{fmt}](https://github.com/fmtlib/fmt). A string formatting library. MIT license.
 * [lz4](https://github.com/lz4/lz4). Extremely fast compression. BSD-2-Clause license.
 * [libuv](https://github.com/libuv/libuv). Cross-platform asynchronous I/O. MIT license.
 * [flatbuffers](https://github.com/google/flatbuffers). Memory efficient serialization library. Apache-2.0 license .

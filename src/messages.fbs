@@ -66,7 +66,6 @@ table LoginRequest
     cid: uint64;                    // Correlation id (used to match responses to requests)
     user: string;                   // User name
     password: string;               // User password
-
 }
 
 table LoginResponse
@@ -76,7 +75,8 @@ table LoginResponse
     session: string;                // Session assigned
     rev0: uint64;                   // Oldest revision available
     crev: uint64;                   // Current database revision
-    // TODO: add timeout + keepalive
+    can_force: bool;                // Can force transactions
+    // TODO: add timeout + keepalive + permissions
 }
 
 table PingRequest
@@ -121,7 +121,7 @@ table SubmitRequest
     type: uint32;                   // Transaction type (user-defined value)
     upserts: [KeyValue];            // List of updates and inserts
     deletes: [string];              // List of deletes
-    checks: [Check];                // List of checks
+    ensures: [Check];               // List of ensures
 }
 
 table SubmitResponse

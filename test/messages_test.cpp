@@ -34,7 +34,8 @@ TEST_CASE("LoginResponse")
         LoginCode::AUTHORIZED,
         "3b12-7aac7",   // session
         456,            // rev0
-        2048            // crev
+        2048,           // crev
+        false           // can_force
     };
 
     auto buf = serialize(resp);
@@ -275,12 +276,12 @@ TEST_CASE("SubmitRequest")
         CHECK(ptr->deletes()->Get(i)->str() == req.deletes[i]);
     }
 
-    REQUIRE(ptr->checks());
-    REQUIRE(ptr->checks()->size() == req.checks.size());
+    REQUIRE(ptr->ensures());
+    REQUIRE(ptr->ensures()->size() == req.ensures.size());
 
-    for (uoffset_t i = 0; i < ptr->checks()->size(); i++)
+    for (uoffset_t i = 0; i < ptr->ensures()->size(); i++)
     {
-        CHECK(ptr->checks()->Get(i)->pattern()->str() == req.checks[i]->pattern);
+        CHECK(ptr->ensures()->Get(i)->pattern()->str() == req.ensures[i]->pattern);
     }
 }
 
