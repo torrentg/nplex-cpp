@@ -1,5 +1,5 @@
 #include <doctest.h>
-#include "exception.hpp"
+#include "nplex-cpp/exception.hpp"
 #include "messages_test.hpp"
 #include "cache.hpp"
 

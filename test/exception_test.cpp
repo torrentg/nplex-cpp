@@ -1,6 +1,6 @@
 #include <sstream>
 #include <doctest.h>
-#include "exception.hpp"
+#include "nplex-cpp/exception.hpp"
 
 using namespace std;
 using namespace nplex;

@@ -5,7 +5,7 @@
 #include <stdexcept>
 #include <condition_variable>
 #include "cqueue.hpp"
-#include "exception.hpp"
+#include "nplex-cpp/exception.hpp"
 
 namespace nplex {
 

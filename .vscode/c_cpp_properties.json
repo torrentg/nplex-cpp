@@ -3,6 +3,7 @@
         {
             "name": "Linux",
             "includePath": [
+                "${workspaceFolder}/include",
                 "${workspaceFolder}/deps",
                 "${workspaceFolder}/src"
             ],
@@ -25,10 +26,10 @@
             ],
             "browse": {
                 "path": [
+                    "${workspaceFolder}/include",
                     "${workspaceFolder}/test",
                     "${workspaceFolder}/deps",
-                    "${workspaceFolder}/src",
-                    "/usr/include/tirpc"
+                    "${workspaceFolder}/src"
                 ],
                 "limitSymbolsToIncludedHeaders": true
             }

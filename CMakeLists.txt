@@ -121,11 +121,11 @@ target_sources(
     ${CMAKE_CURRENT_LIST_DIR}/src/messages.hpp
     ${CMAKE_CURRENT_LIST_DIR}/src/transaction.cpp
     PUBLIC
-    ${CMAKE_CURRENT_LIST_DIR}/src/types.hpp
-    ${CMAKE_CURRENT_LIST_DIR}/src/params.hpp
-    ${CMAKE_CURRENT_LIST_DIR}/src/client.hpp
-    ${CMAKE_CURRENT_LIST_DIR}/src/exception.hpp
-    ${CMAKE_CURRENT_LIST_DIR}/src/transaction.hpp
+    ${CMAKE_CURRENT_LIST_DIR}/include/nplex-cpp/types.hpp
+    ${CMAKE_CURRENT_LIST_DIR}/include/nplex-cpp/params.hpp
+    ${CMAKE_CURRENT_LIST_DIR}/include/nplex-cpp/client.hpp
+    ${CMAKE_CURRENT_LIST_DIR}/include/nplex-cpp/exception.hpp
+    ${CMAKE_CURRENT_LIST_DIR}/include/nplex-cpp/transaction.hpp
 )
 
 set_target_properties(
@@ -138,7 +138,7 @@ set_target_properties(
 target_include_directories(
     nplex-cpp
     PRIVATE
-    ${CMAKE_CURRENT_SOURCE_DIR}/deps/
+    ${CMAKE_CURRENT_SOURCE_DIR}/deps
     PUBLIC
     ${CMAKE_CURRENT_LIST_DIR}/include
 )

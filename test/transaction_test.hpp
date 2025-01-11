@@ -2,9 +2,9 @@
 
 #include <doctest.h>
 #include "messages_test.hpp"
-#include "exception.hpp"
+#include "nplex-cpp/exception.hpp"
+#include "nplex-cpp/transaction.hpp"
 #include "cache.hpp"
-#include "transaction.hpp"
 
 namespace  nplex {
 

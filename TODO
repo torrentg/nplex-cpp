@@ -2,7 +2,6 @@
 
 * NETWORK MSG = LEN + TYPE + ALGO + CONTENT + CHECKSUM
 * value_t::as_millis() convert from ISO-8601 string (instead of number)
-* create include/nplex directory containing public headers
 * Only a public header -> nplex-cpp.hpp
 * implement client.cpp
 * allow ssl connections (see project tlsuv)
@@ -12,6 +11,7 @@
 * segregate params_t class in a file + set default values + setters returning ref to obj
 * submit_tx_fut returns a future (attached to tx.promise)
 * Rename Check to Pattern or Grant or ACL or AccessControl or similar
+* extends key_t from cstring_t adding validation on construct, key_part, key_preffix, key_suffix, etc.
 
 ## Useful commands
 

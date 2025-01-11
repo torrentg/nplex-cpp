@@ -1,6 +1,6 @@
 #include <chrono>
 #include <cassert>
-#include "exception.hpp"
+#include "nplex-cpp/exception.hpp"
 #include "messages.hpp"
 #include "cache.hpp"
 

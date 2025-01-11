@@ -11,8 +11,8 @@ set_target_properties(
 target_include_directories(
     tests
     PRIVATE
-    ${PROJECT_SOURCE_DIR}/src
     ${PROJECT_SOURCE_DIR}/deps
+    ${PROJECT_SOURCE_DIR}/src
 )
 
 target_sources(

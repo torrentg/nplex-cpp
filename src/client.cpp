@@ -1,10 +1,10 @@
 #include <mutex>
 #include <thread>
 #include <atomic>
-#include "cache.hpp"
 #include "cqueue.hpp"
+#include "nplex-cpp/client.hpp"
+#include "cache.hpp"
 #include "mqueue.hpp"
-#include "client.hpp"
 
 #define UNUSED(x) (void)(x)
 
