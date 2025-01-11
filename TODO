@@ -13,7 +13,7 @@
 * segregate params_t class in a file + set default values + setters returning ref to obj
 * submit_tx_fut returns a future (attached to tx.promise)
 * Rename Check to Pattern or Grant or ACL or AccessControl or similar
-* Pimplize transaction_t and client_t
+* Pimplize client_t
 
 ## Useful commands
 

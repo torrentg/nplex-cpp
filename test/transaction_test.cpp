@@ -11,8 +11,12 @@ namespace {
 struct tx_test_t : public transaction_t {
     using transaction_t::transaction_t;
     void update(const std::vector<change_t> &changes) { transaction_t::update(changes); }
-    void set_dirty(bool dirty) { m_dirty = dirty; }
-    void set_state(state_e state) { m_state = state; }
+    void set_dirty(bool dirty) { transaction_t::dirty(dirty); }
+    void set_state(state_e state) { transaction_t::state(state); }
+    static std::shared_ptr<tx_test_t> create(cache_ptr cache, isolation_e isolation, bool read_only = false) {
+        auto tx = transaction_t::create(cache, isolation, read_only);
+        return std::reinterpret_pointer_cast<tx_test_t>(tx);
+    }
 };
 
 using tx_ptr = std::shared_ptr<tx_test_t>;
@@ -76,7 +80,7 @@ TEST_CASE("transaction_test")
 
     SUBCASE("read_committed_basic")
     {
-        auto tx = std::make_shared<tx_test_t>(cache, transaction_t::isolation_e::READ_COMMITTED);
+        auto tx = tx_test_t::create(cache, transaction_t::isolation_e::READ_COMMITTED);
 
         CHECK(tx->isolation() == transaction_t::isolation_e::READ_COMMITTED);
 
@@ -129,7 +133,7 @@ TEST_CASE("transaction_test")
 
     SUBCASE("repeatable_reads_basic")
     {
-        auto tx = std::make_shared<tx_test_t>(cache, transaction_t::isolation_e::REPEATABLE_READS);
+        auto tx = tx_test_t::create(cache, transaction_t::isolation_e::REPEATABLE_READS);
 
         CHECK(tx->isolation() == transaction_t::isolation_e::REPEATABLE_READS);
 
@@ -181,7 +185,7 @@ TEST_CASE("transaction_test")
 
     SUBCASE("serializable_basic")
     {
-        auto tx = std::make_shared<tx_test_t>(cache, transaction_t::isolation_e::SERIALIZABLE);
+        auto tx = tx_test_t::create(cache, transaction_t::isolation_e::SERIALIZABLE);
 
         CHECK(tx->isolation() == transaction_t::isolation_e::SERIALIZABLE);
 
@@ -233,7 +237,8 @@ TEST_CASE("transaction_test")
 
     SUBCASE("read_upsert_remove_exceptions")
     {
-        auto tx = std::make_shared<tx_test_t>(cache, transaction_t::isolation_e::SERIALIZABLE, true);
+        auto tx = tx_test_t::create(cache, transaction_t::isolation_e::SERIALIZABLE, true);
+
         CHECK_THROWS_AS(tx->upsert("key1", "abc"), nplex_exception); // read-only exception
         CHECK_THROWS_AS(tx->remove("key1"), nplex_exception); // read-only exception
         tx->set_state(transaction_t::state_e::ABORTED);
@@ -244,7 +249,7 @@ TEST_CASE("transaction_test")
 TEST_CASE("transaction_for_each")
 {
     cache_ptr cache = make_basic_cache();
-    auto tx = std::make_shared<tx_test_t>(cache, transaction_t::isolation_e::READ_COMMITTED);
+    auto tx = tx_test_t::create(cache, transaction_t::isolation_e::READ_COMMITTED);
 
     SUBCASE("iterate_all_only_cache")
     {
@@ -319,7 +324,7 @@ TEST_CASE("transaction_ensure")
 {
     cache_ptr cache = make_basic_cache();
     std::vector<nplex::change_t> changes;
-    auto tx = std::make_shared<tx_test_t>(cache, transaction_t::isolation_e::READ_COMMITTED);
+    auto tx = tx_test_t::create(cache, transaction_t::isolation_e::READ_COMMITTED);
 
     SUBCASE("ensure_all")
     {

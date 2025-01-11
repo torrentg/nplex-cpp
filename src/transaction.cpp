@@ -1,10 +1,59 @@
+#include <map>
+#include <tuple>
+#include <atomic>
 #include <cstring>
 #include "match.h"
 #include "cache.hpp"
 #include "exception.hpp"
 #include "transaction.hpp"
 
-nplex::transaction_t::transaction_t(cache_ptr cache, isolation_e isolation, bool read_only) : 
+// =================================================================================================
+// transaction_impl_t declaration
+// =================================================================================================
+
+namespace nplex {
+
+struct transaction_impl_t : public transaction_t
+{
+    enum class action_e : std::uint8_t {
+        READ,                                   //!< Read a key-value.
+        UPSERT,                                 //!< Update or insert a key-value.
+        DELETE                                  //!< Remove a key-value.
+    };
+
+    using entry_t = std::tuple<action_e, value_ptr>;
+    using items_t = std::map<key_t, entry_t, key_cmp_less_t>;
+    using ensures_t = std::map<std::string, std::uint8_t>;
+
+    rev_t m_rev;                                //!< Database revision at tx creation.
+    cache_ptr m_cache;                          //!< Database content.
+    items_t m_items;                            //!< Transaction items (depends on isolation level).
+    ensures_t m_ensures;                        //!< Transaction ensures.
+    isolation_e m_isolation_level;              //!< Transaction isolation level.
+    std::atomic<std::uint32_t> m_type = 0;      //!< Transaction type (user-defined value).
+    std::atomic<state_e> m_state;               //!< Transaction state.
+    std::atomic<bool> m_dirty = false;          //!< Current tx conflicts with a commit.
+    bool m_read_only = true;                    //!< Read-only flag.
+
+    transaction_impl_t(cache_ptr cache, isolation_e isolation, bool read_only);
+    nplex::value_ptr read(const char *key, bool check);
+    bool upsert(const char *key, const std::string_view &data, bool force);
+    bool remove(const key_t &key);
+    std::size_t remove(const char *pattern);
+    bool ensure(const char *pattern, std::uint8_t actions);
+    std::size_t for_each(const char *pattern, const callback_t &callback);
+    void update(const std::vector<change_t> &changes);
+    void update_serializable(const std::vector<change_t> &changes);
+    void update_default(const std::vector<change_t> &changes);
+};
+
+} // namespace nplex
+
+// =================================================================================================
+// transaction_impl_t methods
+// =================================================================================================
+
+nplex::transaction_impl_t::transaction_impl_t(cache_ptr cache, isolation_e isolation, bool read_only) : 
     m_cache{std::move(cache)}, m_isolation_level{isolation}, m_read_only{read_only}
 {
     if (!m_cache)
@@ -16,7 +65,7 @@ nplex::transaction_t::transaction_t(cache_ptr cache, isolation_e isolation, bool
     m_state = state_e::OPEN;
 }
 
-nplex::value_ptr nplex::transaction_t::read(const char *key, bool check)
+nplex::value_ptr nplex::transaction_impl_t::read(const char *key, bool check)
 {
     if (!is_valid_key(key))
         throw nplex_exception("Trying to read an invalid key: {}", key);
@@ -58,7 +107,7 @@ nplex::value_ptr nplex::transaction_t::read(const char *key, bool check)
     return it_cache->second;
 }
 
-bool nplex::transaction_t::upsert(const char *key, const std::string_view &data, bool force)
+bool nplex::transaction_impl_t::upsert(const char *key, const std::string_view &data, bool force)
 {
     if (!is_valid_key(key) || data.empty())
         throw std::invalid_argument("Invalid key or invalid data");
@@ -111,7 +160,7 @@ bool nplex::transaction_t::upsert(const char *key, const std::string_view &data,
     return true;
 }
 
-bool nplex::transaction_t::remove(const key_t &key)
+bool nplex::transaction_impl_t::remove(const key_t &key)
 {
     if (!is_valid_key(key))
         throw std::invalid_argument("Invalid key");
@@ -151,7 +200,7 @@ bool nplex::transaction_t::remove(const key_t &key)
     return true;
 }
 
-std::size_t nplex::transaction_t::remove(const char *pattern)
+std::size_t nplex::transaction_impl_t::remove(const char *pattern)
 {
     std::lock_guard<decltype(m_cache->m_mutex)> lock_cache(m_cache->m_mutex);
 
@@ -168,7 +217,29 @@ std::size_t nplex::transaction_t::remove(const char *pattern)
     return ret;
 }
 
-std::size_t nplex::transaction_t::for_each(const char *pattern, const callback_t &callback)
+bool nplex::transaction_impl_t::ensure(const char *pattern, std::uint8_t actions)
+{
+    actions &= (NPLEX_CREATE | NPLEX_UPDATE | NPLEX_DELETE);
+
+    if (!pattern || !actions)
+        return false;
+
+    std::lock_guard<decltype(m_cache->m_mutex)> lock_cache(m_cache->m_mutex);
+
+    if (m_state != state_e::OPEN)
+        throw nplex_exception("Transaction is not open");
+
+    auto it = m_ensures.find(pattern);
+
+    if (it == m_ensures.end())
+        m_ensures.emplace(pattern, actions);
+    else
+        it->second |= actions;
+
+    return true;
+}
+
+std::size_t nplex::transaction_impl_t::for_each(const char *pattern, const callback_t &callback)
 {
     if (!callback)
         throw std::invalid_argument("Invalid callback function");
@@ -264,29 +335,7 @@ std::size_t nplex::transaction_t::for_each(const char *pattern, const callback_t
     return ret;
 }
 
-bool nplex::transaction_t::ensure(const char *pattern, std::uint8_t actions)
-{
-    actions &= (NPLEX_CREATE | NPLEX_UPDATE | NPLEX_DELETE);
-
-    if (!pattern || !actions)
-        return false;
-
-    std::lock_guard<decltype(m_cache->m_mutex)> lock_cache(m_cache->m_mutex);
-
-    if (m_state != state_e::OPEN)
-        throw nplex_exception("Transaction is not open");
-
-    auto it = m_ensures.find(pattern);
-
-    if (it == m_ensures.end())
-        m_ensures.emplace(pattern, actions);
-    else
-        it->second |= actions;
-
-    return true;
-}
-
-void nplex::transaction_t::update(const std::vector<change_t> &changes)
+void nplex::transaction_impl_t::update(const std::vector<change_t> &changes)
 {
     std::lock_guard<decltype(m_cache->m_mutex)> lock_cache(m_cache->m_mutex);
 
@@ -327,7 +376,7 @@ void nplex::transaction_t::update(const std::vector<change_t> &changes)
     }
 }
 
-void nplex::transaction_t::update_default(const std::vector<change_t> &changes)
+void nplex::transaction_impl_t::update_default(const std::vector<change_t> &changes)
 {
     if (m_dirty)
         return;
@@ -346,7 +395,7 @@ void nplex::transaction_t::update_default(const std::vector<change_t> &changes)
     }
 }
 
-void nplex::transaction_t::update_serializable(const std::vector<change_t> &changes)
+void nplex::transaction_impl_t::update_serializable(const std::vector<change_t> &changes)
 {
     for (const auto &change : changes)
     {
@@ -375,3 +424,41 @@ void nplex::transaction_t::update_serializable(const std::vector<change_t> &chan
         m_dirty = true;
     }
 }
+
+// =================================================================================================
+// transaction_t methods
+// =================================================================================================
+
+namespace {
+
+    inline nplex::transaction_impl_t * get_impl(nplex::transaction_t *obj) {
+        return reinterpret_cast<nplex::transaction_impl_t *>(obj);
+    }
+
+    inline const nplex::transaction_impl_t * get_impl(const nplex::transaction_t *obj) {
+        return reinterpret_cast<const nplex::transaction_impl_t *>(obj);
+    }
+
+} // unnamed namespace
+
+std::shared_ptr<nplex::transaction_t> nplex::transaction_t::create(cache_ptr cache, isolation_e isolation, bool read_only)
+{
+    auto impl = std::make_shared<transaction_impl_t>(cache, isolation, read_only);
+    return std::reinterpret_pointer_cast<transaction_t>(impl);
+}
+
+nplex::transaction_t::isolation_e nplex::transaction_t::isolation() const { return get_impl(this)->m_isolation_level; }
+bool nplex::transaction_t::read_only() const { return get_impl(this)->m_read_only; }
+nplex::transaction_t::state_e nplex::transaction_t::state() const { return get_impl(this)->m_state; }
+void nplex::transaction_t::state(state_e state) { get_impl(this)->m_state = state; }
+bool nplex::transaction_t::dirty() const { return get_impl(this)->m_dirty; }
+void nplex::transaction_t::dirty(bool dirty) { get_impl(this)->m_dirty = dirty; }
+std::uint32_t nplex::transaction_t::type() const { return get_impl(this)->m_type; }
+void nplex::transaction_t::type(std::uint32_t type) { get_impl(this)->m_type = type; }
+nplex::value_ptr nplex::transaction_t::read(const char *key, bool check) { return get_impl(this)->read(key, check); }
+bool nplex::transaction_t::upsert(const char *key, const std::string_view &data, bool force) { return get_impl(this)->upsert(key, data, force); }
+bool nplex::transaction_t::remove(const key_t &key) { return get_impl(this)->remove(key); }
+std::size_t nplex::transaction_t::remove(const char *pattern) { return get_impl(this)->remove(pattern); }
+bool nplex::transaction_t::ensure(const char *pattern, std::uint8_t actions) { return get_impl(this)->ensure(pattern, actions); }
+std::size_t nplex::transaction_t::for_each(const char *pattern, const callback_t &callback) { return get_impl(this)->for_each(pattern, callback); }
+void nplex::transaction_t::update(const std::vector<change_t> &changes) { get_impl(this)->update(changes); }

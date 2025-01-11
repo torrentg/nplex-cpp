@@ -1,10 +1,6 @@
 #pragma once
 
-#include <map>
-#include <tuple>
-#include <atomic>
 #include <functional>
-#include <string_view>
 #include "types.hpp"
 
 #define NPLEX_CREATE 1
@@ -13,7 +9,7 @@
 
 namespace nplex {
 
-// Forward declaration.
+// Forward declaration
 struct cache_t;
 
 /**
@@ -72,43 +68,35 @@ class transaction_t
         SERIALIZABLE                            //!< All read data will not change during the transaction.
     };
 
-    using callback_t = std::function<bool(const gto::cstring &key, const value_t &value)>;
-
-  protected:
-
-    enum class action_e : std::uint8_t {
-        READ,                                   //!< Read a key-value.
-        UPSERT,                                 //!< Update or insert a key-value.
-        DELETE                                  //!< Remove a key-value.
-    };
-
     using cache_ptr = std::shared_ptr<cache_t>;
-    using entry_t = std::tuple<action_e, value_ptr>;
-    using items_t = std::map<key_t, entry_t, key_cmp_less_t>;
-    using ensures_t = std::map<std::string, std::uint8_t>;
+    using callback_t = std::function<bool(const gto::cstring &key, const value_t &value)>;
+    friend struct transaction_impl_t;
 
-    rev_t m_rev;                                //!< Database revision at tx creation.
-    cache_ptr m_cache;                          //!< Database content.
-    items_t m_items;                            //!< Transaction items (depends on isolation level).
-    ensures_t m_ensures;                        //!< Transaction ensures.
-    isolation_e m_isolation_level;              //!< Transaction isolation level.
-    std::atomic<std::uint32_t> m_type = 0;      //!< Transaction type (user-defined value).
-    std::atomic<state_e> m_state;               //!< Transaction state.
-    std::atomic<bool> m_dirty = false;          //!< Current tx conflicts with a commit.
-    bool m_read_only = true;                    //!< Read-only flag.
+  private:
+
+    transaction_t() = default;
+    // non-copyable class
+    transaction_t(const transaction_t&) = delete;
+    transaction_t& operator=(const transaction_t&) = delete;
+    // non-movable class
+    transaction_t(transaction_t&&) = delete;
+    transaction_t& operator=(transaction_t&&) = delete;
 
   protected:
 
     /**
-     * Updates current transaction with the changes from a commit.
+     * Updates the current transaction with the changes from a commit.
      * 
-     * The transaction becomes dirty if the commit conflicts with it.
+     * This method is called by the client on each update.
+     * The transaction becomes dirty if there are update conflicts.
      * 
-     * @param[in] changes List of changes.
+     * @param[in] changes List of update changes.
      */
-    void update_serializable(const std::vector<change_t> &changes);
-    void update_default(const std::vector<change_t> &changes);
     void update(const std::vector<change_t> &changes);
+
+    // Only for debug purposes
+    void dirty(bool dirty);
+    void state(state_e state);
 
   public:
 
@@ -119,16 +107,18 @@ class transaction_t
      * @param[in] isolation The isolation level to use.
      * @param[in] read_only If true, the transaction is read-only.
      * 
+     * @return A pointer to the new transaction.
+     * 
      * @exception std::invalid_argument Thrown if data is invalid.
      */
-    transaction_t(cache_ptr cache, isolation_e isolation, bool read_only = false);
+    static std::shared_ptr<transaction_t> create(cache_ptr cache, isolation_e isolation, bool read_only = false);
 
-    state_e state() const { return m_state; }
-    isolation_e isolation() const { return m_isolation_level; }
-    bool read_only() const { return m_read_only; }
-    bool dirty() const { return m_dirty; }
-    std::uint32_t type() const { return m_type; }
-    void type(std::uint32_t type) { this->m_type = type; }
+    isolation_e isolation() const;
+    bool read_only() const;
+    state_e state() const;
+    bool dirty() const;
+    std::uint32_t type() const;
+    void type(std::uint32_t type);
 
     /**
      * Read a key-value pair.
