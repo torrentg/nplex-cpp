@@ -10,20 +10,45 @@ using namespace flatbuffers;
 
 TEST_CASE("LoginRequest")
 {
-    LoginRequestT req = {
-        {},         // Native table
-        1,          // cid
-        "jdoe",     // user
-        "password"  // password
-    };
-    
-    auto buf = serialize(req);
-    auto *ptr = ::GetRoot<nplex::msgs::LoginRequest>(buf.data());
+    SUBCASE("hard-way")
+    {
+        flatbuffers::FlatBufferBuilder builder;
 
-    REQUIRE(ptr);
-    CHECK(ptr->cid() == 1);
-    CHECK(ptr->user()->str() == "jdoe");
-    CHECK(ptr->password()->str() == "password");
+        auto req = CreateLoginRequest(builder, 
+            1, 
+            builder.CreateString("jdoe"), 
+            builder.CreateString("password"));
+
+        builder.Finish(req);
+        auto buf = builder.Release();
+
+        auto verifier = flatbuffers::Verifier(buf.data(), buf.size());
+        CHECK(verifier.VerifyBuffer<LoginRequest>(nullptr));
+
+        auto *ptr = ::GetRoot<nplex::msgs::LoginRequest>(buf.data());
+        REQUIRE(ptr);
+        CHECK(ptr->cid() == 1);
+        CHECK(ptr->user()->str() == "jdoe");
+        CHECK(ptr->password()->str() == "password");
+    }
+
+    SUBCASE("easy-way")
+    {
+        LoginRequestT req = {
+            {},         // Native table
+            1,          // cid
+            "jdoe",     // user
+            "password"  // password
+        };
+
+        auto buf = serialize(req);
+        auto *ptr = ::GetRoot<nplex::msgs::LoginRequest>(buf.data());
+
+        REQUIRE(ptr);
+        CHECK(ptr->cid() == 1);
+        CHECK(ptr->user()->str() == "jdoe");
+        CHECK(ptr->password()->str() == "password");
+    }
 }
 
 TEST_CASE("LoginResponse")
@@ -317,4 +342,60 @@ TEST_CASE("KeepAlivePush")
 
     REQUIRE(ptr);
     CHECK(ptr->crev() == 2049);
+}
+
+TEST_CASE("Message")
+{
+    SUBCASE("hard-way")
+    {
+        flatbuffers::FlatBufferBuilder builder;
+
+        auto msg = CreateMessage(builder, 
+            MsgContent::LOGIN_REQUEST, 
+            CreateLoginRequest(builder, 
+                1, 
+                builder.CreateString("jdoe"), 
+                builder.CreateString("password")
+            ).Union()
+        );
+
+        builder.Finish(msg);
+        auto buf = builder.Release();
+
+        auto verifier = flatbuffers::Verifier(buf.data(), buf.size());
+        CHECK(verifier.VerifyBuffer<Message>(nullptr));
+
+        auto *ptr = ::GetRoot<nplex::msgs::Message>(buf.data());
+        REQUIRE(ptr);
+        CHECK(ptr->content_type() == MsgContent::LOGIN_REQUEST);
+
+        auto *login = ptr->content_as_LOGIN_REQUEST();
+        REQUIRE(login);
+        CHECK(login->cid() == 1);
+        CHECK(login->user()->str() == "jdoe");
+        CHECK(login->password()->str() == "password");
+    }
+
+    SUBCASE("easy-way")
+    {
+        MessageT msg = make_message(
+            LoginRequestT{
+                {},         // Native table
+                1,          // cid
+                "jdoe",     // user
+                "password"  // password
+            });
+
+        auto buf = serialize(msg);
+
+        auto *ptr = ::GetRoot<nplex::msgs::Message>(buf.data());
+        REQUIRE(ptr);
+        CHECK(ptr->content_type() == MsgContent::LOGIN_REQUEST);
+
+        auto *login = ptr->content_as_LOGIN_REQUEST();
+        REQUIRE(login);
+        CHECK(login->cid() == 1);
+        CHECK(login->user()->str() == "jdoe");
+        CHECK(login->password()->str() == "password");
+    }
 }

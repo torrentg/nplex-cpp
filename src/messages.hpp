@@ -28,9 +28,9 @@ struct Snapshot;
 struct SnapshotBuilder;
 struct SnapshotT;
 
-struct Check;
-struct CheckBuilder;
-struct CheckT;
+struct Acl;
+struct AclBuilder;
+struct AclT;
 
 struct LoginRequest;
 struct LoginRequestBuilder;
@@ -71,6 +71,10 @@ struct SubmitResponseT;
 struct KeepAlivePush;
 struct KeepAlivePushBuilder;
 struct KeepAlivePushT;
+
+struct Message;
+struct MessageBuilder;
+struct MessageT;
 
 enum class LoginCode : int8_t {
   UNKNOW = 0,
@@ -152,6 +156,266 @@ inline const char *EnumNameLoadMode(LoadMode e) {
   const size_t index = static_cast<size_t>(e);
   return EnumNamesLoadMode()[index];
 }
+
+enum class MsgContent : uint8_t {
+  NONE = 0,
+  PING_REQUEST = 1,
+  PING_RESPONSE = 2,
+  LOGIN_REQUEST = 3,
+  LOGIN_RESPONSE = 4,
+  LOAD_REQUEST = 5,
+  LOAD_RESPONSE = 6,
+  SUBMIT_REQUEST = 7,
+  SUBMIT_RESPONSE = 8,
+  UPDATE_PUSH = 9,
+  KEEPALIVE_PUSH = 10,
+  MIN = NONE,
+  MAX = KEEPALIVE_PUSH
+};
+
+inline const MsgContent (&EnumValuesMsgContent())[11] {
+  static const MsgContent values[] = {
+    MsgContent::NONE,
+    MsgContent::PING_REQUEST,
+    MsgContent::PING_RESPONSE,
+    MsgContent::LOGIN_REQUEST,
+    MsgContent::LOGIN_RESPONSE,
+    MsgContent::LOAD_REQUEST,
+    MsgContent::LOAD_RESPONSE,
+    MsgContent::SUBMIT_REQUEST,
+    MsgContent::SUBMIT_RESPONSE,
+    MsgContent::UPDATE_PUSH,
+    MsgContent::KEEPALIVE_PUSH
+  };
+  return values;
+}
+
+inline const char * const *EnumNamesMsgContent() {
+  static const char * const names[12] = {
+    "NONE",
+    "PING_REQUEST",
+    "PING_RESPONSE",
+    "LOGIN_REQUEST",
+    "LOGIN_RESPONSE",
+    "LOAD_REQUEST",
+    "LOAD_RESPONSE",
+    "SUBMIT_REQUEST",
+    "SUBMIT_RESPONSE",
+    "UPDATE_PUSH",
+    "KEEPALIVE_PUSH",
+    nullptr
+  };
+  return names;
+}
+
+inline const char *EnumNameMsgContent(MsgContent e) {
+  if (::flatbuffers::IsOutRange(e, MsgContent::NONE, MsgContent::KEEPALIVE_PUSH)) return "";
+  const size_t index = static_cast<size_t>(e);
+  return EnumNamesMsgContent()[index];
+}
+
+template<typename T> struct MsgContentTraits {
+  static const MsgContent enum_value = MsgContent::NONE;
+};
+
+template<> struct MsgContentTraits<nplex::msgs::PingRequest> {
+  static const MsgContent enum_value = MsgContent::PING_REQUEST;
+};
+
+template<> struct MsgContentTraits<nplex::msgs::PingResponse> {
+  static const MsgContent enum_value = MsgContent::PING_RESPONSE;
+};
+
+template<> struct MsgContentTraits<nplex::msgs::LoginRequest> {
+  static const MsgContent enum_value = MsgContent::LOGIN_REQUEST;
+};
+
+template<> struct MsgContentTraits<nplex::msgs::LoginResponse> {
+  static const MsgContent enum_value = MsgContent::LOGIN_RESPONSE;
+};
+
+template<> struct MsgContentTraits<nplex::msgs::LoadRequest> {
+  static const MsgContent enum_value = MsgContent::LOAD_REQUEST;
+};
+
+template<> struct MsgContentTraits<nplex::msgs::LoadResponse> {
+  static const MsgContent enum_value = MsgContent::LOAD_RESPONSE;
+};
+
+template<> struct MsgContentTraits<nplex::msgs::SubmitRequest> {
+  static const MsgContent enum_value = MsgContent::SUBMIT_REQUEST;
+};
+
+template<> struct MsgContentTraits<nplex::msgs::SubmitResponse> {
+  static const MsgContent enum_value = MsgContent::SUBMIT_RESPONSE;
+};
+
+template<> struct MsgContentTraits<nplex::msgs::UpdatePush> {
+  static const MsgContent enum_value = MsgContent::UPDATE_PUSH;
+};
+
+template<> struct MsgContentTraits<nplex::msgs::KeepAlivePush> {
+  static const MsgContent enum_value = MsgContent::KEEPALIVE_PUSH;
+};
+
+template<typename T> struct MsgContentUnionTraits {
+  static const MsgContent enum_value = MsgContent::NONE;
+};
+
+template<> struct MsgContentUnionTraits<nplex::msgs::PingRequestT> {
+  static const MsgContent enum_value = MsgContent::PING_REQUEST;
+};
+
+template<> struct MsgContentUnionTraits<nplex::msgs::PingResponseT> {
+  static const MsgContent enum_value = MsgContent::PING_RESPONSE;
+};
+
+template<> struct MsgContentUnionTraits<nplex::msgs::LoginRequestT> {
+  static const MsgContent enum_value = MsgContent::LOGIN_REQUEST;
+};
+
+template<> struct MsgContentUnionTraits<nplex::msgs::LoginResponseT> {
+  static const MsgContent enum_value = MsgContent::LOGIN_RESPONSE;
+};
+
+template<> struct MsgContentUnionTraits<nplex::msgs::LoadRequestT> {
+  static const MsgContent enum_value = MsgContent::LOAD_REQUEST;
+};
+
+template<> struct MsgContentUnionTraits<nplex::msgs::LoadResponseT> {
+  static const MsgContent enum_value = MsgContent::LOAD_RESPONSE;
+};
+
+template<> struct MsgContentUnionTraits<nplex::msgs::SubmitRequestT> {
+  static const MsgContent enum_value = MsgContent::SUBMIT_REQUEST;
+};
+
+template<> struct MsgContentUnionTraits<nplex::msgs::SubmitResponseT> {
+  static const MsgContent enum_value = MsgContent::SUBMIT_RESPONSE;
+};
+
+template<> struct MsgContentUnionTraits<nplex::msgs::UpdatePushT> {
+  static const MsgContent enum_value = MsgContent::UPDATE_PUSH;
+};
+
+template<> struct MsgContentUnionTraits<nplex::msgs::KeepAlivePushT> {
+  static const MsgContent enum_value = MsgContent::KEEPALIVE_PUSH;
+};
+
+struct MsgContentUnion {
+  MsgContent type;
+  void *value;
+
+  MsgContentUnion() : type(MsgContent::NONE), value(nullptr) {}
+  MsgContentUnion(MsgContentUnion&& u) FLATBUFFERS_NOEXCEPT :
+    type(MsgContent::NONE), value(nullptr)
+    { std::swap(type, u.type); std::swap(value, u.value); }
+  MsgContentUnion(const MsgContentUnion &);
+  MsgContentUnion &operator=(const MsgContentUnion &u)
+    { MsgContentUnion t(u); std::swap(type, t.type); std::swap(value, t.value); return *this; }
+  MsgContentUnion &operator=(MsgContentUnion &&u) FLATBUFFERS_NOEXCEPT
+    { std::swap(type, u.type); std::swap(value, u.value); return *this; }
+  ~MsgContentUnion() { Reset(); }
+
+  void Reset();
+
+  template <typename T>
+  void Set(T&& val) {
+    typedef typename std::remove_reference<T>::type RT;
+    Reset();
+    type = MsgContentUnionTraits<RT>::enum_value;
+    if (type != MsgContent::NONE) {
+      value = new RT(std::forward<T>(val));
+    }
+  }
+
+  static void *UnPack(const void *obj, MsgContent type, const ::flatbuffers::resolver_function_t *resolver);
+  ::flatbuffers::Offset<void> Pack(::flatbuffers::FlatBufferBuilder &_fbb, const ::flatbuffers::rehasher_function_t *_rehasher = nullptr) const;
+
+  nplex::msgs::PingRequestT *AsPING_REQUEST() {
+    return type == MsgContent::PING_REQUEST ?
+      reinterpret_cast<nplex::msgs::PingRequestT *>(value) : nullptr;
+  }
+  const nplex::msgs::PingRequestT *AsPING_REQUEST() const {
+    return type == MsgContent::PING_REQUEST ?
+      reinterpret_cast<const nplex::msgs::PingRequestT *>(value) : nullptr;
+  }
+  nplex::msgs::PingResponseT *AsPING_RESPONSE() {
+    return type == MsgContent::PING_RESPONSE ?
+      reinterpret_cast<nplex::msgs::PingResponseT *>(value) : nullptr;
+  }
+  const nplex::msgs::PingResponseT *AsPING_RESPONSE() const {
+    return type == MsgContent::PING_RESPONSE ?
+      reinterpret_cast<const nplex::msgs::PingResponseT *>(value) : nullptr;
+  }
+  nplex::msgs::LoginRequestT *AsLOGIN_REQUEST() {
+    return type == MsgContent::LOGIN_REQUEST ?
+      reinterpret_cast<nplex::msgs::LoginRequestT *>(value) : nullptr;
+  }
+  const nplex::msgs::LoginRequestT *AsLOGIN_REQUEST() const {
+    return type == MsgContent::LOGIN_REQUEST ?
+      reinterpret_cast<const nplex::msgs::LoginRequestT *>(value) : nullptr;
+  }
+  nplex::msgs::LoginResponseT *AsLOGIN_RESPONSE() {
+    return type == MsgContent::LOGIN_RESPONSE ?
+      reinterpret_cast<nplex::msgs::LoginResponseT *>(value) : nullptr;
+  }
+  const nplex::msgs::LoginResponseT *AsLOGIN_RESPONSE() const {
+    return type == MsgContent::LOGIN_RESPONSE ?
+      reinterpret_cast<const nplex::msgs::LoginResponseT *>(value) : nullptr;
+  }
+  nplex::msgs::LoadRequestT *AsLOAD_REQUEST() {
+    return type == MsgContent::LOAD_REQUEST ?
+      reinterpret_cast<nplex::msgs::LoadRequestT *>(value) : nullptr;
+  }
+  const nplex::msgs::LoadRequestT *AsLOAD_REQUEST() const {
+    return type == MsgContent::LOAD_REQUEST ?
+      reinterpret_cast<const nplex::msgs::LoadRequestT *>(value) : nullptr;
+  }
+  nplex::msgs::LoadResponseT *AsLOAD_RESPONSE() {
+    return type == MsgContent::LOAD_RESPONSE ?
+      reinterpret_cast<nplex::msgs::LoadResponseT *>(value) : nullptr;
+  }
+  const nplex::msgs::LoadResponseT *AsLOAD_RESPONSE() const {
+    return type == MsgContent::LOAD_RESPONSE ?
+      reinterpret_cast<const nplex::msgs::LoadResponseT *>(value) : nullptr;
+  }
+  nplex::msgs::SubmitRequestT *AsSUBMIT_REQUEST() {
+    return type == MsgContent::SUBMIT_REQUEST ?
+      reinterpret_cast<nplex::msgs::SubmitRequestT *>(value) : nullptr;
+  }
+  const nplex::msgs::SubmitRequestT *AsSUBMIT_REQUEST() const {
+    return type == MsgContent::SUBMIT_REQUEST ?
+      reinterpret_cast<const nplex::msgs::SubmitRequestT *>(value) : nullptr;
+  }
+  nplex::msgs::SubmitResponseT *AsSUBMIT_RESPONSE() {
+    return type == MsgContent::SUBMIT_RESPONSE ?
+      reinterpret_cast<nplex::msgs::SubmitResponseT *>(value) : nullptr;
+  }
+  const nplex::msgs::SubmitResponseT *AsSUBMIT_RESPONSE() const {
+    return type == MsgContent::SUBMIT_RESPONSE ?
+      reinterpret_cast<const nplex::msgs::SubmitResponseT *>(value) : nullptr;
+  }
+  nplex::msgs::UpdatePushT *AsUPDATE_PUSH() {
+    return type == MsgContent::UPDATE_PUSH ?
+      reinterpret_cast<nplex::msgs::UpdatePushT *>(value) : nullptr;
+  }
+  const nplex::msgs::UpdatePushT *AsUPDATE_PUSH() const {
+    return type == MsgContent::UPDATE_PUSH ?
+      reinterpret_cast<const nplex::msgs::UpdatePushT *>(value) : nullptr;
+  }
+  nplex::msgs::KeepAlivePushT *AsKEEPALIVE_PUSH() {
+    return type == MsgContent::KEEPALIVE_PUSH ?
+      reinterpret_cast<nplex::msgs::KeepAlivePushT *>(value) : nullptr;
+  }
+  const nplex::msgs::KeepAlivePushT *AsKEEPALIVE_PUSH() const {
+    return type == MsgContent::KEEPALIVE_PUSH ?
+      reinterpret_cast<const nplex::msgs::KeepAlivePushT *>(value) : nullptr;
+  }
+};
+
+bool VerifyMsgContent(::flatbuffers::Verifier &verifier, const void *obj, MsgContent type);
+bool VerifyMsgContentVector(::flatbuffers::Verifier &verifier, const ::flatbuffers::Vector<::flatbuffers::Offset<void>> *values, const ::flatbuffers::Vector<MsgContent> *types);
 
 struct KeyValueT : public ::flatbuffers::NativeTable {
   typedef KeyValue TableType;
@@ -465,15 +729,15 @@ inline ::flatbuffers::Offset<Snapshot> CreateSnapshotDirect(
 
 ::flatbuffers::Offset<Snapshot> CreateSnapshot(::flatbuffers::FlatBufferBuilder &_fbb, const SnapshotT *_o, const ::flatbuffers::rehasher_function_t *_rehasher = nullptr);
 
-struct CheckT : public ::flatbuffers::NativeTable {
-  typedef Check TableType;
+struct AclT : public ::flatbuffers::NativeTable {
+  typedef Acl TableType;
   std::string pattern{};
   uint8_t mode = 0;
 };
 
-struct Check FLATBUFFERS_FINAL_CLASS : private ::flatbuffers::Table {
-  typedef CheckT NativeTableType;
-  typedef CheckBuilder Builder;
+struct Acl FLATBUFFERS_FINAL_CLASS : private ::flatbuffers::Table {
+  typedef AclT NativeTableType;
+  typedef AclBuilder Builder;
   struct Traits;
   enum FlatBuffersVTableOffset FLATBUFFERS_VTABLE_UNDERLYING_TYPE {
     VT_PATTERN = 4,
@@ -492,59 +756,59 @@ struct Check FLATBUFFERS_FINAL_CLASS : private ::flatbuffers::Table {
            VerifyField<uint8_t>(verifier, VT_MODE, 1) &&
            verifier.EndTable();
   }
-  CheckT *UnPack(const ::flatbuffers::resolver_function_t *_resolver = nullptr) const;
-  void UnPackTo(CheckT *_o, const ::flatbuffers::resolver_function_t *_resolver = nullptr) const;
-  static ::flatbuffers::Offset<Check> Pack(::flatbuffers::FlatBufferBuilder &_fbb, const CheckT* _o, const ::flatbuffers::rehasher_function_t *_rehasher = nullptr);
+  AclT *UnPack(const ::flatbuffers::resolver_function_t *_resolver = nullptr) const;
+  void UnPackTo(AclT *_o, const ::flatbuffers::resolver_function_t *_resolver = nullptr) const;
+  static ::flatbuffers::Offset<Acl> Pack(::flatbuffers::FlatBufferBuilder &_fbb, const AclT* _o, const ::flatbuffers::rehasher_function_t *_rehasher = nullptr);
 };
 
-struct CheckBuilder {
-  typedef Check Table;
+struct AclBuilder {
+  typedef Acl Table;
   ::flatbuffers::FlatBufferBuilder &fbb_;
   ::flatbuffers::uoffset_t start_;
   void add_pattern(::flatbuffers::Offset<::flatbuffers::String> pattern) {
-    fbb_.AddOffset(Check::VT_PATTERN, pattern);
+    fbb_.AddOffset(Acl::VT_PATTERN, pattern);
   }
   void add_mode(uint8_t mode) {
-    fbb_.AddElement<uint8_t>(Check::VT_MODE, mode, 0);
+    fbb_.AddElement<uint8_t>(Acl::VT_MODE, mode, 0);
   }
-  explicit CheckBuilder(::flatbuffers::FlatBufferBuilder &_fbb)
+  explicit AclBuilder(::flatbuffers::FlatBufferBuilder &_fbb)
         : fbb_(_fbb) {
     start_ = fbb_.StartTable();
   }
-  ::flatbuffers::Offset<Check> Finish() {
+  ::flatbuffers::Offset<Acl> Finish() {
     const auto end = fbb_.EndTable(start_);
-    auto o = ::flatbuffers::Offset<Check>(end);
+    auto o = ::flatbuffers::Offset<Acl>(end);
     return o;
   }
 };
 
-inline ::flatbuffers::Offset<Check> CreateCheck(
+inline ::flatbuffers::Offset<Acl> CreateAcl(
     ::flatbuffers::FlatBufferBuilder &_fbb,
     ::flatbuffers::Offset<::flatbuffers::String> pattern = 0,
     uint8_t mode = 0) {
-  CheckBuilder builder_(_fbb);
+  AclBuilder builder_(_fbb);
   builder_.add_pattern(pattern);
   builder_.add_mode(mode);
   return builder_.Finish();
 }
 
-struct Check::Traits {
-  using type = Check;
-  static auto constexpr Create = CreateCheck;
+struct Acl::Traits {
+  using type = Acl;
+  static auto constexpr Create = CreateAcl;
 };
 
-inline ::flatbuffers::Offset<Check> CreateCheckDirect(
+inline ::flatbuffers::Offset<Acl> CreateAclDirect(
     ::flatbuffers::FlatBufferBuilder &_fbb,
     const char *pattern = nullptr,
     uint8_t mode = 0) {
   auto pattern__ = pattern ? _fbb.CreateString(pattern) : 0;
-  return nplex::msgs::CreateCheck(
+  return nplex::msgs::CreateAcl(
       _fbb,
       pattern__,
       mode);
 }
 
-::flatbuffers::Offset<Check> CreateCheck(::flatbuffers::FlatBufferBuilder &_fbb, const CheckT *_o, const ::flatbuffers::rehasher_function_t *_rehasher = nullptr);
+::flatbuffers::Offset<Acl> CreateAcl(::flatbuffers::FlatBufferBuilder &_fbb, const AclT *_o, const ::flatbuffers::rehasher_function_t *_rehasher = nullptr);
 
 struct LoginRequestT : public ::flatbuffers::NativeTable {
   typedef LoginRequest TableType;
@@ -1218,7 +1482,7 @@ struct SubmitRequestT : public ::flatbuffers::NativeTable {
   uint32_t type = 0;
   std::vector<std::unique_ptr<nplex::msgs::KeyValueT>> upserts{};
   std::vector<std::string> deletes{};
-  std::vector<std::unique_ptr<nplex::msgs::CheckT>> ensures{};
+  std::vector<std::unique_ptr<nplex::msgs::AclT>> ensures{};
   SubmitRequestT() = default;
   SubmitRequestT(const SubmitRequestT &o);
   SubmitRequestT(SubmitRequestT&&) FLATBUFFERS_NOEXCEPT = default;
@@ -1252,8 +1516,8 @@ struct SubmitRequest FLATBUFFERS_FINAL_CLASS : private ::flatbuffers::Table {
   const ::flatbuffers::Vector<::flatbuffers::Offset<::flatbuffers::String>> *deletes() const {
     return GetPointer<const ::flatbuffers::Vector<::flatbuffers::Offset<::flatbuffers::String>> *>(VT_DELETES);
   }
-  const ::flatbuffers::Vector<::flatbuffers::Offset<nplex::msgs::Check>> *ensures() const {
-    return GetPointer<const ::flatbuffers::Vector<::flatbuffers::Offset<nplex::msgs::Check>> *>(VT_ENSURES);
+  const ::flatbuffers::Vector<::flatbuffers::Offset<nplex::msgs::Acl>> *ensures() const {
+    return GetPointer<const ::flatbuffers::Vector<::flatbuffers::Offset<nplex::msgs::Acl>> *>(VT_ENSURES);
   }
   bool Verify(::flatbuffers::Verifier &verifier) const {
     return VerifyTableStart(verifier) &&
@@ -1295,7 +1559,7 @@ struct SubmitRequestBuilder {
   void add_deletes(::flatbuffers::Offset<::flatbuffers::Vector<::flatbuffers::Offset<::flatbuffers::String>>> deletes) {
     fbb_.AddOffset(SubmitRequest::VT_DELETES, deletes);
   }
-  void add_ensures(::flatbuffers::Offset<::flatbuffers::Vector<::flatbuffers::Offset<nplex::msgs::Check>>> ensures) {
+  void add_ensures(::flatbuffers::Offset<::flatbuffers::Vector<::flatbuffers::Offset<nplex::msgs::Acl>>> ensures) {
     fbb_.AddOffset(SubmitRequest::VT_ENSURES, ensures);
   }
   explicit SubmitRequestBuilder(::flatbuffers::FlatBufferBuilder &_fbb)
@@ -1316,7 +1580,7 @@ inline ::flatbuffers::Offset<SubmitRequest> CreateSubmitRequest(
     uint32_t type = 0,
     ::flatbuffers::Offset<::flatbuffers::Vector<::flatbuffers::Offset<nplex::msgs::KeyValue>>> upserts = 0,
     ::flatbuffers::Offset<::flatbuffers::Vector<::flatbuffers::Offset<::flatbuffers::String>>> deletes = 0,
-    ::flatbuffers::Offset<::flatbuffers::Vector<::flatbuffers::Offset<nplex::msgs::Check>>> ensures = 0) {
+    ::flatbuffers::Offset<::flatbuffers::Vector<::flatbuffers::Offset<nplex::msgs::Acl>>> ensures = 0) {
   SubmitRequestBuilder builder_(_fbb);
   builder_.add_crev(crev);
   builder_.add_cid(cid);
@@ -1339,10 +1603,10 @@ inline ::flatbuffers::Offset<SubmitRequest> CreateSubmitRequestDirect(
     uint32_t type = 0,
     const std::vector<::flatbuffers::Offset<nplex::msgs::KeyValue>> *upserts = nullptr,
     const std::vector<::flatbuffers::Offset<::flatbuffers::String>> *deletes = nullptr,
-    const std::vector<::flatbuffers::Offset<nplex::msgs::Check>> *ensures = nullptr) {
+    const std::vector<::flatbuffers::Offset<nplex::msgs::Acl>> *ensures = nullptr) {
   auto upserts__ = upserts ? _fbb.CreateVector<::flatbuffers::Offset<nplex::msgs::KeyValue>>(*upserts) : 0;
   auto deletes__ = deletes ? _fbb.CreateVector<::flatbuffers::Offset<::flatbuffers::String>>(*deletes) : 0;
-  auto ensures__ = ensures ? _fbb.CreateVector<::flatbuffers::Offset<nplex::msgs::Check>>(*ensures) : 0;
+  auto ensures__ = ensures ? _fbb.CreateVector<::flatbuffers::Offset<nplex::msgs::Acl>>(*ensures) : 0;
   return nplex::msgs::CreateSubmitRequest(
       _fbb,
       cid,
@@ -1520,6 +1784,146 @@ struct KeepAlivePush::Traits {
 
 ::flatbuffers::Offset<KeepAlivePush> CreateKeepAlivePush(::flatbuffers::FlatBufferBuilder &_fbb, const KeepAlivePushT *_o, const ::flatbuffers::rehasher_function_t *_rehasher = nullptr);
 
+struct MessageT : public ::flatbuffers::NativeTable {
+  typedef Message TableType;
+  nplex::msgs::MsgContentUnion content{};
+};
+
+struct Message FLATBUFFERS_FINAL_CLASS : private ::flatbuffers::Table {
+  typedef MessageT NativeTableType;
+  typedef MessageBuilder Builder;
+  struct Traits;
+  enum FlatBuffersVTableOffset FLATBUFFERS_VTABLE_UNDERLYING_TYPE {
+    VT_CONTENT_TYPE = 4,
+    VT_CONTENT = 6
+  };
+  nplex::msgs::MsgContent content_type() const {
+    return static_cast<nplex::msgs::MsgContent>(GetField<uint8_t>(VT_CONTENT_TYPE, 0));
+  }
+  const void *content() const {
+    return GetPointer<const void *>(VT_CONTENT);
+  }
+  template<typename T> const T *content_as() const;
+  const nplex::msgs::PingRequest *content_as_PING_REQUEST() const {
+    return content_type() == nplex::msgs::MsgContent::PING_REQUEST ? static_cast<const nplex::msgs::PingRequest *>(content()) : nullptr;
+  }
+  const nplex::msgs::PingResponse *content_as_PING_RESPONSE() const {
+    return content_type() == nplex::msgs::MsgContent::PING_RESPONSE ? static_cast<const nplex::msgs::PingResponse *>(content()) : nullptr;
+  }
+  const nplex::msgs::LoginRequest *content_as_LOGIN_REQUEST() const {
+    return content_type() == nplex::msgs::MsgContent::LOGIN_REQUEST ? static_cast<const nplex::msgs::LoginRequest *>(content()) : nullptr;
+  }
+  const nplex::msgs::LoginResponse *content_as_LOGIN_RESPONSE() const {
+    return content_type() == nplex::msgs::MsgContent::LOGIN_RESPONSE ? static_cast<const nplex::msgs::LoginResponse *>(content()) : nullptr;
+  }
+  const nplex::msgs::LoadRequest *content_as_LOAD_REQUEST() const {
+    return content_type() == nplex::msgs::MsgContent::LOAD_REQUEST ? static_cast<const nplex::msgs::LoadRequest *>(content()) : nullptr;
+  }
+  const nplex::msgs::LoadResponse *content_as_LOAD_RESPONSE() const {
+    return content_type() == nplex::msgs::MsgContent::LOAD_RESPONSE ? static_cast<const nplex::msgs::LoadResponse *>(content()) : nullptr;
+  }
+  const nplex::msgs::SubmitRequest *content_as_SUBMIT_REQUEST() const {
+    return content_type() == nplex::msgs::MsgContent::SUBMIT_REQUEST ? static_cast<const nplex::msgs::SubmitRequest *>(content()) : nullptr;
+  }
+  const nplex::msgs::SubmitResponse *content_as_SUBMIT_RESPONSE() const {
+    return content_type() == nplex::msgs::MsgContent::SUBMIT_RESPONSE ? static_cast<const nplex::msgs::SubmitResponse *>(content()) : nullptr;
+  }
+  const nplex::msgs::UpdatePush *content_as_UPDATE_PUSH() const {
+    return content_type() == nplex::msgs::MsgContent::UPDATE_PUSH ? static_cast<const nplex::msgs::UpdatePush *>(content()) : nullptr;
+  }
+  const nplex::msgs::KeepAlivePush *content_as_KEEPALIVE_PUSH() const {
+    return content_type() == nplex::msgs::MsgContent::KEEPALIVE_PUSH ? static_cast<const nplex::msgs::KeepAlivePush *>(content()) : nullptr;
+  }
+  bool Verify(::flatbuffers::Verifier &verifier) const {
+    return VerifyTableStart(verifier) &&
+           VerifyField<uint8_t>(verifier, VT_CONTENT_TYPE, 1) &&
+           VerifyOffset(verifier, VT_CONTENT) &&
+           VerifyMsgContent(verifier, content(), content_type()) &&
+           verifier.EndTable();
+  }
+  MessageT *UnPack(const ::flatbuffers::resolver_function_t *_resolver = nullptr) const;
+  void UnPackTo(MessageT *_o, const ::flatbuffers::resolver_function_t *_resolver = nullptr) const;
+  static ::flatbuffers::Offset<Message> Pack(::flatbuffers::FlatBufferBuilder &_fbb, const MessageT* _o, const ::flatbuffers::rehasher_function_t *_rehasher = nullptr);
+};
+
+template<> inline const nplex::msgs::PingRequest *Message::content_as<nplex::msgs::PingRequest>() const {
+  return content_as_PING_REQUEST();
+}
+
+template<> inline const nplex::msgs::PingResponse *Message::content_as<nplex::msgs::PingResponse>() const {
+  return content_as_PING_RESPONSE();
+}
+
+template<> inline const nplex::msgs::LoginRequest *Message::content_as<nplex::msgs::LoginRequest>() const {
+  return content_as_LOGIN_REQUEST();
+}
+
+template<> inline const nplex::msgs::LoginResponse *Message::content_as<nplex::msgs::LoginResponse>() const {
+  return content_as_LOGIN_RESPONSE();
+}
+
+template<> inline const nplex::msgs::LoadRequest *Message::content_as<nplex::msgs::LoadRequest>() const {
+  return content_as_LOAD_REQUEST();
+}
+
+template<> inline const nplex::msgs::LoadResponse *Message::content_as<nplex::msgs::LoadResponse>() const {
+  return content_as_LOAD_RESPONSE();
+}
+
+template<> inline const nplex::msgs::SubmitRequest *Message::content_as<nplex::msgs::SubmitRequest>() const {
+  return content_as_SUBMIT_REQUEST();
+}
+
+template<> inline const nplex::msgs::SubmitResponse *Message::content_as<nplex::msgs::SubmitResponse>() const {
+  return content_as_SUBMIT_RESPONSE();
+}
+
+template<> inline const nplex::msgs::UpdatePush *Message::content_as<nplex::msgs::UpdatePush>() const {
+  return content_as_UPDATE_PUSH();
+}
+
+template<> inline const nplex::msgs::KeepAlivePush *Message::content_as<nplex::msgs::KeepAlivePush>() const {
+  return content_as_KEEPALIVE_PUSH();
+}
+
+struct MessageBuilder {
+  typedef Message Table;
+  ::flatbuffers::FlatBufferBuilder &fbb_;
+  ::flatbuffers::uoffset_t start_;
+  void add_content_type(nplex::msgs::MsgContent content_type) {
+    fbb_.AddElement<uint8_t>(Message::VT_CONTENT_TYPE, static_cast<uint8_t>(content_type), 0);
+  }
+  void add_content(::flatbuffers::Offset<void> content) {
+    fbb_.AddOffset(Message::VT_CONTENT, content);
+  }
+  explicit MessageBuilder(::flatbuffers::FlatBufferBuilder &_fbb)
+        : fbb_(_fbb) {
+    start_ = fbb_.StartTable();
+  }
+  ::flatbuffers::Offset<Message> Finish() {
+    const auto end = fbb_.EndTable(start_);
+    auto o = ::flatbuffers::Offset<Message>(end);
+    return o;
+  }
+};
+
+inline ::flatbuffers::Offset<Message> CreateMessage(
+    ::flatbuffers::FlatBufferBuilder &_fbb,
+    nplex::msgs::MsgContent content_type = nplex::msgs::MsgContent::NONE,
+    ::flatbuffers::Offset<void> content = 0) {
+  MessageBuilder builder_(_fbb);
+  builder_.add_content(content);
+  builder_.add_content_type(content_type);
+  return builder_.Finish();
+}
+
+struct Message::Traits {
+  using type = Message;
+  static auto constexpr Create = CreateMessage;
+};
+
+::flatbuffers::Offset<Message> CreateMessage(::flatbuffers::FlatBufferBuilder &_fbb, const MessageT *_o, const ::flatbuffers::rehasher_function_t *_rehasher = nullptr);
+
 inline KeyValueT *KeyValue::UnPack(const ::flatbuffers::resolver_function_t *_resolver) const {
   auto _o = std::make_unique<KeyValueT>();
   UnPackTo(_o.get(), _resolver);
@@ -1651,30 +2055,30 @@ inline ::flatbuffers::Offset<Snapshot> CreateSnapshot(::flatbuffers::FlatBufferB
       _updates);
 }
 
-inline CheckT *Check::UnPack(const ::flatbuffers::resolver_function_t *_resolver) const {
-  auto _o = std::make_unique<CheckT>();
+inline AclT *Acl::UnPack(const ::flatbuffers::resolver_function_t *_resolver) const {
+  auto _o = std::make_unique<AclT>();
   UnPackTo(_o.get(), _resolver);
   return _o.release();
 }
 
-inline void Check::UnPackTo(CheckT *_o, const ::flatbuffers::resolver_function_t *_resolver) const {
+inline void Acl::UnPackTo(AclT *_o, const ::flatbuffers::resolver_function_t *_resolver) const {
   (void)_o;
   (void)_resolver;
   { auto _e = pattern(); if (_e) _o->pattern = _e->str(); }
   { auto _e = mode(); _o->mode = _e; }
 }
 
-inline ::flatbuffers::Offset<Check> Check::Pack(::flatbuffers::FlatBufferBuilder &_fbb, const CheckT* _o, const ::flatbuffers::rehasher_function_t *_rehasher) {
-  return CreateCheck(_fbb, _o, _rehasher);
+inline ::flatbuffers::Offset<Acl> Acl::Pack(::flatbuffers::FlatBufferBuilder &_fbb, const AclT* _o, const ::flatbuffers::rehasher_function_t *_rehasher) {
+  return CreateAcl(_fbb, _o, _rehasher);
 }
 
-inline ::flatbuffers::Offset<Check> CreateCheck(::flatbuffers::FlatBufferBuilder &_fbb, const CheckT *_o, const ::flatbuffers::rehasher_function_t *_rehasher) {
+inline ::flatbuffers::Offset<Acl> CreateAcl(::flatbuffers::FlatBufferBuilder &_fbb, const AclT *_o, const ::flatbuffers::rehasher_function_t *_rehasher) {
   (void)_rehasher;
   (void)_o;
-  struct _VectorArgs { ::flatbuffers::FlatBufferBuilder *__fbb; const CheckT* __o; const ::flatbuffers::rehasher_function_t *__rehasher; } _va = { &_fbb, _o, _rehasher}; (void)_va;
+  struct _VectorArgs { ::flatbuffers::FlatBufferBuilder *__fbb; const AclT* __o; const ::flatbuffers::rehasher_function_t *__rehasher; } _va = { &_fbb, _o, _rehasher}; (void)_va;
   auto _pattern = _o->pattern.empty() ? 0 : _fbb.CreateString(_o->pattern);
   auto _mode = _o->mode;
-  return nplex::msgs::CreateCheck(
+  return nplex::msgs::CreateAcl(
       _fbb,
       _pattern,
       _mode);
@@ -1949,7 +2353,7 @@ inline SubmitRequestT::SubmitRequestT(const SubmitRequestT &o)
   upserts.reserve(o.upserts.size());
   for (const auto &upserts_ : o.upserts) { upserts.emplace_back((upserts_) ? new nplex::msgs::KeyValueT(*upserts_) : nullptr); }
   ensures.reserve(o.ensures.size());
-  for (const auto &ensures_ : o.ensures) { ensures.emplace_back((ensures_) ? new nplex::msgs::CheckT(*ensures_) : nullptr); }
+  for (const auto &ensures_ : o.ensures) { ensures.emplace_back((ensures_) ? new nplex::msgs::AclT(*ensures_) : nullptr); }
 }
 
 inline SubmitRequestT &SubmitRequestT::operator=(SubmitRequestT o) FLATBUFFERS_NOEXCEPT {
@@ -1976,7 +2380,7 @@ inline void SubmitRequest::UnPackTo(SubmitRequestT *_o, const ::flatbuffers::res
   { auto _e = type(); _o->type = _e; }
   { auto _e = upserts(); if (_e) { _o->upserts.resize(_e->size()); for (::flatbuffers::uoffset_t _i = 0; _i < _e->size(); _i++) { if(_o->upserts[_i]) { _e->Get(_i)->UnPackTo(_o->upserts[_i].get(), _resolver); } else { _o->upserts[_i] = std::unique_ptr<nplex::msgs::KeyValueT>(_e->Get(_i)->UnPack(_resolver)); }; } } else { _o->upserts.resize(0); } }
   { auto _e = deletes(); if (_e) { _o->deletes.resize(_e->size()); for (::flatbuffers::uoffset_t _i = 0; _i < _e->size(); _i++) { _o->deletes[_i] = _e->Get(_i)->str(); } } else { _o->deletes.resize(0); } }
-  { auto _e = ensures(); if (_e) { _o->ensures.resize(_e->size()); for (::flatbuffers::uoffset_t _i = 0; _i < _e->size(); _i++) { if(_o->ensures[_i]) { _e->Get(_i)->UnPackTo(_o->ensures[_i].get(), _resolver); } else { _o->ensures[_i] = std::unique_ptr<nplex::msgs::CheckT>(_e->Get(_i)->UnPack(_resolver)); }; } } else { _o->ensures.resize(0); } }
+  { auto _e = ensures(); if (_e) { _o->ensures.resize(_e->size()); for (::flatbuffers::uoffset_t _i = 0; _i < _e->size(); _i++) { if(_o->ensures[_i]) { _e->Get(_i)->UnPackTo(_o->ensures[_i].get(), _resolver); } else { _o->ensures[_i] = std::unique_ptr<nplex::msgs::AclT>(_e->Get(_i)->UnPack(_resolver)); }; } } else { _o->ensures.resize(0); } }
 }
 
 inline ::flatbuffers::Offset<SubmitRequest> SubmitRequest::Pack(::flatbuffers::FlatBufferBuilder &_fbb, const SubmitRequestT* _o, const ::flatbuffers::rehasher_function_t *_rehasher) {
@@ -1992,7 +2396,7 @@ inline ::flatbuffers::Offset<SubmitRequest> CreateSubmitRequest(::flatbuffers::F
   auto _type = _o->type;
   auto _upserts = _o->upserts.size() ? _fbb.CreateVector<::flatbuffers::Offset<nplex::msgs::KeyValue>> (_o->upserts.size(), [](size_t i, _VectorArgs *__va) { return CreateKeyValue(*__va->__fbb, __va->__o->upserts[i].get(), __va->__rehasher); }, &_va ) : 0;
   auto _deletes = _o->deletes.size() ? _fbb.CreateVectorOfStrings(_o->deletes) : 0;
-  auto _ensures = _o->ensures.size() ? _fbb.CreateVector<::flatbuffers::Offset<nplex::msgs::Check>> (_o->ensures.size(), [](size_t i, _VectorArgs *__va) { return CreateCheck(*__va->__fbb, __va->__o->ensures[i].get(), __va->__rehasher); }, &_va ) : 0;
+  auto _ensures = _o->ensures.size() ? _fbb.CreateVector<::flatbuffers::Offset<nplex::msgs::Acl>> (_o->ensures.size(), [](size_t i, _VectorArgs *__va) { return CreateAcl(*__va->__fbb, __va->__o->ensures[i].get(), __va->__rehasher); }, &_va ) : 0;
   return nplex::msgs::CreateSubmitRequest(
       _fbb,
       _cid,
@@ -2062,6 +2466,337 @@ inline ::flatbuffers::Offset<KeepAlivePush> CreateKeepAlivePush(::flatbuffers::F
   return nplex::msgs::CreateKeepAlivePush(
       _fbb,
       _crev);
+}
+
+inline MessageT *Message::UnPack(const ::flatbuffers::resolver_function_t *_resolver) const {
+  auto _o = std::make_unique<MessageT>();
+  UnPackTo(_o.get(), _resolver);
+  return _o.release();
+}
+
+inline void Message::UnPackTo(MessageT *_o, const ::flatbuffers::resolver_function_t *_resolver) const {
+  (void)_o;
+  (void)_resolver;
+  { auto _e = content_type(); _o->content.type = _e; }
+  { auto _e = content(); if (_e) _o->content.value = nplex::msgs::MsgContentUnion::UnPack(_e, content_type(), _resolver); }
+}
+
+inline ::flatbuffers::Offset<Message> Message::Pack(::flatbuffers::FlatBufferBuilder &_fbb, const MessageT* _o, const ::flatbuffers::rehasher_function_t *_rehasher) {
+  return CreateMessage(_fbb, _o, _rehasher);
+}
+
+inline ::flatbuffers::Offset<Message> CreateMessage(::flatbuffers::FlatBufferBuilder &_fbb, const MessageT *_o, const ::flatbuffers::rehasher_function_t *_rehasher) {
+  (void)_rehasher;
+  (void)_o;
+  struct _VectorArgs { ::flatbuffers::FlatBufferBuilder *__fbb; const MessageT* __o; const ::flatbuffers::rehasher_function_t *__rehasher; } _va = { &_fbb, _o, _rehasher}; (void)_va;
+  auto _content_type = _o->content.type;
+  auto _content = _o->content.Pack(_fbb);
+  return nplex::msgs::CreateMessage(
+      _fbb,
+      _content_type,
+      _content);
+}
+
+inline bool VerifyMsgContent(::flatbuffers::Verifier &verifier, const void *obj, MsgContent type) {
+  switch (type) {
+    case MsgContent::NONE: {
+      return true;
+    }
+    case MsgContent::PING_REQUEST: {
+      auto ptr = reinterpret_cast<const nplex::msgs::PingRequest *>(obj);
+      return verifier.VerifyTable(ptr);
+    }
+    case MsgContent::PING_RESPONSE: {
+      auto ptr = reinterpret_cast<const nplex::msgs::PingResponse *>(obj);
+      return verifier.VerifyTable(ptr);
+    }
+    case MsgContent::LOGIN_REQUEST: {
+      auto ptr = reinterpret_cast<const nplex::msgs::LoginRequest *>(obj);
+      return verifier.VerifyTable(ptr);
+    }
+    case MsgContent::LOGIN_RESPONSE: {
+      auto ptr = reinterpret_cast<const nplex::msgs::LoginResponse *>(obj);
+      return verifier.VerifyTable(ptr);
+    }
+    case MsgContent::LOAD_REQUEST: {
+      auto ptr = reinterpret_cast<const nplex::msgs::LoadRequest *>(obj);
+      return verifier.VerifyTable(ptr);
+    }
+    case MsgContent::LOAD_RESPONSE: {
+      auto ptr = reinterpret_cast<const nplex::msgs::LoadResponse *>(obj);
+      return verifier.VerifyTable(ptr);
+    }
+    case MsgContent::SUBMIT_REQUEST: {
+      auto ptr = reinterpret_cast<const nplex::msgs::SubmitRequest *>(obj);
+      return verifier.VerifyTable(ptr);
+    }
+    case MsgContent::SUBMIT_RESPONSE: {
+      auto ptr = reinterpret_cast<const nplex::msgs::SubmitResponse *>(obj);
+      return verifier.VerifyTable(ptr);
+    }
+    case MsgContent::UPDATE_PUSH: {
+      auto ptr = reinterpret_cast<const nplex::msgs::UpdatePush *>(obj);
+      return verifier.VerifyTable(ptr);
+    }
+    case MsgContent::KEEPALIVE_PUSH: {
+      auto ptr = reinterpret_cast<const nplex::msgs::KeepAlivePush *>(obj);
+      return verifier.VerifyTable(ptr);
+    }
+    default: return true;
+  }
+}
+
+inline bool VerifyMsgContentVector(::flatbuffers::Verifier &verifier, const ::flatbuffers::Vector<::flatbuffers::Offset<void>> *values, const ::flatbuffers::Vector<MsgContent> *types) {
+  if (!values || !types) return !values && !types;
+  if (values->size() != types->size()) return false;
+  for (::flatbuffers::uoffset_t i = 0; i < values->size(); ++i) {
+    if (!VerifyMsgContent(
+        verifier,  values->Get(i), types->GetEnum<MsgContent>(i))) {
+      return false;
+    }
+  }
+  return true;
+}
+
+inline void *MsgContentUnion::UnPack(const void *obj, MsgContent type, const ::flatbuffers::resolver_function_t *resolver) {
+  (void)resolver;
+  switch (type) {
+    case MsgContent::PING_REQUEST: {
+      auto ptr = reinterpret_cast<const nplex::msgs::PingRequest *>(obj);
+      return ptr->UnPack(resolver);
+    }
+    case MsgContent::PING_RESPONSE: {
+      auto ptr = reinterpret_cast<const nplex::msgs::PingResponse *>(obj);
+      return ptr->UnPack(resolver);
+    }
+    case MsgContent::LOGIN_REQUEST: {
+      auto ptr = reinterpret_cast<const nplex::msgs::LoginRequest *>(obj);
+      return ptr->UnPack(resolver);
+    }
+    case MsgContent::LOGIN_RESPONSE: {
+      auto ptr = reinterpret_cast<const nplex::msgs::LoginResponse *>(obj);
+      return ptr->UnPack(resolver);
+    }
+    case MsgContent::LOAD_REQUEST: {
+      auto ptr = reinterpret_cast<const nplex::msgs::LoadRequest *>(obj);
+      return ptr->UnPack(resolver);
+    }
+    case MsgContent::LOAD_RESPONSE: {
+      auto ptr = reinterpret_cast<const nplex::msgs::LoadResponse *>(obj);
+      return ptr->UnPack(resolver);
+    }
+    case MsgContent::SUBMIT_REQUEST: {
+      auto ptr = reinterpret_cast<const nplex::msgs::SubmitRequest *>(obj);
+      return ptr->UnPack(resolver);
+    }
+    case MsgContent::SUBMIT_RESPONSE: {
+      auto ptr = reinterpret_cast<const nplex::msgs::SubmitResponse *>(obj);
+      return ptr->UnPack(resolver);
+    }
+    case MsgContent::UPDATE_PUSH: {
+      auto ptr = reinterpret_cast<const nplex::msgs::UpdatePush *>(obj);
+      return ptr->UnPack(resolver);
+    }
+    case MsgContent::KEEPALIVE_PUSH: {
+      auto ptr = reinterpret_cast<const nplex::msgs::KeepAlivePush *>(obj);
+      return ptr->UnPack(resolver);
+    }
+    default: return nullptr;
+  }
+}
+
+inline ::flatbuffers::Offset<void> MsgContentUnion::Pack(::flatbuffers::FlatBufferBuilder &_fbb, const ::flatbuffers::rehasher_function_t *_rehasher) const {
+  (void)_rehasher;
+  switch (type) {
+    case MsgContent::PING_REQUEST: {
+      auto ptr = reinterpret_cast<const nplex::msgs::PingRequestT *>(value);
+      return CreatePingRequest(_fbb, ptr, _rehasher).Union();
+    }
+    case MsgContent::PING_RESPONSE: {
+      auto ptr = reinterpret_cast<const nplex::msgs::PingResponseT *>(value);
+      return CreatePingResponse(_fbb, ptr, _rehasher).Union();
+    }
+    case MsgContent::LOGIN_REQUEST: {
+      auto ptr = reinterpret_cast<const nplex::msgs::LoginRequestT *>(value);
+      return CreateLoginRequest(_fbb, ptr, _rehasher).Union();
+    }
+    case MsgContent::LOGIN_RESPONSE: {
+      auto ptr = reinterpret_cast<const nplex::msgs::LoginResponseT *>(value);
+      return CreateLoginResponse(_fbb, ptr, _rehasher).Union();
+    }
+    case MsgContent::LOAD_REQUEST: {
+      auto ptr = reinterpret_cast<const nplex::msgs::LoadRequestT *>(value);
+      return CreateLoadRequest(_fbb, ptr, _rehasher).Union();
+    }
+    case MsgContent::LOAD_RESPONSE: {
+      auto ptr = reinterpret_cast<const nplex::msgs::LoadResponseT *>(value);
+      return CreateLoadResponse(_fbb, ptr, _rehasher).Union();
+    }
+    case MsgContent::SUBMIT_REQUEST: {
+      auto ptr = reinterpret_cast<const nplex::msgs::SubmitRequestT *>(value);
+      return CreateSubmitRequest(_fbb, ptr, _rehasher).Union();
+    }
+    case MsgContent::SUBMIT_RESPONSE: {
+      auto ptr = reinterpret_cast<const nplex::msgs::SubmitResponseT *>(value);
+      return CreateSubmitResponse(_fbb, ptr, _rehasher).Union();
+    }
+    case MsgContent::UPDATE_PUSH: {
+      auto ptr = reinterpret_cast<const nplex::msgs::UpdatePushT *>(value);
+      return CreateUpdatePush(_fbb, ptr, _rehasher).Union();
+    }
+    case MsgContent::KEEPALIVE_PUSH: {
+      auto ptr = reinterpret_cast<const nplex::msgs::KeepAlivePushT *>(value);
+      return CreateKeepAlivePush(_fbb, ptr, _rehasher).Union();
+    }
+    default: return 0;
+  }
+}
+
+inline MsgContentUnion::MsgContentUnion(const MsgContentUnion &u) : type(u.type), value(nullptr) {
+  switch (type) {
+    case MsgContent::PING_REQUEST: {
+      value = new nplex::msgs::PingRequestT(*reinterpret_cast<nplex::msgs::PingRequestT *>(u.value));
+      break;
+    }
+    case MsgContent::PING_RESPONSE: {
+      value = new nplex::msgs::PingResponseT(*reinterpret_cast<nplex::msgs::PingResponseT *>(u.value));
+      break;
+    }
+    case MsgContent::LOGIN_REQUEST: {
+      value = new nplex::msgs::LoginRequestT(*reinterpret_cast<nplex::msgs::LoginRequestT *>(u.value));
+      break;
+    }
+    case MsgContent::LOGIN_RESPONSE: {
+      value = new nplex::msgs::LoginResponseT(*reinterpret_cast<nplex::msgs::LoginResponseT *>(u.value));
+      break;
+    }
+    case MsgContent::LOAD_REQUEST: {
+      value = new nplex::msgs::LoadRequestT(*reinterpret_cast<nplex::msgs::LoadRequestT *>(u.value));
+      break;
+    }
+    case MsgContent::LOAD_RESPONSE: {
+      value = new nplex::msgs::LoadResponseT(*reinterpret_cast<nplex::msgs::LoadResponseT *>(u.value));
+      break;
+    }
+    case MsgContent::SUBMIT_REQUEST: {
+      value = new nplex::msgs::SubmitRequestT(*reinterpret_cast<nplex::msgs::SubmitRequestT *>(u.value));
+      break;
+    }
+    case MsgContent::SUBMIT_RESPONSE: {
+      value = new nplex::msgs::SubmitResponseT(*reinterpret_cast<nplex::msgs::SubmitResponseT *>(u.value));
+      break;
+    }
+    case MsgContent::UPDATE_PUSH: {
+      value = new nplex::msgs::UpdatePushT(*reinterpret_cast<nplex::msgs::UpdatePushT *>(u.value));
+      break;
+    }
+    case MsgContent::KEEPALIVE_PUSH: {
+      value = new nplex::msgs::KeepAlivePushT(*reinterpret_cast<nplex::msgs::KeepAlivePushT *>(u.value));
+      break;
+    }
+    default:
+      break;
+  }
+}
+
+inline void MsgContentUnion::Reset() {
+  switch (type) {
+    case MsgContent::PING_REQUEST: {
+      auto ptr = reinterpret_cast<nplex::msgs::PingRequestT *>(value);
+      delete ptr;
+      break;
+    }
+    case MsgContent::PING_RESPONSE: {
+      auto ptr = reinterpret_cast<nplex::msgs::PingResponseT *>(value);
+      delete ptr;
+      break;
+    }
+    case MsgContent::LOGIN_REQUEST: {
+      auto ptr = reinterpret_cast<nplex::msgs::LoginRequestT *>(value);
+      delete ptr;
+      break;
+    }
+    case MsgContent::LOGIN_RESPONSE: {
+      auto ptr = reinterpret_cast<nplex::msgs::LoginResponseT *>(value);
+      delete ptr;
+      break;
+    }
+    case MsgContent::LOAD_REQUEST: {
+      auto ptr = reinterpret_cast<nplex::msgs::LoadRequestT *>(value);
+      delete ptr;
+      break;
+    }
+    case MsgContent::LOAD_RESPONSE: {
+      auto ptr = reinterpret_cast<nplex::msgs::LoadResponseT *>(value);
+      delete ptr;
+      break;
+    }
+    case MsgContent::SUBMIT_REQUEST: {
+      auto ptr = reinterpret_cast<nplex::msgs::SubmitRequestT *>(value);
+      delete ptr;
+      break;
+    }
+    case MsgContent::SUBMIT_RESPONSE: {
+      auto ptr = reinterpret_cast<nplex::msgs::SubmitResponseT *>(value);
+      delete ptr;
+      break;
+    }
+    case MsgContent::UPDATE_PUSH: {
+      auto ptr = reinterpret_cast<nplex::msgs::UpdatePushT *>(value);
+      delete ptr;
+      break;
+    }
+    case MsgContent::KEEPALIVE_PUSH: {
+      auto ptr = reinterpret_cast<nplex::msgs::KeepAlivePushT *>(value);
+      delete ptr;
+      break;
+    }
+    default: break;
+  }
+  value = nullptr;
+  type = MsgContent::NONE;
+}
+
+inline const nplex::msgs::Message *GetMessage(const void *buf) {
+  return ::flatbuffers::GetRoot<nplex::msgs::Message>(buf);
+}
+
+inline const nplex::msgs::Message *GetSizePrefixedMessage(const void *buf) {
+  return ::flatbuffers::GetSizePrefixedRoot<nplex::msgs::Message>(buf);
+}
+
+inline bool VerifyMessageBuffer(
+    ::flatbuffers::Verifier &verifier) {
+  return verifier.VerifyBuffer<nplex::msgs::Message>(nullptr);
+}
+
+inline bool VerifySizePrefixedMessageBuffer(
+    ::flatbuffers::Verifier &verifier) {
+  return verifier.VerifySizePrefixedBuffer<nplex::msgs::Message>(nullptr);
+}
+
+inline void FinishMessageBuffer(
+    ::flatbuffers::FlatBufferBuilder &fbb,
+    ::flatbuffers::Offset<nplex::msgs::Message> root) {
+  fbb.Finish(root);
+}
+
+inline void FinishSizePrefixedMessageBuffer(
+    ::flatbuffers::FlatBufferBuilder &fbb,
+    ::flatbuffers::Offset<nplex::msgs::Message> root) {
+  fbb.FinishSizePrefixed(root);
+}
+
+inline std::unique_ptr<nplex::msgs::MessageT> UnPackMessage(
+    const void *buf,
+    const ::flatbuffers::resolver_function_t *res = nullptr) {
+  return std::unique_ptr<nplex::msgs::MessageT>(GetMessage(buf)->UnPack(res));
+}
+
+inline std::unique_ptr<nplex::msgs::MessageT> UnPackSizePrefixedMessage(
+    const void *buf,
+    const ::flatbuffers::resolver_function_t *res = nullptr) {
+  return std::unique_ptr<nplex::msgs::MessageT>(GetSizePrefixedMessage(buf)->UnPack(res));
 }
 
 }  // namespace msgs

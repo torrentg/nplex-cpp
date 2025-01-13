@@ -2,7 +2,6 @@
 
 #include <vector>
 #include <memory>
-#include <type_traits>
 #include <doctest.h>
 #include "messages.hpp"
 
@@ -10,19 +9,8 @@ namespace nplex {
 namespace tests {
 
     template <class T>
-    auto move_to_unique(T&& t) {
-        return std::make_unique<std::remove_reference_t<T>>(std::move(t));
-    }
-
-    template <class V, class ... Args>
-    auto make_vector_unique(Args ... args) {
-        std::vector<std::unique_ptr<V>> rv;
-        (rv.push_back(move_to_unique(args)), ...);
-        return rv;
-    }
-
-    template <class T>
-    std::vector<std::unique_ptr<T>> make_vector_unique_ptr(const std::vector<T>& input) {
+    std::vector<std::unique_ptr<T>> make_vector_unique_ptr(const std::vector<T>& input)
+    {
         std::vector<std::unique_ptr<T>> result;
         result.reserve(input.size());
         for (const auto& item : input) {
@@ -70,7 +58,7 @@ namespace tests {
         return push;
     }
 
-    inline nplex::msgs::SubmitRequestT make_submit_request(std::size_t cid, std::size_t crev, std::uint32_t type, std::vector<nplex::msgs::KeyValueT> upserts, std::vector<std::string> deletes, std::vector<nplex::msgs::CheckT> ensures)
+    inline nplex::msgs::SubmitRequestT make_submit_request(std::size_t cid, std::size_t crev, std::uint32_t type, std::vector<nplex::msgs::KeyValueT> upserts, std::vector<std::string> deletes, std::vector<nplex::msgs::AclT> ensures)
     {
         nplex::msgs::SubmitRequestT req;
         req.cid = cid;
@@ -80,6 +68,14 @@ namespace tests {
         req.deletes = deletes;
         req.ensures = make_vector_unique_ptr(ensures);
         return req;
+    }
+
+    template<typename T>
+    inline nplex::msgs::MessageT make_message(T &&val)
+    {
+        nplex::msgs::MessageT msg;
+        msg.content.Set(std::move(val));
+        return msg;
     }
 
     template <class T>

@@ -52,7 +52,7 @@ table Snapshot
     updates: [Update];              // List of updates sorted by commit revision (oldest to newest)
 }
 
-table Check
+table Acl
 {
     pattern: string;                // Pattern (glob)
     mode: ubyte;                    // Mode (1=CREATE, 2=UPDATE, 4=DELETE)
@@ -121,7 +121,7 @@ table SubmitRequest
     type: uint32;                   // Transaction type (user-defined value)
     upserts: [KeyValue];            // List of updates and inserts
     deletes: [string];              // List of deletes
-    ensures: [Check];               // List of ensures
+    ensures: [Acl];                 // List of ensures
 }
 
 table SubmitResponse
@@ -137,4 +137,24 @@ table KeepAlivePush
     crev: uint64;                   // Current database revision
 }
 
-//root_type Snapshot;
+// ========================================================
+// Generic message
+
+union MsgContent {
+    PING_REQUEST: PingRequest,
+    PING_RESPONSE: PingResponse,
+    LOGIN_REQUEST: LoginRequest,
+    LOGIN_RESPONSE: LoginResponse,
+    LOAD_REQUEST: LoadRequest,
+    LOAD_RESPONSE: LoadResponse,
+    SUBMIT_REQUEST: SubmitRequest,
+    SUBMIT_RESPONSE: SubmitResponse,
+    UPDATE_PUSH: UpdatePush,
+    KEEPALIVE_PUSH: KeepAlivePush
+}
+
+table Message {
+    content: MsgContent;            // Message content
+}
+
+root_type Message;

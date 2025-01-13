@@ -1,6 +1,5 @@
 #pragma once
 
-#include <uv.h>
 #include <memory>
 #include <utility>
 #include "types.hpp"
@@ -13,7 +12,6 @@ namespace nplex {
 /**
  * Async nplex client.
  * 
- * By default this class only updates the database values.
  * Extend this class to create a client fulfilling your needs.
  * Add your business members and override the virtual functions.
  * 
@@ -38,7 +36,6 @@ namespace nplex {
  * 
  * On client startup:
  *   - Attachs to the event loop (used to contact the server).
- *   - Starts a thread to execute the server events.
  *   - Connects to the nplex server (login).
  *   - Receives events from server (ex: snapshot, commits).
  *     - Updating the local database contents.
@@ -81,15 +78,18 @@ class client_t
     /**
      * Client constructor.
      * 
+     * This method starts the event loop.
+     * You can stop it by calling the close() method or destroying the object.
+     * 
      * @triggers on_connected() If the client is connected.
      * @triggers on_error() If an error occurs.
      * 
      * @param[in] params Connection parameters.
-     * @param[in] loop Event loop (if NULL creates a new loop).
      * 
      * @exception nplex_exception Thrown if the parameters are invalid.
      */
-    client_t(const params_t &params, uv_loop_t *loop = nullptr);
+    client_t(const params_t &params);
+    ~client_t();
 
     /**
      * Returns current client state.
@@ -153,7 +153,7 @@ class client_t
     /**
      * Sends a delayed command to disconnect the client.
      * 
-     * Close the event loop (if owns it), the worker thread, and the client becomes invalid.
+     * Close the event loop and the client becomes invalid.
      * 
      * @triggers on_disconnected().
      * @triggers on_closed().
