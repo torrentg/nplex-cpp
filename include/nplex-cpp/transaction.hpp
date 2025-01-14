@@ -54,6 +54,7 @@ class transaction_t
 
     enum class state_e : std::uint8_t {
         OPEN,                                   //!< Transaction is ongoing (user is fetching data).
+        SUBMITTING,                             //!< Transaction is being submitted to the server.
         SUBMITTED,                              //!< Transaction was submitted to the server.
         ACCEPTED,                               //!< Transaction was accepted by the server (pending to receive the commit).
         COMMITTED,                              //!< Transaction was committed.
@@ -71,6 +72,7 @@ class transaction_t
     using cache_ptr = std::shared_ptr<cache_t>;
     using callback_t = std::function<bool(const gto::cstring &key, const value_t &value)>;
     friend struct transaction_impl_t;
+    friend struct client_t;
 
   private:
 

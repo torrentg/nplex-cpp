@@ -76,7 +76,9 @@
     "typeindex": "cpp",
     "cfenv": "cpp",
     "codecvt": "cpp",
-    "stdfloat": "cpp"
+    "stdfloat": "cpp",
+    "bitset": "cpp",
+    "regex": "cpp"
   },
   "C_Cpp.default.cStandard": "c17",
   "C_Cpp.default.includePath": [

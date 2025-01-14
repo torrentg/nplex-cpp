@@ -6,9 +6,12 @@ namespace nplex {
 
 struct params_t
 {
-    std::string hosts;                          //!< Comma-separated list of server:port.
+    std::string servers;                        //!< Comma-separated list of host:port.
     std::string user;                           //!< User name.
     std::string password;                       //!< User password.
+    std::uint32_t max_num_concurrent_tx;        //!< Maximum number of concurrent transactions.
+    std::uint32_t max_num_queued_commands;      //!< Maximum number of pending commands.
+
     std::uint32_t timeout;                      //!< Connection timeout.
     std::uint32_t reconnect;                    //!< Reconnect interval.
     std::uint32_t max_retries;                  //!< Maximum number of retries.
@@ -19,6 +22,7 @@ struct params_t
     std::uint32_t max_tx_pending;               //!< Maximum number of pending transactions.
     std::uint32_t max_tx_queue_size;            //!< Maximum size of the transaction queue.
     std::uint32_t max_tx_queue_time;            //!< Maximum time of the transaction queue.
+
 
     // TODO: create constructor
     // TODO: add setters returning ref to obj

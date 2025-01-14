@@ -12,6 +12,7 @@
 * utility class to read config from file (optional)
 * submit_tx_fut returns a future (attached to tx.promise)
 * extends key_t from cstring_t adding validation (length, double-, ending/, utf8) on construct, key_part, key_preffix, key_suffix, etc.
+* Remove conditional_var, push() and pop() from mqueue, mutex suffices
 
 ## Useful commands
 

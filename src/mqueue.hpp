@@ -49,6 +49,7 @@ class mqueue
      * Push an item to the queue.
      * 
      * @param[in] item Item to push.
+     * 
      * @exception nplex_mqueue_exceeded Queue is full.
      */
     void push(const T &item)
@@ -68,7 +69,9 @@ class mqueue
      * Try to push an item to the queue.
      * 
      * @param[in] item Item to push.
-     * @return True if the item was pushed, false otherwise.
+     * 
+     * @return true if the item was pushed,
+     *         false otherwise.
      */
     bool try_push(const T &item)
     {
@@ -96,6 +99,25 @@ class mqueue
         m_cond_not_empty.wait(lock, [this]() { return !m_queue.empty(); });
 
         return m_queue.pop();
+    }
+
+    /**
+     * Try to pop an item from the queue.
+     * 
+     * @param[out] item Popped item.
+     * 
+     * @return true if the item was popped,
+     *         false otherwise.
+     */
+    bool try_pop(T &item)
+    {
+        std::unique_lock<std::mutex> lock(m_mutex);
+
+        if (m_queue.empty())
+            return false;
+
+        item = m_queue.pop();
+        return true;
     }
 };
 

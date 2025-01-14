@@ -113,6 +113,8 @@ target_sources(
     nplex-cpp
     PRIVATE
     ${CMAKE_CURRENT_LIST_DIR}/deps/match.c
+    ${CMAKE_CURRENT_LIST_DIR}/src/addr.hpp
+    ${CMAKE_CURRENT_LIST_DIR}/src/addr.cpp
     ${CMAKE_CURRENT_LIST_DIR}/src/cache.hpp
     ${CMAKE_CURRENT_LIST_DIR}/src/cache.cpp
     ${CMAKE_CURRENT_LIST_DIR}/src/client.cpp

@@ -24,6 +24,7 @@ target_sources(
     ${CMAKE_CURRENT_LIST_DIR}/mqueue_test.cpp
     ${CMAKE_CURRENT_LIST_DIR}/cache_test.cpp
     ${CMAKE_CURRENT_LIST_DIR}/match_test.cpp
+    ${CMAKE_CURRENT_LIST_DIR}/addr_test.cpp
     ${CMAKE_CURRENT_LIST_DIR}/main.cpp
 )
 

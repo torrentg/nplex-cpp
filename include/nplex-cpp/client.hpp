@@ -9,6 +9,9 @@
 
 namespace nplex {
 
+// Forward declaration
+struct client_impl_t;
+
 /**
  * Async nplex client.
  * 
@@ -51,29 +54,30 @@ namespace nplex {
  */
 class client_t
 {
+  private:
+
+    std::unique_ptr<client_impl_t> m_impl;
+
+  public:
+
     enum class state_e : std::uint8_t {
+        INITIALIZING,                           //!< Client is initializing.
         CONNECTING,                             //!< Connecting to the server.
         SYNCHRONIZING,                          //!< Initializing the cache.
         SYNCED,                                 //!< Client is synced with the server.
         RECONNECTING,                           //!< Reconnecting to the server.
+        CLOSING,                                //!< Client is closing.
         CLOSED                                  //!< Client is closed.
     };
 
     enum class load_mode_e : std::uint8_t {
-        SNAPSHOT_AT_FIXED_REV,                  //!< Sends snapshot at a fixed revision. and subsequent commits.
+        SNAPSHOT_AT_FIXED_REV,                  //!< Sends snapshot at a fixed revision and subsequent commits.
         SNAPSHOT_AT_LAST_REV,                   //!< Sends snapshot at the last revision and subsequent commits.   
         ONLY_UPDATES_FROM_REV                   //!< Sends only updates from a revision.   
     };
 
     using tx_ptr = std::shared_ptr<transaction_t>;
     using load_cmd_t = std::pair<load_mode_e, rev_t>;
-
-  private:
-
-    struct impl_t;
-    std::unique_ptr<impl_t> m_impl;
-
-  public:
 
     /**
      * Client constructor.
@@ -89,7 +93,7 @@ class client_t
      * @exception nplex_exception Thrown if the parameters are invalid.
      */
     client_t(const params_t &params);
-    ~client_t();
+    ~client_t() { close(true); }
 
     /**
      * Returns current client state.
@@ -114,12 +118,15 @@ class client_t
      * @param[in] isolation Isolation level.
      * @param[in] read_only Read-only flag.
      * @return The transaction.
+     * 
+     * @exception nplex_exception client-closed, max-tx-exceeded.
      */
     tx_ptr create_tx(transaction_t::isolation_e isolation = transaction_t::isolation_e::READ_COMMITTED, bool read_only = false);
 
     /**
      * Submit a transaction to the server.
      * 
+     * On error, the transaction is rejected and the on_rejected() callback is called.
      * Response will be notified via on_committed() or on_rejected().
      * 
      * @triggers on_committed()
@@ -132,7 +139,7 @@ class client_t
      *         false otherwise (ex. dirty, read-only, no-alter).
      * 
      * @exception std::invalid_argument Transaction is empty (null).
-     * @exception nplex_exception client-not-synced, tx-not-found, tx-not-open.
+     * @exception nplex_exception client-closed, tx-not-found, tx-not-open.
      */
     bool submit_tx(tx_ptr tx, bool force = false);
 
@@ -146,7 +153,8 @@ class client_t
      * 
      * @param[in] tx Transaction to remove from ongoing transactions list.
      * 
-     * @return true if the transaction was removed, false otherwise (tx-not-found, invalid-state).
+     * @return true if the transaction was removed, 
+     *         false otherwise (tx-not-found, invalid-state).
      */
     bool discard_tx(tx_ptr tx);
 
@@ -154,12 +162,13 @@ class client_t
      * Sends a delayed command to disconnect the client.
      * 
      * Close the event loop and the client becomes invalid.
+     * This is a blocking command, it waits for the event loop to finish.
      * 
      * @triggers on_disconnected().
      * @triggers on_closed().
      * 
-     * @param[in] immediate If true, all pending commands are discarded, 
-     *                      otherwise process pending commands and disconnects.
+     * @param[in] immediate If true, all pending commands and pending responses are discarded, 
+     *                      otherwise process pending commands and responses and disconnects.
      */
     void close(bool immediate = false);
 
@@ -170,6 +179,8 @@ class client_t
      * 
      * This function handles the connection event and determines the initial load command
      * to send to the server.
+     * 
+     * This function is executed in the event loop thread. Do not block it.
      * 
      * @triggers on_snapshot() If snapshot was requested.
      * @triggers on_commit() On every new commit.
@@ -190,6 +201,8 @@ class client_t
      * This function handles the reconnection event and determines the load command
      * to send to the server.
      * 
+     * This function is executed in the event loop thread. Do not block it.
+     * 
      * @triggers on_snapshot() If snapshot was requested.
      * @triggers on_commit() On every new commit.
      * 
@@ -209,6 +222,8 @@ class client_t
      * This function handles the disconnection event, performing necessary cleanup and
      * attempting to reconnect if applicable.
      * 
+     * This function is executed in the event loop thread. Do not block it.
+     * 
      * @triggers on_reconnect() If the client reconnects (returns true).
      * @triggers on_close() If the client is closed (returns false).
      * 
@@ -226,6 +241,8 @@ class client_t
      * 
      * This function handles the event when the client is closed, performing necessary cleanup.
      * After this function is called, the client is no longer valid.
+     * 
+     * This function is executed in the event loop thread.
      */
     virtual void on_close() {}
 
@@ -234,6 +251,8 @@ class client_t
      * 
      * When this method is called, the client is in the SYNCHRONIZING state and the 
      * local database was just reseted to the snapshot content.
+     * 
+     * This function is executed in the event loop thread. Do not block it.
      * 
      * Use this method to update your business objects.
      */
@@ -244,6 +263,8 @@ class client_t
      * 
      * When this method is called, changes was already applied to the local database.
      * Use this method to update your business objects.
+     * 
+     * This function is executed in the event loop thread. Do not block it.
      *
      * @param[in] meta Transaction metadata.
      * @param[in] changes List of changes.
@@ -259,6 +280,8 @@ class client_t
      * 
      * If you need to resubmit the transaction, creates a new one.
      * 
+     * This function is executed in the event loop thread. Do not block it.
+     * 
      * @param[in] tx The transaction that was rejected.
      */
     virtual void on_reject([[maybe_unused]] tx_ptr tx) {}
@@ -268,6 +291,8 @@ class client_t
      * 
      * This function handles error events, allowing the client to take appropriate actions,
      * such as logging the error or attempting recovery.
+     * 
+     * This function is executed in the event loop thread. Do not block it.
      * 
      * @param[in] msg The error message describing the issue.
      */
