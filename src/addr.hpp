@@ -8,7 +8,7 @@ namespace nplex {
 
 /**
  * Server address.
- * This is an immtuable class.
+ * This is an immutable class.
  */
 class addr_t
 {
@@ -44,9 +44,10 @@ class addr_t
     addr_t(const std::string &str);
 
     // getters
-    std::string host() const { return m_host; };
+    const std::string & host() const { return m_host; };
     std::uint16_t port() const { return m_port; }
     std::uint8_t family() const { return m_family; }
+    std::string str() const;
 };
 
 } // namespace nplex

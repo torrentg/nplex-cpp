@@ -21,6 +21,7 @@ cmake -DENABLE_COVERAGE=ON ..
 
 ### Static
 
+* [cppcrc](https://github.com/DarrenLevine/cppcrc). A very small, fast, header-only, C++ library for generating CRCs. MIT license.
 * [cstring](https://github.com/torrentg/cstring). A C++ immutable C-string with reference counting. LGPL-3.0 license.
 * [cqueue](https://github.com/torrentg/cqueue). A C++20 header-only circular queue container. LGPL-3.0 license.
 * [doctest](https://github.com/doctest/doctest). The fastest feature-rich C++11/14/17/20/23 single-header testing framework. MIT license.

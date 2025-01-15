@@ -2,28 +2,33 @@
 
 #include <mutex>
 #include <cstddef>
-#include <stdexcept>
-#include <condition_variable>
 #include "cqueue.hpp"
 #include "nplex-cpp/exception.hpp"
 
 namespace nplex {
 
 /**
- * Basic thread-safe message queue.
+ * Message queue used to store commands pending to be processed by the event loop.
  * 
- * It is a mpmc (multiple producers, multiple consumers) queue.
- * Queue used to comunicate between threads.
+ * Intended usage:
+ * 
+ *   thread 1: push(item)
+ *             queue has only 1 item -> wake up thread X (via async)
+ *   thread 2: push(item)
+ *             queue has more than 1 item -> does nothing
+ *   thread X: repeatedly calls try_pop(item) until the queue is empty
+ *             sets thread to waiting
+ *   thread 1: push(item)
+ *             queue has only 1 item -> wake up thread X (via async)
  * 
  * @note This class is thread-safe.
- * @tparam T Items type.
+ * @tparam T Type of items in the queue.
  */
 template <typename T>
 class mqueue
 {
   private:
 
-    std::condition_variable m_cond_not_empty;
     gto::cqueue<T> m_queue;
     std::mutex m_mutex;
 
@@ -50,55 +55,30 @@ class mqueue
      * 
      * @param[in] item Item to push.
      * 
-     * @exception nplex_mqueue_exceeded Queue is full.
-     */
-    void push(const T &item)
-    {
-        std::unique_lock<std::mutex> lock(m_mutex);
-
-        try {
-            m_queue.push(item);
-        } catch (const std::length_error &) {
-            throw nplex_mqueue_exceeded("mqueue is full");
-        }
-
-        m_cond_not_empty.notify_one();
-    }
-
-    /**
-     * Try to push an item to the queue.
+     * @return The queue size after the push.
      * 
-     * @param[in] item Item to push.
-     * 
-     * @return true if the item was pushed,
-     *         false otherwise.
+     * @exception nplex_exception Queue is full.
      */
-    bool try_push(const T &item)
+    std::size_t push(const T &item)
     {
         std::unique_lock<std::mutex> lock(m_mutex);
 
         if (m_queue.full())
-            return false;
+            throw nplex_mqueue_exceeded("mqueue exceeded capacity");
 
         m_queue.push(item);
-        m_cond_not_empty.notify_one();
-
-        return true;
+        return m_queue.size();
     }
 
-    /**
-     * Pop an item from the queue.
-     * Waits until an item is available.
-     * 
-     * @return Popped item.
-     */
-    T pop()
+    std::size_t push(T &&item)
     {
         std::unique_lock<std::mutex> lock(m_mutex);
 
-        m_cond_not_empty.wait(lock, [this]() { return !m_queue.empty(); });
+        if (m_queue.full())
+            throw nplex_mqueue_exceeded("mqueue exceeded capacity");
 
-        return m_queue.pop();
+        m_queue.push(std::move(item));
+        return m_queue.size();
     }
 
     /**

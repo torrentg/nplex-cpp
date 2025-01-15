@@ -160,6 +160,7 @@ TEST_CASE("addr")
 
         CHECK(addr.port() == 12345);
         CHECK(addr.family() == entry.family);
+        CHECK(addr.str() == server);
     }
 
     // invalid hosts

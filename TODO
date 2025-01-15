@@ -1,7 +1,6 @@
 # TODO
 
-* NETWORK MSG = LEN + TYPE + ALGO + CONTENT + CHECKSUM
-* NETWORK MSG = LEN + COMPRESSED + DATA + CHECKSUM
+* NETWORK MSG = LEN + METADATA + DATA + CHECKSUM
 * value_t::as_millis() convert from ISO-8601 string (instead of number)
 * Only a public header -> nplex-cpp.hpp
 * implement client.cpp
@@ -12,7 +11,7 @@
 * utility class to read config from file (optional)
 * submit_tx_fut returns a future (attached to tx.promise)
 * extends key_t from cstring_t adding validation (length, double-, ending/, utf8) on construct, key_part, key_preffix, key_suffix, etc.
-* Remove conditional_var, push() and pop() from mqueue, mutex suffices
+* manage client_impl_t::async correctly
 
 ## Useful commands
 

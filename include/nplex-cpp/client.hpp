@@ -63,8 +63,10 @@ class client_t
     enum class state_e : std::uint8_t {
         INITIALIZING,                           //!< Client is initializing.
         CONNECTING,                             //!< Connecting to the server.
+        LOGGING_IN,                             //!< Logging in to the server.
         SYNCHRONIZING,                          //!< Initializing the cache.
         SYNCED,                                 //!< Client is synced with the server.
+        DISCONNECTED,                           //!< Client is disconnected.
         RECONNECTING,                           //!< Reconnecting to the server.
         CLOSING,                                //!< Client is closing.
         CLOSED                                  //!< Client is closed.
