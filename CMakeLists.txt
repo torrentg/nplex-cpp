@@ -122,6 +122,8 @@ target_sources(
     ${CMAKE_CURRENT_LIST_DIR}/src/messages.fbs
     ${CMAKE_CURRENT_LIST_DIR}/src/messages.hpp
     ${CMAKE_CURRENT_LIST_DIR}/src/transaction.cpp
+    ${CMAKE_CURRENT_LIST_DIR}/src/transaction_impl.hpp
+    ${CMAKE_CURRENT_LIST_DIR}/src/transaction_impl.cpp
     PUBLIC
     ${CMAKE_CURRENT_LIST_DIR}/include/nplex-cpp/types.hpp
     ${CMAKE_CURRENT_LIST_DIR}/include/nplex-cpp/params.hpp

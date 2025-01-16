@@ -1,4 +1,9 @@
-#include "transaction_test.hpp"
+#include <doctest.h>
+#include "messages_test.hpp"
+#include "nplex-cpp/exception.hpp"
+#include "nplex-cpp/transaction.hpp"
+#include "transaction_impl.hpp"
+#include "cache.hpp"
 
 using namespace std;
 using namespace nplex;
@@ -8,16 +13,24 @@ using namespace flatbuffers;
 
 namespace {
 
-struct tx_test_t : public transaction_t {
+/**
+ * Modified transaction allowing to access protected members.
+ */
+struct tx_test_t : public transaction_t
+{
     using transaction_t::transaction_t;
     void update(const std::vector<change_t> &changes) { transaction_t::update(changes); }
     void set_dirty(bool dirty) { transaction_t::dirty(dirty); }
     void set_state(state_e state) { transaction_t::state(state); }
-    static std::shared_ptr<tx_test_t> create(cache_ptr cache, isolation_e isolation, bool read_only = false) {
-        auto tx = transaction_t::create(cache, isolation, read_only);
-        return std::reinterpret_pointer_cast<tx_test_t>(tx);
-    }
 };
+
+/**
+ * tx_test_t factory
+ */
+std::shared_ptr<tx_test_t> make_tx_test(cache_ptr cache, transaction_t::isolation_e isolation, bool read_only = false) {
+    auto tx = make_transaction(cache, isolation, read_only);
+    return std::static_pointer_cast<tx_test_t>(tx);
+}
 
 using tx_ptr = std::shared_ptr<tx_test_t>;
 
@@ -30,6 +43,80 @@ auto update_cache(cache_ptr &cache, const msgs::UpdateT &upd)
     REQUIRE_NOTHROW(changes = cache->update(update_ptr));
 
     return changes;
+}
+
+/**
+ * Creates a basic cache initialized with some values.
+ * 
+ * // value first digit represents the key number, 
+ * // second digit represents the last transaction that modified.
+ * 
+ * key-values = {
+ *      key1 = 11
+ *      key2 = 21
+ *      key3 = 32
+ *      key4 = 42
+ *      key5 = removed
+ *      key6 = removed
+ *      key7 = 72
+ *      key8 = 82
+ * }
+ * 
+ * tx-metadatas = {
+ *     { rev = 1, user = jdoe },
+ *     { rev = 2, user = ljohnson }
+ * }
+ * 
+ * tx-users = { 
+ *      jdoe, 
+ *      ljohnson
+ * }
+ * 
+ * @param[in] rev The cache revision.
+ * 
+ * @return Initialized cache.
+ */
+cache_ptr make_basic_cache()
+{
+    flatbuffers::DetachedBuffer buf;
+    cache_ptr cache = std::make_shared<cache_t>();
+    const msgs::Update *ptr = nullptr;
+
+    auto transaction1 = make_update(1, "jdoe", 1234567890, 15,
+        {
+            { .key = "key1", .value = {11}},
+            { .key = "key2", .value = {21}},
+            { .key = "key3", .value = {31}},
+            { .key = "key4", .value = {41}},
+            { .key = "key5", .value = {51}},
+            { .key = "key6", .value = {61}}
+        },
+        {}
+    );
+
+    buf = serialize(transaction1);
+    ptr = flatbuffers::GetRoot<nplex::msgs::Update>(buf.data());
+
+    REQUIRE_NOTHROW(cache->update(ptr));
+    CHECK(cache->m_rev == 1);
+
+    auto transaction2 = make_update(2, "ljohnson", 1234567895, 7,
+        {
+            { .key = "key3", .value = {32}},
+            { .key = "key4", .value = {42}},
+            { .key = "key7", .value = {72}},
+            { .key = "key8", .value = {82}}
+        },
+        { "key5", "key6" }
+    );
+
+    buf = serialize(transaction2);
+    ptr = flatbuffers::GetRoot<nplex::msgs::Update>(buf.data());
+
+    REQUIRE_NOTHROW(cache->update(ptr));
+    CHECK(cache->m_rev == 2);
+
+    return cache;
 }
 
 void basic_step_1(tx_ptr &tx)
@@ -80,7 +167,7 @@ TEST_CASE("transaction_test")
 
     SUBCASE("read_committed_basic")
     {
-        auto tx = tx_test_t::create(cache, transaction_t::isolation_e::READ_COMMITTED);
+        auto tx = make_tx_test(cache, transaction_t::isolation_e::READ_COMMITTED);
 
         CHECK(tx->isolation() == transaction_t::isolation_e::READ_COMMITTED);
 
@@ -133,7 +220,7 @@ TEST_CASE("transaction_test")
 
     SUBCASE("repeatable_reads_basic")
     {
-        auto tx = tx_test_t::create(cache, transaction_t::isolation_e::REPEATABLE_READS);
+        auto tx = make_tx_test(cache, transaction_t::isolation_e::REPEATABLE_READS);
 
         CHECK(tx->isolation() == transaction_t::isolation_e::REPEATABLE_READS);
 
@@ -185,7 +272,7 @@ TEST_CASE("transaction_test")
 
     SUBCASE("serializable_basic")
     {
-        auto tx = tx_test_t::create(cache, transaction_t::isolation_e::SERIALIZABLE);
+        auto tx = make_tx_test(cache, transaction_t::isolation_e::SERIALIZABLE);
 
         CHECK(tx->isolation() == transaction_t::isolation_e::SERIALIZABLE);
 
@@ -237,7 +324,7 @@ TEST_CASE("transaction_test")
 
     SUBCASE("read_upsert_remove_exceptions")
     {
-        auto tx = tx_test_t::create(cache, transaction_t::isolation_e::SERIALIZABLE, true);
+        auto tx = make_tx_test(cache, transaction_t::isolation_e::SERIALIZABLE, true);
 
         CHECK_THROWS_AS(tx->upsert("key1", "abc"), nplex_exception); // read-only exception
         CHECK_THROWS_AS(tx->remove("key1"), nplex_exception); // read-only exception
@@ -249,7 +336,7 @@ TEST_CASE("transaction_test")
 TEST_CASE("transaction_for_each")
 {
     cache_ptr cache = make_basic_cache();
-    auto tx = tx_test_t::create(cache, transaction_t::isolation_e::READ_COMMITTED);
+    auto tx = make_tx_test(cache, transaction_t::isolation_e::READ_COMMITTED);
 
     SUBCASE("iterate_all_only_cache")
     {
@@ -324,7 +411,7 @@ TEST_CASE("transaction_ensure")
 {
     cache_ptr cache = make_basic_cache();
     std::vector<nplex::change_t> changes;
-    auto tx = tx_test_t::create(cache, transaction_t::isolation_e::READ_COMMITTED);
+    auto tx = make_tx_test(cache, transaction_t::isolation_e::READ_COMMITTED);
 
     SUBCASE("ensure_all")
     {

@@ -1,4 +1,5 @@
 #include <set>
+#include <array>
 #include <mutex>
 #include <thread>
 #include <atomic>
@@ -9,6 +10,7 @@
 #include "cppcrc.h"
 #include "cqueue.hpp"
 #include "nplex-cpp/client.hpp"
+#include "transaction_impl.hpp"
 #include "messages.hpp"
 #include "mqueue.hpp"
 #include "cache.hpp"
@@ -27,10 +29,122 @@
 
 namespace {
 
+using namespace nplex;
+using namespace nplex::msgs;
+using namespace flatbuffers;
+
+flatbuffers::DetachedBuffer create_login_request(std::size_t cid, const std::string &user, const std::string &password)
+{
+    flatbuffers::FlatBufferBuilder builder;
+
+    auto msg = CreateMessage(builder, 
+        MsgContent::LOGIN_REQUEST, 
+        CreateLoginRequest(builder, 
+            cid, 
+            builder.CreateString(user), 
+            builder.CreateString(password)
+        ).Union()
+    );
+
+    builder.Finish(msg);
+    return builder.Release();
+}
+
+flatbuffers::DetachedBuffer create_load_request(std::size_t cid, LoadMode mode, rev_t rev)
+{
+    flatbuffers::FlatBufferBuilder builder;
+
+    auto msg = CreateMessage(builder, 
+        MsgContent::LOGIN_REQUEST, 
+        CreateLoadRequest(builder, 
+            cid, 
+            mode,
+            rev
+        ).Union()
+    );
+
+    builder.Finish(msg);
+    return builder.Release();
+}
+
+flatbuffers::DetachedBuffer create_submit_request(std::size_t cid, rev_t crev, const transaction_impl_t *tx, bool force)
+{
+    using action_e = transaction_impl_t::action_e;
+
+    flatbuffers::FlatBufferBuilder builder;
+    std::vector<flatbuffers::Offset<msgs::KeyValue>> upserts_v;
+    std::vector<flatbuffers::Offset<flatbuffers::String>> deletes_v;
+    std::vector<flatbuffers::Offset<msgs::Acl>> ensures_v;
+
+    for (const auto &item : tx->m_items)
+    {
+        switch (std::get<action_e>(item.second))
+        {
+            case action_e::DELETE:
+                deletes_v.push_back(builder.CreateString(item.first));
+                break;
+
+            case action_e::UPSERT:
+                upserts_v.push_back(
+                    CreateKeyValue(
+                        builder, 
+                        builder.CreateString(item.first), 
+                        builder.CreateVector(
+                            (uint8_t *) std::get<value_ptr>(item.second)->data().c_str(), 
+                            std::get<value_ptr>(item.second)->data().size()
+                        )
+                    )
+                );
+                break;
+
+            default:
+                break;
+        }
+    }
+
+    for (const auto &item : tx->m_ensures)
+    {
+        ensures_v.push_back(
+            CreateAcl(
+                builder, 
+                builder.CreateString(item.first), 
+                item.second
+            )
+        );
+    }
+
+    auto msg = CreateMessage(builder, 
+        MsgContent::SUBMIT_REQUEST, 
+        CreateSubmitRequest(builder, 
+            cid,
+            crev,
+            tx->m_type,
+            builder.CreateVector(upserts_v),
+            builder.CreateVector(deletes_v),
+            builder.CreateVector(ensures_v),
+            force
+        ).Union()
+    );
+
+    builder.Finish(msg);
+    return builder.Release();
+}
+
+} // unnamed namespace
+
+// =================================================================================================
+// client_t::impl_t declaration
+// =================================================================================================
+
+namespace nplex {
+
+using cache_ptr = std::shared_ptr<cache_t>;
+using tx_ptr = std::shared_ptr<transaction_t>;
+
 struct output_msg_t
 {
     uv_write_t req;
-    uv_buf_t buf[4];
+    std::array<uv_buf_t, 4> buf;
     flatbuffers::DetachedBuffer content;
     std::uint32_t metadata;     // 0=none, 1=lz4 (big-endian)
     std::uint32_t checksum;     // CRC32 of len + metadata + content (big-endian)
@@ -59,17 +173,6 @@ struct output_msg_t
     }
 };
 
-} // unnamed namespace
-
-// =================================================================================================
-// client_t::impl_t declaration
-// =================================================================================================
-
-namespace nplex {
-
-using cache_ptr = std::shared_ptr<cache_t>;
-using tx_ptr = std::shared_ptr<transaction_t>;
-
 struct connect_cmd_t {
     std::string server;      // host:port
 };
@@ -84,9 +187,7 @@ struct submit_cmd_t {
     bool force;
 };
 
-struct close_cmd_t {
-    bool close_immediate;
-};
+struct close_cmd_t {};
 
 struct ping_cmd_t {
     std::string payload;
@@ -96,15 +197,18 @@ using command_t = std::variant<connect_cmd_t, load_cmd_t, submit_cmd_t, close_cm
 
 struct client_impl_t
 {
+    client_t &parent;                               //!< Parent client.
     addr_t server_addr;                             //!< Server address.
     std::size_t correlation = 0;                    //!< Last correlation id.
-    std::mutex m_mutex;                             //!< Mutex to protect the client state.
     params_t params;                                //!< Client params.
+    std::mutex m_mutex;                             //!< Mutex to protect the client state.
     std::unique_ptr<uv_loop_t> loop;                //!< Event loop.
     std::unique_ptr<uv_async_t> async;              //!< Signals that there are input commands.
+    std::unique_ptr<uv_tcp_t> con;                  //!< Connection to the server.
+    char input_buffer[UINT16_MAX];                  //!< Input buffer.
     std::thread thread_loop;                        //!< Event loop thread, process input commands.
     mqueue<command_t> commands;                     //!< Commands pending to be digested by the event loop.
-    //gto::cqueue<std::unique_ptr<output_msg_t>> output_msgs;
+    gto::cqueue<std::unique_ptr<output_msg_t>> msgs;
     std::set<tx_ptr> ongoing_tx;                    //!< List of ongoing transactions (user working on it).
     gto::cqueue<tx_ptr> pending_tx;                 //!< List of pending transactions (awaiting server response).
     cache_ptr cache;                                //!< Database content.
@@ -112,9 +216,15 @@ struct client_impl_t
     bool can_force = false;                         //!< User can force transactions (given by server at login).
     std::string error;                              //!< Error message (empty if no error).
 
-    client_impl_t(const params_t &params);
+    client_impl_t(client_t &parent_, const params_t &params_);
     void run() noexcept;
+    void disconnect();
+    void send(flatbuffers::DetachedBuffer &&buf);
     void connect(const nplex::connect_cmd_t &cmd);
+    void load(const nplex::load_cmd_t &cmd);
+    void submit(const nplex::submit_cmd_t &cmd) { UNUSED(cmd); /*TODO*/ }
+    void close(const nplex::close_cmd_t &cmd);
+    void ping(const nplex::ping_cmd_t &cmd) { UNUSED(cmd); /*TODO*/ }
 };
 
 } // namespace nplex
@@ -128,9 +238,25 @@ static void cb_process_async(uv_async_t *handle)
     nplex::client_impl_t *impl = (nplex::client_impl_t *) handle->data;
     nplex::command_t cmd;
 
-    while (!impl->commands.try_pop(cmd))
+    while (impl->commands.try_pop(cmd))
     {
-        // TODO: process command
+        std::visit([impl, &cmd](auto&& arg)
+        {
+            using T = std::decay_t<decltype(arg)>;
+
+            if constexpr (std::is_same_v<T, nplex::connect_cmd_t>)
+                impl->connect(get<T>(cmd));
+            else if constexpr (std::is_same_v<T, nplex::load_cmd_t>)
+                impl->load(get<T>(cmd));
+            else if constexpr (std::is_same_v<T, nplex::submit_cmd_t>)
+                impl->submit(get<T>(cmd));
+            else if constexpr (std::is_same_v<T, nplex::close_cmd_t>)
+                impl->close(get<T>(cmd));
+            else if constexpr (std::is_same_v<T, nplex::ping_cmd_t>)
+                impl->ping(get<T>(cmd));
+            else
+                static_assert(false, "non-exhaustive visitor!");
+        }, cmd);
     }
 }
 
@@ -143,17 +269,135 @@ static void cb_close_handle(uv_handle_t *handle, void *arg)
 
     switch(handle->type)
     {
+        case UV_TCP:
         case UV_ASYNC:
             uv_close(handle, NULL);
             break;
-        case UV_TIMER:
-            uv_close(handle, (uv_close_cb) free);
-            break;
-        case UV_TCP:
-            uv_close(handle, (uv_close_cb) free);
-            break;
         default:
-            uv_close(handle, NULL);
+            uv_close(handle, (uv_close_cb) free);
+    }
+}
+
+static void cb_on_tcp_alloc(uv_handle_t *handle, size_t suggested_size, uv_buf_t *buf)
+{
+    UNUSED(suggested_size);
+    uv_tcp_t *con = (uv_tcp_t *) handle;
+    nplex::client_impl_t *impl = (nplex::client_impl_t *) con->loop->data;
+
+    buf->base = impl->input_buffer;
+    buf->len = sizeof(impl->input_buffer);
+}
+
+static void cb_on_tcp_read(uv_stream_t *stream, ssize_t nread, const uv_buf_t *buf)
+{
+    UNUSED(stream);
+    UNUSED(nread);
+    UNUSED(buf);
+
+    uv_tcp_t *con = (uv_tcp_t *) stream;
+    nplex::client_impl_t *impl = (nplex::client_impl_t *) con->loop->data;
+    char *ptr = buf->base;
+    size_t len = buf->len;
+
+    if (nread < 0 || buf->base == NULL) {
+        impl->error = fmt::format("Tcp read error: {}", uv_strerror(nread));
+        impl->close(nplex::close_cmd_t{});
+        return;
+    }
+
+    // if (nread == UV_EOF) {
+    //     rft_close_connection(con);
+    //     return;
+    // }
+
+    // if (con->input_msg_data == NULL) {
+    //     con->input_msg_data = malloc(MIN_MSG_SIZE);
+    //     con->input_msg_reserved = MIN_MSG_SIZE;
+    // }
+
+    // while (len > 0)
+    // {
+    //     assert(con->input_msg_data && con->input_msg_reserved);
+    //     assert(con->input_msg_pos <= con->input_msg_reserved);
+    //     assert(con->input_msg_len <= con->input_msg_pos);
+    //     assert(con->input_msg_len <= con->input_msg_reserved);
+
+    //     // msg data is preceded by its length (4-bytes in network format).
+    //     // msg data can be split into multiple on_tcp_read() calls.
+    //     // msg length can be split between two consecutive on_tcp_read() calls.
+
+    //     if (con->input_msg_len == 0)
+    //     {
+    //         assert(con->input_msg_pos < sizeof(uint32_t));
+
+    //         size_t aux = MIN(sizeof(uint32_t) - con->input_msg_pos, len);
+    //         memcpy(con->input_msg_data + con->input_msg_pos, ptr, aux);
+    //         con->input_msg_pos += aux;
+    //         ptr += aux;
+    //         len -= aux;
+
+    //         if (con->input_msg_pos < sizeof(uint32_t))
+    //             return;
+
+    //         uint32_t num = 0;
+    //         memcpy(&num, con->input_msg_data, sizeof(uint32_t));
+
+    //         con->input_msg_len = ntohl(num);
+    //         con->input_msg_pos = 0;
+
+    //         if (con->input_msg_len == 0) {
+    //             LOG(RAFT_LOG_WARNING, "Received empty message, remote=%s", con->address);
+    //             rft_close_connection(con);
+    //             return;
+    //         }
+
+    //         if (con->input_msg_len > params->max_msg_size) {
+    //             LOG(RAFT_LOG_WARNING, "Received message exceeding max size (%d), remote=%s", 
+    //                     (int) params->max_msg_size, con->address);
+    //             rft_close_connection(con);
+    //             con->input_msg_len = 0;
+    //             return;
+    //         }
+
+    //         if (con->input_msg_len > con->input_msg_reserved) {
+    //             free(con->input_msg_data);
+    //             con->input_msg_data = malloc(con->input_msg_len);
+    //             con->input_msg_reserved = con->input_msg_len;
+    //         }
+    //     }
+
+    //     assert(con->input_msg_pos < con->input_msg_len);
+
+    //     size_t aux = MIN(con->input_msg_len - con->input_msg_pos, len);
+    //     memcpy(con->input_msg_data + con->input_msg_pos, ptr, aux);
+    //     con->input_msg_pos += aux;
+    //     ptr += aux;
+    //     len -= aux;
+
+    //     assert(con->input_msg_pos <= con->input_msg_len);
+
+    //     if (con->input_msg_pos == con->input_msg_len)
+    //     {
+    //         process_input_message(con);
+    //         con->input_msg_len = 0;
+    //         con->input_msg_pos = 0;
+    //     }
+    // }
+}
+
+static void cb_on_tcp_write(uv_write_t *req, int status)
+{
+    output_msg_t *msg = (output_msg_t *) req;
+    uv_tcp_t *con = (uv_tcp_t *) req->handle;
+    nplex::client_impl_t *impl = (nplex::client_impl_t *) con->loop->data;
+
+    // assert(XXX);
+    // // TODO: pop message
+    // output_queue_release(con, tcp_msg);
+
+    if (status < 0) {
+        impl->error = fmt::format("Failed to write to {}: {}", impl->server_addr.str(), uv_strerror(status));
+        impl->disconnect();
     }
 }
 
@@ -166,39 +410,41 @@ static void cb_on_tcp_connect(uv_connect_t *req, int status)
 
     if (status < 0) {
         std::string msg = fmt::format("Failed to connect to {}: {}", impl->server_addr.str(), uv_strerror(status));
-        //TODO: call client_t::on_disconnect()
+        impl->close(nplex::close_cmd_t{});
         return;
     }
 
-    // TODO
-    // uv_read_start((uv_stream_t *) con, cb_on_tcp_alloc, cb_on_tcp_read);
+    uv_read_start((uv_stream_t *) con, cb_on_tcp_alloc, cb_on_tcp_read);
 
-    // impl->state = nplex::client_t::state_e::LOGGING_IN;
+    impl->state = nplex::client_t::state_e::LOGGING_IN;
 
-
-    // // send login message
-    // rft_tcp_msg_t *msg = con->output_queue_front;
-
-    // while (msg)
-    // {
-    //     uv_write((uv_write_t *) msg, (uv_stream_t *) con, msg->buf, 2, on_tcp_write);
-    //     msg = msg->next;
-    // }
+    impl->send(
+        create_login_request(
+            impl->correlation++, 
+            impl->params.user, 
+            impl->params.password
+        )
+    );
 }
 
 // =================================================================================================
 // impl_t methods
 // =================================================================================================
 
-nplex::client_impl_t::client_impl_t(const params_t &params_) : params(params_), commands(params.max_num_queued_commands)
+nplex::client_impl_t::client_impl_t(client_t &parent_, const params_t &params_) : 
+    parent(parent_),
+    params(params_), 
+    input_buffer{0},
+    commands(params.max_num_queued_commands),
+    state{client_t::state_e::INITIALIZING}
 {
-    state = client_t::state_e::INITIALIZING;
-
-    loop = std::make_unique<uv_loop_t>();
-    async = std::make_unique<uv_async_t>();
-
     if (params.servers.empty())
         throw nplex_exception("Invalid params: no servers");
+
+    cache = std::make_shared<cache_t>();
+    async = std::make_unique<uv_async_t>();
+    loop = std::make_unique<uv_loop_t>();
+    con = std::make_unique<uv_tcp_t>();
 }
 
 void nplex::client_impl_t::run() noexcept
@@ -231,7 +477,7 @@ void nplex::client_impl_t::run() noexcept
     catch (const std::exception &e) {
         error = e.what();
     }
-    catch(...) {
+    catch (...) {
         error = "Unknown error in the event loop";
     }
 
@@ -239,6 +485,8 @@ void nplex::client_impl_t::run() noexcept
     uv_walk(loop.get(), cb_close_handle, NULL);
     while (uv_run(loop.get(), UV_RUN_NOWAIT));
     uv_loop_close(loop.get());
+
+    parent.on_close();
 
     return;
 }
@@ -297,27 +545,78 @@ void nplex::client_impl_t::connect(const nplex::connect_cmd_t &cmd)
             throw nplex_exception(fmt::format("Unrecognized address family: {}", server_addr.str()));
     }
 
-    uv_tcp_t *socket = NULL;
     uv_connect_t* connect = NULL;
 
-    if ((socket = (uv_tcp_t *) calloc(1, sizeof(uv_tcp_t))) == NULL)
-        throw std::bad_alloc();
-
-    if ((rc = uv_tcp_init(loop.get(), (uv_tcp_t *) socket)) != 0) {
-        free(socket);
+    if ((rc = uv_tcp_init(loop.get(), con.get())) != 0)
         throw nplex_exception(uv_strerror(rc));
-    }
 
-    if ((connect = (uv_connect_t*) malloc(sizeof(uv_connect_t))) == NULL) {
-        free(socket);
+    if ((connect = (uv_connect_t*) malloc(sizeof(uv_connect_t))) == NULL)
         throw std::bad_alloc();
-    }
 
-    if ((rc = uv_tcp_connect(connect, socket, (const struct sockaddr*) &addr_in, cb_on_tcp_connect)) != 0) {
-        free(socket);
+    if ((rc = uv_tcp_connect(connect, con.get(), (const struct sockaddr*) &addr_in, cb_on_tcp_connect)) != 0) {
         free(connect);
         throw nplex_exception(uv_strerror(rc));
     }
+}
+
+void nplex::client_impl_t::disconnect()
+{
+    switch (state)
+    {
+        case client_t::state_e::LOGGING_IN:
+        case client_t::state_e::SYNCHRONIZING:
+        case client_t::state_e::SYNCED:
+            state = client_t::state_e::DISCONNECTING;
+            uv_close((uv_handle_t *) con.get(), NULL);
+            break;
+        default:
+            break;
+    }
+}
+
+void nplex::client_impl_t::close(const close_cmd_t &cmd)
+{
+    UNUSED(cmd);
+
+    switch (state)
+    {
+        case client_t::state_e::INITIALIZING:
+            state = client_t::state_e::CLOSED;
+            return;
+
+        case client_t::state_e::CLOSING:
+        case client_t::state_e::CLOSED:
+            return;
+
+        default:
+            state = client_t::state_e::CLOSING;
+            commands.clear();
+            disconnect();
+            break;
+    }
+
+    uv_stop(loop.get());
+}
+
+void nplex::client_impl_t::send(flatbuffers::DetachedBuffer &&buf)
+{
+    output_msg_t msg(std::move(buf));
+
+    // TODO: add msg to msg_queue
+    // rft_tcp_msg_t *msg = con->output_queue_front;
+
+    uv_write(&msg.req, (uv_stream_t *) con.get(), msg.buf.data(), msg.buf.size(), cb_on_tcp_write);
+}
+
+void nplex::client_impl_t::load(const nplex::load_cmd_t &cmd)
+{
+    send(
+        create_load_request(
+            correlation++, 
+            cmd.load_mode, 
+            cmd.rev
+        )
+    );
 }
 
 // =================================================================================================
@@ -326,10 +625,10 @@ void nplex::client_impl_t::connect(const nplex::connect_cmd_t &cmd)
 
 nplex::client_t::client_t(const params_t &params)
 {
-    m_impl = std::make_unique<client_impl_t>(params);
+    m_impl = std::make_unique<client_impl_t>(*this, params);
 
-    m_impl->thread_loop = std::thread([impl = m_impl.get()]() {
-        impl->run();
+    m_impl->thread_loop = std::thread([this]() {
+        m_impl->run();
     });
 }
 
@@ -344,7 +643,7 @@ nplex::rev_t nplex::client_t::rev() const
     return m_impl->cache->m_rev;
 }
 
-void nplex::client_t::close(bool immediate)
+void nplex::client_t::close()
 {
     std::lock_guard<decltype(m_impl->m_mutex)> lock(m_impl->m_mutex);
 
@@ -362,9 +661,8 @@ void nplex::client_t::close(bool immediate)
 
         default:
             m_impl->state = state_e::CLOSING;
-            if (immediate)
-                m_impl->commands.clear();
-            m_impl->commands.push(close_cmd_t{immediate});
+            m_impl->commands.clear();
+            m_impl->commands.push(close_cmd_t{});
             uv_async_send(m_impl->async.get());
             break;
     }
@@ -383,7 +681,7 @@ nplex::tx_ptr nplex::client_t::create_tx(transaction_t::isolation_e isolation, b
     if (num_concurrent_tx >= m_impl->params.max_num_concurrent_tx)
         throw nplex_exception("Too many concurrent transactions (max={})", m_impl->params.max_num_concurrent_tx);
 
-    auto tx = transaction_t::create(m_impl->cache, isolation, read_only);
+    auto tx = make_transaction(m_impl->cache, isolation, read_only);
 
     m_impl->ongoing_tx.insert(tx);
 
@@ -400,18 +698,18 @@ bool nplex::client_t::submit_tx(tx_ptr tx, bool force)
 
     std::lock_guard<decltype(m_impl->m_mutex)> lock(m_impl->m_mutex);
 
-    if (m_impl->state == state_e::CLOSED || m_impl->state == state_e::CLOSING)
-        throw nplex_exception("Client is closed");
+    if (m_impl->state != state_e::SYNCED)
+        throw nplex_exception("Client not synced");
 
     auto it = m_impl->ongoing_tx.find(tx);
     if (it == m_impl->ongoing_tx.end())
         throw nplex_exception("Transaction not found");
 
-    m_impl->commands.push(submit_cmd_t{tx, force});
+    if (m_impl->commands.push(submit_cmd_t{tx, force}) == 1)
+        uv_async_send(m_impl->async.get());
 
-    tx->state(transaction_t::state_e::SUBMITTING);
-
-    uv_async_send(m_impl->async.get());
+    // TODO: solve visibility error
+    //tx->state(transaction_t::state_e::SUBMITTING);
 
     return true;
 }

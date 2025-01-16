@@ -20,7 +20,7 @@ TEST_CASE("nplex_exception")
         try {
             function_throwing_exception();
             CHECK(false);
-        } catch(const std::exception &e) {
+        } catch (const std::exception &e) {
             CHECK(e.what() == string("error in line 25."));
         }
     }

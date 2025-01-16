@@ -9,12 +9,13 @@
 
 namespace nplex {
 
-// Forward declaration
-struct cache_t;
-
 /**
  * Database access can only be done through a transaction, which allows you to operate
  * according to an isolation level.
+ * 
+ * Transactions can only be created by the client.
+ * 
+ * @see client_t::create_tx().
  * 
  * Isolation levels:
  *
@@ -57,10 +58,10 @@ class transaction_t
         SUBMITTING,                             //!< Transaction is being submitted to the server.
         SUBMITTED,                              //!< Transaction was submitted to the server.
         ACCEPTED,                               //!< Transaction was accepted by the server (pending to receive the commit).
-        COMMITTED,                              //!< Transaction was committed.
         REJECTED,                               //!< Transaction was rejected by the server (commit was rejected).
+        COMMITTED,                              //!< Transaction was committed.
         DISCARDED,                              //!< Transaction was discarded by the user.
-        ABORTED                                 //!< Transaction was discarded by the server (ex. server disconnected).
+        ABORTED                                 //!< Transaction was aborted (ex. server disconnected).
     };
 
     enum class isolation_e : std::uint8_t {
@@ -69,14 +70,10 @@ class transaction_t
         SERIALIZABLE                            //!< All read data will not change during the transaction.
     };
 
-    using cache_ptr = std::shared_ptr<cache_t>;
     using callback_t = std::function<bool(const gto::cstring &key, const value_t &value)>;
-    friend struct transaction_impl_t;
-    friend struct client_t;
 
   private:
 
-    transaction_t() = default;
     // non-copyable class
     transaction_t(const transaction_t&) = delete;
     transaction_t& operator=(const transaction_t&) = delete;
@@ -85,6 +82,8 @@ class transaction_t
     transaction_t& operator=(transaction_t&&) = delete;
 
   protected:
+
+    transaction_t() = default;
 
     /**
      * Updates the current transaction with the changes from a commit.
@@ -101,19 +100,6 @@ class transaction_t
     void state(state_e state);
 
   public:
-
-    /**
-     * Create a new transaction.
-     * 
-     * @param[in] cache The database to use.
-     * @param[in] isolation The isolation level to use.
-     * @param[in] read_only If true, the transaction is read-only.
-     * 
-     * @return A pointer to the new transaction.
-     * 
-     * @exception std::invalid_argument Thrown if data is invalid.
-     */
-    static std::shared_ptr<transaction_t> create(cache_ptr cache, isolation_e isolation, bool read_only = false);
 
     isolation_e isolation() const;
     bool read_only() const;

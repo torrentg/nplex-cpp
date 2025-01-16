@@ -1483,6 +1483,7 @@ struct SubmitRequestT : public ::flatbuffers::NativeTable {
   std::vector<std::unique_ptr<nplex::msgs::KeyValueT>> upserts{};
   std::vector<std::string> deletes{};
   std::vector<std::unique_ptr<nplex::msgs::AclT>> ensures{};
+  bool force = false;
   SubmitRequestT() = default;
   SubmitRequestT(const SubmitRequestT &o);
   SubmitRequestT(SubmitRequestT&&) FLATBUFFERS_NOEXCEPT = default;
@@ -1499,7 +1500,8 @@ struct SubmitRequest FLATBUFFERS_FINAL_CLASS : private ::flatbuffers::Table {
     VT_TYPE = 8,
     VT_UPSERTS = 10,
     VT_DELETES = 12,
-    VT_ENSURES = 14
+    VT_ENSURES = 14,
+    VT_FORCE = 16
   };
   uint64_t cid() const {
     return GetField<uint64_t>(VT_CID, 0);
@@ -1519,6 +1521,9 @@ struct SubmitRequest FLATBUFFERS_FINAL_CLASS : private ::flatbuffers::Table {
   const ::flatbuffers::Vector<::flatbuffers::Offset<nplex::msgs::Acl>> *ensures() const {
     return GetPointer<const ::flatbuffers::Vector<::flatbuffers::Offset<nplex::msgs::Acl>> *>(VT_ENSURES);
   }
+  bool force() const {
+    return GetField<uint8_t>(VT_FORCE, 0) != 0;
+  }
   bool Verify(::flatbuffers::Verifier &verifier) const {
     return VerifyTableStart(verifier) &&
            VerifyField<uint64_t>(verifier, VT_CID, 8) &&
@@ -1533,6 +1538,7 @@ struct SubmitRequest FLATBUFFERS_FINAL_CLASS : private ::flatbuffers::Table {
            VerifyOffset(verifier, VT_ENSURES) &&
            verifier.VerifyVector(ensures()) &&
            verifier.VerifyVectorOfTables(ensures()) &&
+           VerifyField<uint8_t>(verifier, VT_FORCE, 1) &&
            verifier.EndTable();
   }
   SubmitRequestT *UnPack(const ::flatbuffers::resolver_function_t *_resolver = nullptr) const;
@@ -1562,6 +1568,9 @@ struct SubmitRequestBuilder {
   void add_ensures(::flatbuffers::Offset<::flatbuffers::Vector<::flatbuffers::Offset<nplex::msgs::Acl>>> ensures) {
     fbb_.AddOffset(SubmitRequest::VT_ENSURES, ensures);
   }
+  void add_force(bool force) {
+    fbb_.AddElement<uint8_t>(SubmitRequest::VT_FORCE, static_cast<uint8_t>(force), 0);
+  }
   explicit SubmitRequestBuilder(::flatbuffers::FlatBufferBuilder &_fbb)
         : fbb_(_fbb) {
     start_ = fbb_.StartTable();
@@ -1580,7 +1589,8 @@ inline ::flatbuffers::Offset<SubmitRequest> CreateSubmitRequest(
     uint32_t type = 0,
     ::flatbuffers::Offset<::flatbuffers::Vector<::flatbuffers::Offset<nplex::msgs::KeyValue>>> upserts = 0,
     ::flatbuffers::Offset<::flatbuffers::Vector<::flatbuffers::Offset<::flatbuffers::String>>> deletes = 0,
-    ::flatbuffers::Offset<::flatbuffers::Vector<::flatbuffers::Offset<nplex::msgs::Acl>>> ensures = 0) {
+    ::flatbuffers::Offset<::flatbuffers::Vector<::flatbuffers::Offset<nplex::msgs::Acl>>> ensures = 0,
+    bool force = false) {
   SubmitRequestBuilder builder_(_fbb);
   builder_.add_crev(crev);
   builder_.add_cid(cid);
@@ -1588,6 +1598,7 @@ inline ::flatbuffers::Offset<SubmitRequest> CreateSubmitRequest(
   builder_.add_deletes(deletes);
   builder_.add_upserts(upserts);
   builder_.add_type(type);
+  builder_.add_force(force);
   return builder_.Finish();
 }
 
@@ -1603,7 +1614,8 @@ inline ::flatbuffers::Offset<SubmitRequest> CreateSubmitRequestDirect(
     uint32_t type = 0,
     const std::vector<::flatbuffers::Offset<nplex::msgs::KeyValue>> *upserts = nullptr,
     const std::vector<::flatbuffers::Offset<::flatbuffers::String>> *deletes = nullptr,
-    const std::vector<::flatbuffers::Offset<nplex::msgs::Acl>> *ensures = nullptr) {
+    const std::vector<::flatbuffers::Offset<nplex::msgs::Acl>> *ensures = nullptr,
+    bool force = false) {
   auto upserts__ = upserts ? _fbb.CreateVector<::flatbuffers::Offset<nplex::msgs::KeyValue>>(*upserts) : 0;
   auto deletes__ = deletes ? _fbb.CreateVector<::flatbuffers::Offset<::flatbuffers::String>>(*deletes) : 0;
   auto ensures__ = ensures ? _fbb.CreateVector<::flatbuffers::Offset<nplex::msgs::Acl>>(*ensures) : 0;
@@ -1614,7 +1626,8 @@ inline ::flatbuffers::Offset<SubmitRequest> CreateSubmitRequestDirect(
       type,
       upserts__,
       deletes__,
-      ensures__);
+      ensures__,
+      force);
 }
 
 ::flatbuffers::Offset<SubmitRequest> CreateSubmitRequest(::flatbuffers::FlatBufferBuilder &_fbb, const SubmitRequestT *_o, const ::flatbuffers::rehasher_function_t *_rehasher = nullptr);
@@ -2349,7 +2362,8 @@ inline SubmitRequestT::SubmitRequestT(const SubmitRequestT &o)
       : cid(o.cid),
         crev(o.crev),
         type(o.type),
-        deletes(o.deletes) {
+        deletes(o.deletes),
+        force(o.force) {
   upserts.reserve(o.upserts.size());
   for (const auto &upserts_ : o.upserts) { upserts.emplace_back((upserts_) ? new nplex::msgs::KeyValueT(*upserts_) : nullptr); }
   ensures.reserve(o.ensures.size());
@@ -2363,6 +2377,7 @@ inline SubmitRequestT &SubmitRequestT::operator=(SubmitRequestT o) FLATBUFFERS_N
   std::swap(upserts, o.upserts);
   std::swap(deletes, o.deletes);
   std::swap(ensures, o.ensures);
+  std::swap(force, o.force);
   return *this;
 }
 
@@ -2381,6 +2396,7 @@ inline void SubmitRequest::UnPackTo(SubmitRequestT *_o, const ::flatbuffers::res
   { auto _e = upserts(); if (_e) { _o->upserts.resize(_e->size()); for (::flatbuffers::uoffset_t _i = 0; _i < _e->size(); _i++) { if(_o->upserts[_i]) { _e->Get(_i)->UnPackTo(_o->upserts[_i].get(), _resolver); } else { _o->upserts[_i] = std::unique_ptr<nplex::msgs::KeyValueT>(_e->Get(_i)->UnPack(_resolver)); }; } } else { _o->upserts.resize(0); } }
   { auto _e = deletes(); if (_e) { _o->deletes.resize(_e->size()); for (::flatbuffers::uoffset_t _i = 0; _i < _e->size(); _i++) { _o->deletes[_i] = _e->Get(_i)->str(); } } else { _o->deletes.resize(0); } }
   { auto _e = ensures(); if (_e) { _o->ensures.resize(_e->size()); for (::flatbuffers::uoffset_t _i = 0; _i < _e->size(); _i++) { if(_o->ensures[_i]) { _e->Get(_i)->UnPackTo(_o->ensures[_i].get(), _resolver); } else { _o->ensures[_i] = std::unique_ptr<nplex::msgs::AclT>(_e->Get(_i)->UnPack(_resolver)); }; } } else { _o->ensures.resize(0); } }
+  { auto _e = force(); _o->force = _e; }
 }
 
 inline ::flatbuffers::Offset<SubmitRequest> SubmitRequest::Pack(::flatbuffers::FlatBufferBuilder &_fbb, const SubmitRequestT* _o, const ::flatbuffers::rehasher_function_t *_rehasher) {
@@ -2397,6 +2413,7 @@ inline ::flatbuffers::Offset<SubmitRequest> CreateSubmitRequest(::flatbuffers::F
   auto _upserts = _o->upserts.size() ? _fbb.CreateVector<::flatbuffers::Offset<nplex::msgs::KeyValue>> (_o->upserts.size(), [](size_t i, _VectorArgs *__va) { return CreateKeyValue(*__va->__fbb, __va->__o->upserts[i].get(), __va->__rehasher); }, &_va ) : 0;
   auto _deletes = _o->deletes.size() ? _fbb.CreateVectorOfStrings(_o->deletes) : 0;
   auto _ensures = _o->ensures.size() ? _fbb.CreateVector<::flatbuffers::Offset<nplex::msgs::Acl>> (_o->ensures.size(), [](size_t i, _VectorArgs *__va) { return CreateAcl(*__va->__fbb, __va->__o->ensures[i].get(), __va->__rehasher); }, &_va ) : 0;
+  auto _force = _o->force;
   return nplex::msgs::CreateSubmitRequest(
       _fbb,
       _cid,
@@ -2404,7 +2421,8 @@ inline ::flatbuffers::Offset<SubmitRequest> CreateSubmitRequest(::flatbuffers::F
       _type,
       _upserts,
       _deletes,
-      _ensures);
+      _ensures,
+      _force);
 }
 
 inline SubmitResponseT *SubmitResponse::UnPack(const ::flatbuffers::resolver_function_t *_resolver) const {

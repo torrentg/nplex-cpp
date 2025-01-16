@@ -66,6 +66,7 @@ class client_t
         LOGGING_IN,                             //!< Logging in to the server.
         SYNCHRONIZING,                          //!< Initializing the cache.
         SYNCED,                                 //!< Client is synced with the server.
+        DISCONNECTING,                          //!< Client is disconnecting.
         DISCONNECTED,                           //!< Client is disconnected.
         RECONNECTING,                           //!< Reconnecting to the server.
         CLOSING,                                //!< Client is closing.
@@ -80,6 +81,7 @@ class client_t
 
     using tx_ptr = std::shared_ptr<transaction_t>;
     using load_cmd_t = std::pair<load_mode_e, rev_t>;
+    friend client_impl_t;
 
     /**
      * Client constructor.
@@ -95,7 +97,7 @@ class client_t
      * @exception nplex_exception Thrown if the parameters are invalid.
      */
     client_t(const params_t &params);
-    ~client_t() { close(true); }
+    virtual ~client_t() { close(); }
 
     /**
      * Returns current client state.
@@ -141,7 +143,7 @@ class client_t
      *         false otherwise (ex. dirty, read-only, no-alter).
      * 
      * @exception std::invalid_argument Transaction is empty (null).
-     * @exception nplex_exception client-closed, tx-not-found, tx-not-open.
+     * @exception nplex_exception client-not-synced, tx-not-found, tx-not-open, max-queued-commands.
      */
     bool submit_tx(tx_ptr tx, bool force = false);
 
@@ -164,15 +166,13 @@ class client_t
      * Sends a delayed command to disconnect the client.
      * 
      * Close the event loop and the client becomes invalid.
+     * All pending commands and pending responses are discarded.
      * This is a blocking command, it waits for the event loop to finish.
      * 
      * @triggers on_disconnected().
      * @triggers on_closed().
-     * 
-     * @param[in] immediate If true, all pending commands and pending responses are discarded, 
-     *                      otherwise process pending commands and responses and disconnects.
      */
-    void close(bool immediate = false);
+    void close();
 
   protected:
 
@@ -232,7 +232,8 @@ class client_t
      * @param[in] server Server identifier (host:port).
      * @param[in] cause Disconnection cause.
      * 
-     * @return true if the client should try to reconnect, false the client is closed.
+     * @return true if the client should try to reconnect, 
+     *         false if the client should close.
      */
     virtual bool on_disconnect([[maybe_unused]] const char *server, [[maybe_unused]] const char *cause) {
         return true;
@@ -241,10 +242,10 @@ class client_t
     /**
      * Callback function that is called when the client is closed.
      * 
-     * This function handles the event when the client is closed, performing necessary cleanup.
      * After this function is called, the client is no longer valid.
      * 
-     * This function is executed in the event loop thread.
+     * This function is executed in the event loop thread. At this stage, 
+     * you can block it if required (write to disk, etc).
      */
     virtual void on_close() {}
 

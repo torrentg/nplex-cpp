@@ -310,6 +310,91 @@ TEST_CASE("SubmitRequest")
     }
 }
 
+TEST_CASE("SubmitRequest-hard")
+{
+    flatbuffers::FlatBufferBuilder builder;
+    const char data1[] = {1, 2, 3};
+    const char data2[] = {4, 5, 6};
+
+    // create vector of upserts
+    std::vector<flatbuffers::Offset<msgs::KeyValue>> upserts_v;
+    upserts_v.push_back(
+        CreateKeyValue(
+            builder, 
+            builder.CreateString("key1"), 
+            builder.CreateVector((uint8_t *) data1, sizeof(data1))
+        )
+    );
+    upserts_v.push_back(
+        CreateKeyValue(
+            builder, 
+            builder.CreateString("key2"), 
+            builder.CreateVector((uint8_t *) data2, sizeof(data2))
+        )
+    );
+    auto upserts = builder.CreateVector(upserts_v);
+
+    // create vector of deletes
+    std::vector<flatbuffers::Offset<flatbuffers::String>> deletes_v;
+    deletes_v.push_back(builder.CreateString("key3"));
+    deletes_v.push_back(builder.CreateString("key4"));
+    auto deletes = builder.CreateVector(deletes_v);
+
+    // create vector of ensures
+    std::vector<flatbuffers::Offset<msgs::Acl>> ensures_v;
+    ensures_v.push_back(
+        CreateAcl(
+            builder, 
+            builder.CreateString("/devices/*"), 
+            1
+        )
+    );
+    ensures_v.push_back(
+        CreateAcl(
+            builder, 
+            builder.CreateString("/user/**"), 
+            7
+        )
+    );
+    auto ensures = builder.CreateVector(ensures_v);
+
+    auto msg = CreateMessage(builder, 
+        MsgContent::SUBMIT_REQUEST, 
+        CreateSubmitRequest(builder, 
+            4,          // cid
+            2048,       // crev
+            1,          // type
+            upserts,
+            deletes,
+            ensures,
+            true
+        ).Union()
+    );
+
+    builder.Finish(msg);
+    auto buf = builder.Release();
+
+    auto verifier = flatbuffers::Verifier(buf.data(), buf.size());
+    CHECK(verifier.VerifyBuffer<Message>(nullptr));
+
+    auto *ptr = ::GetRoot<nplex::msgs::Message>(buf.data());
+    REQUIRE(ptr);
+    CHECK(ptr->content_type() == MsgContent::SUBMIT_REQUEST);
+
+    auto *submit = ptr->content_as_SUBMIT_REQUEST();
+    REQUIRE(submit);
+    CHECK(submit->cid() == 4);
+    CHECK(submit->crev() == 2048);
+    CHECK(submit->type() == 1);
+    REQUIRE(submit->upserts());
+    CHECK(submit->upserts()->size() == 2);
+    REQUIRE(submit->deletes());
+    CHECK(submit->deletes()->size() == 2);
+    REQUIRE(submit->ensures());
+    CHECK(submit->ensures()->size() == 2);
+    CHECK(submit->force());
+}
+
 TEST_CASE("SubmitResponse")
 {
     SubmitResponseT resp = {

@@ -11,9 +11,9 @@
 * utility class to read config from file (optional)
 * submit_tx_fut returns a future (attached to tx.promise)
 * extends key_t from cstring_t adding validation (length, double-, ending/, utf8) on construct, key_part, key_preffix, key_suffix, etc.
-* manage client_impl_t::async correctly
+* create files client_impl.?pp
 
 ## Useful commands
 
 * cloc --exclude-content="automatically generated" src test
-* cppcheck --enable=all --inconclusive --std=c++17 --force --suppress=missingIncludeSystem --suppress=unusedFunction -Ideps -Isrc src &> removeme.txt
+* cppcheck --enable=all --inconclusive --std=c++20 --force --suppress=missingIncludeSystem --suppress=unusedFunction --suppress=useInitializationList --suppress=noExplicitConstructor -Ideps -Isrc -Iinclude src &> removeme.txt
