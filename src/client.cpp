@@ -67,69 +67,6 @@ flatbuffers::DetachedBuffer create_load_request(std::size_t cid, LoadMode mode, 
     return builder.Release();
 }
 
-flatbuffers::DetachedBuffer create_submit_request(std::size_t cid, rev_t crev, const transaction_impl_t *tx, bool force)
-{
-    using action_e = transaction_impl_t::action_e;
-
-    flatbuffers::FlatBufferBuilder builder;
-    std::vector<flatbuffers::Offset<msgs::KeyValue>> upserts_v;
-    std::vector<flatbuffers::Offset<flatbuffers::String>> deletes_v;
-    std::vector<flatbuffers::Offset<msgs::Acl>> ensures_v;
-
-    for (const auto &item : tx->m_items)
-    {
-        switch (std::get<action_e>(item.second))
-        {
-            case action_e::DELETE:
-                deletes_v.push_back(builder.CreateString(item.first));
-                break;
-
-            case action_e::UPSERT:
-                upserts_v.push_back(
-                    CreateKeyValue(
-                        builder, 
-                        builder.CreateString(item.first), 
-                        builder.CreateVector(
-                            (uint8_t *) std::get<value_ptr>(item.second)->data().c_str(), 
-                            std::get<value_ptr>(item.second)->data().size()
-                        )
-                    )
-                );
-                break;
-
-            default:
-                break;
-        }
-    }
-
-    for (const auto &item : tx->m_ensures)
-    {
-        ensures_v.push_back(
-            CreateAcl(
-                builder, 
-                builder.CreateString(item.first), 
-                item.second
-            )
-        );
-    }
-
-    auto msg = CreateMessage(builder, 
-        MsgContent::SUBMIT_REQUEST, 
-        CreateSubmitRequest(builder, 
-            cid,
-            crev,
-            tx->m_type,
-            builder.CreateVector(upserts_v),
-            builder.CreateVector(deletes_v),
-            builder.CreateVector(ensures_v),
-            force
-        ).Union()
-    );
-
-    builder.Finish(msg);
-    return builder.Release();
-}
-
 } // unnamed namespace
 
 // =================================================================================================
@@ -681,7 +618,7 @@ nplex::tx_ptr nplex::client_t::create_tx(transaction_t::isolation_e isolation, b
     if (num_concurrent_tx >= m_impl->params.max_num_concurrent_tx)
         throw nplex_exception("Too many concurrent transactions (max={})", m_impl->params.max_num_concurrent_tx);
 
-    auto tx = make_transaction(m_impl->cache, isolation, read_only);
+    auto tx = std::make_shared<transaction_impl_t>(m_impl->cache, isolation, read_only);
 
     m_impl->ongoing_tx.insert(tx);
 
@@ -704,6 +641,8 @@ bool nplex::client_t::submit_tx(tx_ptr tx, bool force)
     auto it = m_impl->ongoing_tx.find(tx);
     if (it == m_impl->ongoing_tx.end())
         throw nplex_exception("Transaction not found");
+
+    // TODO: check if there are actions to submit (not-only-reads)
 
     if (m_impl->commands.push(submit_cmd_t{tx, force}) == 1)
         uv_async_send(m_impl->async.get());

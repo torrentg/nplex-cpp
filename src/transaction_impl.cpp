@@ -2,6 +2,7 @@
 #include "match.h"
 #include "nplex-cpp/exception.hpp"
 #include "cache.hpp"
+#include "messages.hpp"
 #include "transaction_impl.hpp"
 
 nplex::transaction_impl_t::transaction_impl_t(cache_ptr cache, isolation_e isolation, bool read_only) : 
@@ -36,7 +37,7 @@ nplex::value_ptr nplex::transaction_impl_t::read(const char *key, bool check)
             return {};
 
         if (check)
-            transaction_t::ensure(key, NPLEX_CREATE | NPLEX_UPDATE | NPLEX_DELETE);
+            ensure(key, NPLEX_CREATE | NPLEX_UPDATE | NPLEX_DELETE);
 
         return std::get<value_ptr>(it_tx->second);
     }
@@ -53,7 +54,7 @@ nplex::value_ptr nplex::transaction_impl_t::read(const char *key, bool check)
         m_items.emplace(it_cache->first, std::make_tuple(action_e::READ, it_cache->second));
 
     if (check)
-        transaction_t::ensure(key, NPLEX_CREATE | NPLEX_UPDATE | NPLEX_DELETE);
+        ensure(key, NPLEX_CREATE | NPLEX_UPDATE | NPLEX_DELETE);
 
     return it_cache->second;
 }
@@ -376,8 +377,68 @@ void nplex::transaction_impl_t::update_serializable(const std::vector<change_t> 
     }
 }
 
-std::shared_ptr<nplex::transaction_t> nplex::make_transaction(cache_ptr cache, transaction_t::isolation_e isolation, bool read_only)
+flatbuffers::DetachedBuffer nplex::transaction_impl_t::create_submit_msg(std::size_t cid, rev_t crev, bool force) const
 {
-    auto impl = std::make_shared<transaction_impl_t>(cache, isolation, read_only);
-    return std::static_pointer_cast<transaction_t>(impl);
+    using namespace msgs;
+    using namespace flatbuffers;
+
+    std::lock_guard<decltype(m_cache->m_mutex)> lock_cache(m_cache->m_mutex);
+
+    FlatBufferBuilder builder;
+    std::vector<Offset<KeyValue>> upserts_v;
+    std::vector<Offset<String>> deletes_v;
+    std::vector<Offset<Acl>> ensures_v;
+
+    for (const auto &item : m_items)
+    {
+        switch (std::get<action_e>(item.second))
+        {
+            case action_e::DELETE:
+                deletes_v.push_back(builder.CreateString(item.first));
+                break;
+
+            case action_e::UPSERT:
+                upserts_v.push_back(
+                    CreateKeyValue(
+                        builder, 
+                        builder.CreateString(item.first), 
+                        builder.CreateVector(
+                            (uint8_t *) std::get<value_ptr>(item.second)->data().c_str(), 
+                            std::get<value_ptr>(item.second)->data().size()
+                        )
+                    )
+                );
+                break;
+
+            default:
+                break;
+        }
+    }
+
+    for (const auto &item : m_ensures)
+    {
+        ensures_v.push_back(
+            CreateAcl(
+                builder, 
+                builder.CreateString(item.first), 
+                item.second
+            )
+        );
+    }
+
+    auto msg = CreateMessage(builder, 
+        MsgContent::SUBMIT_REQUEST, 
+        CreateSubmitRequest(builder, 
+            cid,
+            crev,
+            m_type,
+            builder.CreateVector(upserts_v),
+            builder.CreateVector(deletes_v),
+            builder.CreateVector(ensures_v),
+            force
+        ).Union()
+    );
+
+    builder.Finish(msg);
+    return builder.Release();
 }

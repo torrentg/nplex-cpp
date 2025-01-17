@@ -13,26 +13,8 @@ using namespace flatbuffers;
 
 namespace {
 
-/**
- * Modified transaction allowing to access protected members.
- */
-struct tx_test_t : public transaction_t
-{
-    using transaction_t::transaction_t;
-    void update(const std::vector<change_t> &changes) { transaction_t::update(changes); }
-    void set_dirty(bool dirty) { transaction_t::dirty(dirty); }
-    void set_state(state_e state) { transaction_t::state(state); }
-};
-
-/**
- * tx_test_t factory
- */
-std::shared_ptr<tx_test_t> make_tx_test(cache_ptr cache, transaction_t::isolation_e isolation, bool read_only = false) {
-    auto tx = make_transaction(cache, isolation, read_only);
-    return std::static_pointer_cast<tx_test_t>(tx);
-}
-
-using tx_ptr = std::shared_ptr<tx_test_t>;
+using cache_ptr = std::shared_ptr<cache_t>;
+using tx_ptr = std::shared_ptr<transaction_impl_t>;
 
 auto update_cache(cache_ptr &cache, const msgs::UpdateT &upd)
 {
@@ -167,7 +149,7 @@ TEST_CASE("transaction_test")
 
     SUBCASE("read_committed_basic")
     {
-        auto tx = make_tx_test(cache, transaction_t::isolation_e::READ_COMMITTED);
+        auto tx = std::make_shared<transaction_impl_t>(cache, transaction_t::isolation_e::READ_COMMITTED);
 
         CHECK(tx->isolation() == transaction_t::isolation_e::READ_COMMITTED);
 
@@ -220,7 +202,7 @@ TEST_CASE("transaction_test")
 
     SUBCASE("repeatable_reads_basic")
     {
-        auto tx = make_tx_test(cache, transaction_t::isolation_e::REPEATABLE_READS);
+        auto tx = std::make_shared<transaction_impl_t>(cache, transaction_t::isolation_e::REPEATABLE_READS);
 
         CHECK(tx->isolation() == transaction_t::isolation_e::REPEATABLE_READS);
 
@@ -272,7 +254,7 @@ TEST_CASE("transaction_test")
 
     SUBCASE("serializable_basic")
     {
-        auto tx = make_tx_test(cache, transaction_t::isolation_e::SERIALIZABLE);
+        auto tx = std::make_shared<transaction_impl_t>(cache, transaction_t::isolation_e::SERIALIZABLE);
 
         CHECK(tx->isolation() == transaction_t::isolation_e::SERIALIZABLE);
 
@@ -324,11 +306,11 @@ TEST_CASE("transaction_test")
 
     SUBCASE("read_upsert_remove_exceptions")
     {
-        auto tx = make_tx_test(cache, transaction_t::isolation_e::SERIALIZABLE, true);
+        auto tx = std::make_shared<transaction_impl_t>(cache, transaction_t::isolation_e::SERIALIZABLE, true);
 
         CHECK_THROWS_AS(tx->upsert("key1", "abc"), nplex_exception); // read-only exception
         CHECK_THROWS_AS(tx->remove("key1"), nplex_exception); // read-only exception
-        tx->set_state(transaction_t::state_e::ABORTED);
+        tx->state(transaction_t::state_e::ABORTED);
         CHECK_THROWS_AS(tx->read("key1"), nplex_exception); // not-open exception
     }
 }
@@ -336,7 +318,7 @@ TEST_CASE("transaction_test")
 TEST_CASE("transaction_for_each")
 {
     cache_ptr cache = make_basic_cache();
-    auto tx = make_tx_test(cache, transaction_t::isolation_e::READ_COMMITTED);
+    auto tx = std::make_shared<transaction_impl_t>(cache, transaction_t::isolation_e::READ_COMMITTED);
 
     SUBCASE("iterate_all_only_cache")
     {
@@ -397,7 +379,7 @@ TEST_CASE("transaction_for_each")
 
     SUBCASE("iterate_exceptions")
     {
-        tx->set_state(transaction_t::state_e::ABORTED);
+        tx->state(transaction_t::state_e::ABORTED);
         CHECK_THROWS_AS(tx->for_each("key1", []([[maybe_unused]] const gto::cstring &key, [[maybe_unused]] const value_t &value) {
                 return true;
             }), nplex_exception);
@@ -411,7 +393,7 @@ TEST_CASE("transaction_ensure")
 {
     cache_ptr cache = make_basic_cache();
     std::vector<nplex::change_t> changes;
-    auto tx = make_tx_test(cache, transaction_t::isolation_e::READ_COMMITTED);
+    auto tx = std::make_shared<transaction_impl_t>(cache, transaction_t::isolation_e::READ_COMMITTED);
 
     SUBCASE("ensure_all")
     {
@@ -419,7 +401,7 @@ TEST_CASE("transaction_ensure")
         REQUIRE_NOTHROW(tx->ensure("**", NPLEX_CREATE | NPLEX_UPDATE | NPLEX_DELETE));
 
         // updating key1
-        tx->set_dirty(false);
+        tx->dirty(false);
         changes = update_cache(cache, 
             make_update(3, "jdoe", 1234567890, 15, {
                     { .key = "key1", .value = {13}}
@@ -431,7 +413,7 @@ TEST_CASE("transaction_ensure")
         CHECK(tx->dirty());
 
         // adding new key
-        tx->set_dirty(false);
+        tx->dirty(false);
         changes = update_cache(cache, 
             make_update(4, "jdoe", 1234567890, 15, {
                     { .key = "key99", .value = {13}}
@@ -443,7 +425,7 @@ TEST_CASE("transaction_ensure")
         CHECK(tx->dirty());
 
         // deleting key2
-        tx->set_dirty(false);
+        tx->dirty(false);
         changes = update_cache(cache, 
             make_update(5, "jdoe", 1234567890, 15, 
                 {},
@@ -460,7 +442,7 @@ TEST_CASE("transaction_ensure")
         REQUIRE_NOTHROW(tx->ensure("key1*", NPLEX_UPDATE | NPLEX_DELETE));
 
         // updating key1
-        tx->set_dirty(false);
+        tx->dirty(false);
         changes = update_cache(cache, 
             make_update(3, "jdoe", 1234567890, 15, {
                     { .key = "key1", .value = {13}}
@@ -469,7 +451,7 @@ TEST_CASE("transaction_ensure")
             ));
 
         // adding key11 does nothing
-        tx->set_dirty(false);
+        tx->dirty(false);
         changes = update_cache(cache, 
             make_update(4, "jdoe", 1234567890, 15, {
                     { .key = "key11", .value = {13}}
@@ -481,7 +463,7 @@ TEST_CASE("transaction_ensure")
         CHECK(!tx->dirty());
 
         // deleting key11
-        tx->set_dirty(false);
+        tx->dirty(false);
         changes = update_cache(cache, 
             make_update(5, "jdoe", 1234567890, 15, {
                     { .key = "key11", .value = {15}}
@@ -495,7 +477,7 @@ TEST_CASE("transaction_ensure")
 
     SUBCASE("ensure_error_not_open")
     {
-        tx->set_state(transaction_t::state_e::COMMITTED);
+        tx->state(transaction_t::state_e::COMMITTED);
         CHECK_THROWS_AS(tx->ensure("key1", NPLEX_UPDATE), nplex_exception);
     }
 }

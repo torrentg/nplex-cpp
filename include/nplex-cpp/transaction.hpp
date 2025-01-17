@@ -13,6 +13,7 @@ namespace nplex {
  * Database access can only be done through a transaction, which allows you to operate
  * according to an isolation level.
  * 
+ * Transaction is an interface where implementation details are hidden from the user.
  * Transactions can only be created by the client.
  * 
  * @see client_t::create_tx().
@@ -51,6 +52,19 @@ namespace nplex {
  */
 class transaction_t
 {
+  private:
+
+    // non-copyable class
+    transaction_t(const transaction_t&) = delete;
+    transaction_t& operator=(const transaction_t&) = delete;
+    // non-movable class
+    transaction_t(transaction_t&&) = delete;
+    transaction_t& operator=(transaction_t&&) = delete;
+
+  protected:
+
+    transaction_t() = default;
+
   public:
 
     enum class state_e : std::uint8_t {
@@ -72,41 +86,13 @@ class transaction_t
 
     using callback_t = std::function<bool(const gto::cstring &key, const value_t &value)>;
 
-  private:
-
-    // non-copyable class
-    transaction_t(const transaction_t&) = delete;
-    transaction_t& operator=(const transaction_t&) = delete;
-    // non-movable class
-    transaction_t(transaction_t&&) = delete;
-    transaction_t& operator=(transaction_t&&) = delete;
-
-  protected:
-
-    transaction_t() = default;
-
-    /**
-     * Updates the current transaction with the changes from a commit.
-     * 
-     * This method is called by the client on each update.
-     * The transaction becomes dirty if there are update conflicts.
-     * 
-     * @param[in] changes List of update changes.
-     */
-    void update(const std::vector<change_t> &changes);
-
-    // Only for debug purposes
-    void dirty(bool dirty);
-    void state(state_e state);
-
-  public:
-
-    isolation_e isolation() const;
-    bool read_only() const;
-    state_e state() const;
-    bool dirty() const;
-    std::uint32_t type() const;
-    void type(std::uint32_t type);
+    virtual ~transaction_t() = default;
+    virtual isolation_e isolation() const = 0;
+    virtual bool read_only() const = 0;
+    virtual state_e state() const = 0;
+    virtual bool dirty() const = 0;
+    virtual std::uint32_t type() const = 0;
+    virtual void type(std::uint32_t type) = 0;
 
     /**
      * Read a key-value pair.
@@ -146,7 +132,7 @@ class transaction_t
      * @exception std::invalid_argument Invalid key.
      * @exception nplex_exception Transaction not open, or invalid key.
      */
-    value_ptr read(const char *key, bool check = false);
+    virtual value_ptr read(const char *key, bool check = false) = 0;
 
     /**
      * Update a key-value or insert it if not exists.
@@ -164,7 +150,7 @@ class transaction_t
      * @exception std::invalid_argument Invalid key or data.
      * @exception nplex_exception Transaction is read-only, or not open.
      */
-    bool upsert(const char *key, const std::string_view &data, bool force = false);
+    virtual bool upsert(const char *key, const std::string_view &data, bool force = false) = 0;
 
     /**
      * Remove a key-value pair.
@@ -184,8 +170,8 @@ class transaction_t
      * @exception std::invalid_argument Invalid key.
      * @exception nplex_exception Transaction is read-only, or not open, or invalid key.
      */
-    bool remove(const key_t &key);
-    std::size_t remove(const char *pattern);
+    virtual bool remove(const key_t &key) = 0;
+    virtual std::size_t remove(const char *pattern) = 0;
 
     /**
      * Appends a validation to be done at commit-time.
@@ -226,7 +212,7 @@ class transaction_t
      * 
      * @exception nplex_exception Transaction is not open.
      */
-    bool ensure(const char *pattern, std::uint8_t actions);
+    virtual bool ensure(const char *pattern, std::uint8_t actions) = 0;
 
     /**
      * Executes the callback function for each key-value.
@@ -269,8 +255,8 @@ class transaction_t
      * @exception nplex_exception Transaction is not open, or empty callback function.
      * @exception nplex_exception Transaction is read-only and callback function calls upsert or delete.
      */
-    std::size_t for_each(const callback_t &callback) { return for_each("**", callback); }
-    std::size_t for_each(const char *pattern, const callback_t &callback);
+    virtual std::size_t for_each(const callback_t &callback) { return for_each("**", callback); }
+    virtual std::size_t for_each(const char *pattern, const callback_t &callback) = 0;
 };
 
 }; // namespace nplex
