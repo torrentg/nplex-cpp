@@ -93,6 +93,7 @@ class transaction_t
     virtual bool dirty() const = 0;
     virtual std::uint32_t type() const = 0;
     virtual void type(std::uint32_t type) = 0;
+    virtual rev_t rev() const = 0; // current database revision
 
     /**
      * Read a key-value pair.

@@ -118,6 +118,8 @@ target_sources(
     ${CMAKE_CURRENT_LIST_DIR}/src/cache.hpp
     ${CMAKE_CURRENT_LIST_DIR}/src/cache.cpp
     ${CMAKE_CURRENT_LIST_DIR}/src/client.cpp
+    ${CMAKE_CURRENT_LIST_DIR}/src/client_impl.hpp
+    ${CMAKE_CURRENT_LIST_DIR}/src/client_impl.cpp
     ${CMAKE_CURRENT_LIST_DIR}/src/mqueue.hpp
     ${CMAKE_CURRENT_LIST_DIR}/src/messages.fbs
     ${CMAKE_CURRENT_LIST_DIR}/src/messages.hpp

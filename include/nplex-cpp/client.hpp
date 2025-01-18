@@ -56,6 +56,7 @@ class client_t
 {
   private:
 
+    friend client_impl_t;
     std::unique_ptr<client_impl_t> m_impl;
 
   public:
@@ -81,7 +82,6 @@ class client_t
 
     using tx_ptr = std::shared_ptr<transaction_t>;
     using load_cmd_t = std::pair<load_mode_e, rev_t>;
-    friend client_impl_t;
 
     /**
      * Client constructor.
@@ -89,7 +89,7 @@ class client_t
      * This method starts the event loop.
      * You can stop it by calling the close() method or destroying the object.
      * 
-     * @triggers on_connected() If the client is connected.
+     * @triggers on_connected() When the client connects to server.
      * @triggers on_error() If an error occurs.
      * 
      * @param[in] params Connection parameters.

@@ -32,7 +32,7 @@ class transaction_impl_t : public transaction_t
 
   private:
 
-    rev_t m_rev;                                //!< Database revision at tx creation.
+    rev_t m_rev_creation;                       //!< Database revision at tx creation.
     cache_ptr m_cache;                          //!< Database content.
     items_t m_items;                            //!< Transaction items (depends on isolation level).
     ensures_t m_ensures;                        //!< Transaction ensures.
@@ -61,6 +61,7 @@ class transaction_impl_t : public transaction_t
     virtual std::uint32_t type() const { return m_type; }
     virtual void type(std::uint32_t type) { m_type = type; }
 
+    virtual rev_t rev() const;
     virtual value_ptr read(const char *key, bool check = false);
     virtual bool upsert(const char *key, const std::string_view &data, bool force = false);
     virtual bool remove(const key_t &key);

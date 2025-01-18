@@ -13,8 +13,14 @@ nplex::transaction_impl_t::transaction_impl_t(cache_ptr cache, isolation_e isola
 
     std::lock_guard<decltype(m_cache->m_mutex)> lock_cache(m_cache->m_mutex);
 
-    m_rev = m_cache->m_rev;
+    m_rev_creation = m_cache->m_rev;
     m_state = state_e::OPEN;
+}
+
+nplex::rev_t nplex::transaction_impl_t::rev() const
+{
+    std::lock_guard<decltype(m_cache->m_mutex)> lock_cache(m_cache->m_mutex);
+    return m_cache->m_rev;
 }
 
 nplex::value_ptr nplex::transaction_impl_t::read(const char *key, bool check)
@@ -430,7 +436,7 @@ flatbuffers::DetachedBuffer nplex::transaction_impl_t::create_submit_msg(std::si
         MsgContent::SUBMIT_REQUEST, 
         CreateSubmitRequest(builder, 
             cid,
-            crev,
+            (m_isolation_level == isolation_e::SERIALIZABLE ? m_rev_creation : crev),
             m_type,
             builder.CreateVector(upserts_v),
             builder.CreateVector(deletes_v),
