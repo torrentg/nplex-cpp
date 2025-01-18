@@ -3,6 +3,7 @@
 #include <map>
 #include <mutex>
 #include <vector>
+#include <memory>
 #include "nplex-cpp/types.hpp"
 
 namespace nplex {
@@ -30,7 +31,7 @@ struct cache_t
 {
     rev_t m_rev = 0;
     std::recursive_mutex m_mutex;
-    std::map<key_t, value_ptr, key_cmp_less_t> m_data;
+    std::map<key_t, value_ptr, key_less_t> m_data;
     std::map<rev_t, meta_ptr> m_metas;
     std::map<gto::cstring, std::uint32_t> m_users; // value=num_refs
 
@@ -99,5 +100,7 @@ struct cache_t
     change_t delete_entry(const char *key);
 
 };
+
+using cache_ptr = std::shared_ptr<cache_t>;
 
 }; // namespace nplex

@@ -3,7 +3,7 @@
 
 nplex::client_t::client_t(const params_t &params)
 {
-    m_impl = std::make_unique<client_impl_t>(*this, params);
+    m_impl = std::make_unique<impl_t>(*this, params);
 
     m_impl->thread_loop = std::thread([this]() {
         m_impl->run();
@@ -50,7 +50,8 @@ void nplex::client_t::close()
 
 nplex::tx_ptr nplex::client_t::create_tx(transaction_t::isolation_e isolation, bool read_only)
 {
-    std::lock_guard<decltype(m_impl->m_mutex)> lock(m_impl->m_mutex);
+    std::lock_guard<decltype(m_impl->m_mutex)> lock_impl(m_impl->m_mutex);
+    std::lock_guard<decltype(m_impl->cache->m_mutex)> lock_cache(m_impl->cache->m_mutex);
 
     if (m_impl->state == state_e::CLOSED)
         throw nplex_exception("Client is closed");
@@ -85,7 +86,7 @@ bool nplex::client_t::submit_tx(tx_ptr tx, bool force)
 
     // TODO: check if there are actions to submit (not-only-reads)
 
-    if (m_impl->commands.push(submit_cmd_t{tx, force}) == 1)
+    if (m_impl->commands.push(submit_cmd_t{dynamic_pointer_cast<transaction_impl_t>(tx), force}) == 1)
         uv_async_send(m_impl->async.get());
 
     // TODO: solve visibility error
@@ -101,5 +102,11 @@ bool nplex::client_t::discard_tx(tx_ptr tx)
     if (m_impl->state == state_e::CLOSED)
         return false;
 
-    return m_impl->ongoing_tx.erase(tx);
+    auto it = m_impl->ongoing_tx.find(tx);
+    
+    if (it == m_impl->ongoing_tx.end())
+        return false;
+
+    m_impl->ongoing_tx.erase(it);
+    return true;
 }

@@ -96,7 +96,7 @@ std::string_view key_prefix(const key_t &key, std::size_t index, char delimiter 
 std::string_view key_suffix(const key_t &key, std::size_t index, char delimiter = KEY_DELIMITER);
 key_t operator+(const key_t &lhs, const char *rhs);
 
-struct key_cmp_less_t
+struct key_less_t
 {
     using is_transparent = std::true_type;
 

@@ -260,4 +260,6 @@ class transaction_t
     virtual std::size_t for_each(const char *pattern, const callback_t &callback) = 0;
 };
 
+using tx_ptr = std::shared_ptr<transaction_t>;
+
 }; // namespace nplex

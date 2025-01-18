@@ -13,9 +13,6 @@ using namespace flatbuffers;
 
 namespace {
 
-using cache_ptr = std::shared_ptr<cache_t>;
-using tx_ptr = std::shared_ptr<transaction_impl_t>;
-
 auto update_cache(cache_ptr &cache, const msgs::UpdateT &upd)
 {
     std::vector<change_t> changes;
@@ -101,7 +98,7 @@ cache_ptr make_basic_cache()
     return cache;
 }
 
-void basic_step_1(tx_ptr &tx)
+void basic_step_1(tx_impl_ptr &tx)
 {
     // scenario: tx just created and no updates yet
 

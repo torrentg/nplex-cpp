@@ -59,7 +59,7 @@ class mqueue
      * 
      * @exception nplex_exception Queue is full.
      */
-    std::size_t push(const T &item)
+    auto push(const T &item)
     {
         std::unique_lock<std::mutex> lock(m_mutex);
 
@@ -70,7 +70,7 @@ class mqueue
         return m_queue.size();
     }
 
-    std::size_t push(T &&item)
+    auto push(T &&item)
     {
         std::unique_lock<std::mutex> lock(m_mutex);
 

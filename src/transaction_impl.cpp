@@ -1,7 +1,6 @@
 #include <cstring>
 #include "match.h"
 #include "nplex-cpp/exception.hpp"
-#include "cache.hpp"
 #include "messages.hpp"
 #include "transaction_impl.hpp"
 

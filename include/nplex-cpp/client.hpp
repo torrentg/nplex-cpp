@@ -9,9 +9,6 @@
 
 namespace nplex {
 
-// Forward declaration
-struct client_impl_t;
-
 /**
  * Async nplex client.
  * 
@@ -38,12 +35,12 @@ struct client_impl_t;
  * subset of key-values. In this case, it only receives updates for the selected keys.
  * 
  * On client startup:
- *   - Attachs to the event loop (used to contact the server).
+ *   - Starts the event loop.
  *   - Connects to the nplex server (login).
  *   - Receives events from server (ex: snapshot, commits).
- *     - Updating the local database contents.
- *     - Updating ongoing transactions.
- *     - Notifying database changes to the user.
+ *     - Updates the local database contents.
+ *     - Updates ongoing transactions.
+ *     - Notify database changes to the user.
  *   - Manages connection-lost and reconnections.
  *   - Allows to read/update db content using transactions.
  * 
@@ -54,12 +51,9 @@ struct client_impl_t;
  */
 class client_t
 {
-  private:
-
-    friend client_impl_t;
-    std::unique_ptr<client_impl_t> m_impl;
-
   public:
+
+    struct impl_t;
 
     enum class state_e : std::uint8_t {
         INITIALIZING,                           //!< Client is initializing.
@@ -80,7 +74,6 @@ class client_t
         ONLY_UPDATES_FROM_REV                   //!< Sends only updates from a revision.   
     };
 
-    using tx_ptr = std::shared_ptr<transaction_t>;
     using load_cmd_t = std::pair<load_mode_e, rev_t>;
 
     /**
@@ -154,6 +147,10 @@ class client_t
      * 
      * Subsequent commits will not update the transaction.
      * This transaction can no longer be submitted.
+     * 
+     * You are not forced to call discard() to release a transaction, you 
+     * can simply remove it using tx.reset() or destroying the tx object. 
+     * On database updates, unused transactions are automatically removed.
      * 
      * @param[in] tx Transaction to remove from ongoing transactions list.
      * 
@@ -300,6 +297,10 @@ class client_t
      * @param[in] msg The error message describing the issue.
      */
     virtual void on_error([[maybe_unused]] const char *msg) {}
+
+  private:
+
+    std::unique_ptr<impl_t> m_impl;
 };
 
 }; // namespace nplex

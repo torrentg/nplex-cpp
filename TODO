@@ -3,7 +3,6 @@
 * NETWORK MSG = LEN + METADATA + DATA + CHECKSUM
 * value_t::as_millis() convert from ISO-8601 string (instead of number)
 * Only a public header -> nplex-cpp.hpp
-* implement client.cpp
 * allow ssl connections (see project tlsuv)
 * add user permissions on login_response
 * README: explain nplex purpose
@@ -11,7 +10,8 @@
 * utility class to read config from file (optional)
 * submit_tx_fut returns a future (attached to tx.promise)
 * extends key_t from cstring_t adding validation (length, double-, ending/, utf8) on construct, key_part, key_preffix, key_suffix, etc.
-* create files client_impl.?pp
+* Review client_t::impl_t::m_mutex usage. Is it required?
+* Move mqueue to client_internals ?
 
 ## Useful commands
 
