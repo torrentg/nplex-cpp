@@ -401,6 +401,7 @@ TEST_CASE("SubmitResponse")
         {},         // Native table
         4,          // cid
         2048,       // crev
+        msgs::SubmitCode::ACCEPTED,
         2049,       // erev
         ""          // error
     };
@@ -411,6 +412,7 @@ TEST_CASE("SubmitResponse")
     REQUIRE(ptr);
     CHECK(ptr->cid() == 4);
     CHECK(ptr->crev() == 2048);
+    CHECK(ptr->code() == msgs::SubmitCode::ACCEPTED);
     CHECK(ptr->erev() == 2049);
     CHECK(!ptr->error());
 }

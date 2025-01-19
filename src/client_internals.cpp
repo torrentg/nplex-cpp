@@ -127,28 +127,7 @@ flatbuffers::DetachedBuffer nplex::create_load_msg(std::size_t cid, msgs::LoadMo
 void nplex::cb_process_async(uv_async_t *handle)
 {
     nplex::client_t::impl_t *impl = (nplex::client_t::impl_t *) handle->data;
-    nplex::command_t cmd;
-
-    while (impl->commands.try_pop(cmd))
-    {
-        std::visit([impl, &cmd](auto&& arg)
-        {
-            using T = std::decay_t<decltype(arg)>;
-
-            if constexpr (std::is_same_v<T, nplex::connect_cmd_t>)
-                impl->connect(get<T>(cmd));
-            else if constexpr (std::is_same_v<T, nplex::load_cmd_t>)
-                impl->load(get<T>(cmd));
-            else if constexpr (std::is_same_v<T, nplex::submit_cmd_t>)
-                impl->submit(get<T>(cmd));
-            else if constexpr (std::is_same_v<T, nplex::close_cmd_t>)
-                impl->close(get<T>(cmd));
-            else if constexpr (std::is_same_v<T, nplex::ping_cmd_t>)
-                impl->ping(get<T>(cmd));
-            else
-                static_assert(false, "non-exhaustive visitor!");
-        }, cmd);
-    }
+    impl->process_commands();
 }
 
 void nplex::cb_close_handle(uv_handle_t *handle, void *arg)
@@ -192,7 +171,7 @@ void nplex::cb_tcp_read(uv_stream_t *stream, ssize_t nread, const uv_buf_t *buf)
 
     if (nread < 0 || buf->base == NULL) {
         impl->error = fmt::format("Tcp read error: {}", uv_strerror(nread));
-        impl->close(nplex::close_cmd_t{});
+        impl->close();
         return;
     }
 
@@ -301,19 +280,11 @@ void nplex::cb_tcp_connect(uv_connect_t *req, int status)
 
     if (status < 0) {
         std::string msg = fmt::format("Failed to connect to {}: {}", impl->server_addr.str(), uv_strerror(status));
-        impl->close(nplex::close_cmd_t{});
+        impl->close();
         return;
     }
 
     uv_read_start((uv_stream_t *) con, cb_tcp_alloc, cb_tcp_read);
 
-    impl->state = nplex::client_t::state_e::LOGGING_IN;
-
-    impl->send(
-        create_login_msg(
-            impl->correlation++, 
-            impl->params.user, 
-            impl->params.password
-        )
-    );
+    impl->do_login();
 }

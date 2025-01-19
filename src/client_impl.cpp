@@ -50,7 +50,7 @@ void nplex::client_t::impl_t::run() noexcept
 
     try
     {
-        connect(connect_cmd_t{params.servers});
+        connect(params.servers);
         guard.unlock();
         uv_run(loop.get(), UV_RUN_DEFAULT);
     }
@@ -70,20 +70,22 @@ void nplex::client_t::impl_t::run() noexcept
     return;
 }
 
-void nplex::client_t::impl_t::connect(const nplex::connect_cmd_t &cmd)
+void nplex::client_t::impl_t::connect(const addr_t &addr)
 {
+    int rc = 0;
+
     // TODO: Check if the client is already connected
     // TODO: manage on-fly messages (clear + reject tx)
 
     state = client_t::state_e::CONNECTING;
 
-    int rc = 0;
-    uv_connect_t* connect = NULL;
-    struct sockaddr_storage addr_in = get_sockaddr(loop.get(), cmd.server);
+    struct sockaddr_storage addr_in = get_sockaddr(loop.get(), addr);
 
+    assert(con);
     if ((rc = uv_tcp_init(loop.get(), con.get())) != 0)
         throw nplex_exception(uv_strerror(rc));
 
+    uv_connect_t* connect = NULL;
     if ((connect = (uv_connect_t*) malloc(sizeof(uv_connect_t))) == NULL)
         throw std::bad_alloc();
 
@@ -91,6 +93,19 @@ void nplex::client_t::impl_t::connect(const nplex::connect_cmd_t &cmd)
         free(connect);
         throw nplex_exception(uv_strerror(rc));
     }
+}
+
+void nplex::client_t::impl_t::do_login()
+{
+    state = nplex::client_t::state_e::LOGGING_IN;
+
+    send(
+        create_login_msg(
+            correlation++, 
+            params.user, 
+            params.password
+        )
+    );
 }
 
 void nplex::client_t::impl_t::disconnect()
@@ -108,10 +123,8 @@ void nplex::client_t::impl_t::disconnect()
     }
 }
 
-void nplex::client_t::impl_t::close(const close_cmd_t &cmd)
+void nplex::client_t::impl_t::close()
 {
-    UNUSED(cmd);
-
     switch (state)
     {
         case client_t::state_e::INITIALIZING:
@@ -142,13 +155,142 @@ void nplex::client_t::impl_t::send(flatbuffers::DetachedBuffer &&buf)
     uv_write(&msg.req, (uv_stream_t *) con.get(), msg.buf.data(), msg.buf.size(), cb_tcp_write);
 }
 
-void nplex::client_t::impl_t::load(const nplex::load_cmd_t &cmd)
+void nplex::client_t::impl_t::process_commands()
 {
+    nplex::command_t cmd;
+
+    while (commands.try_pop(cmd))
+    {
+        std::visit([this, &cmd](auto&& arg)
+        {
+            using T = std::decay_t<decltype(arg)>;
+
+            if constexpr (std::is_same_v<T, nplex::submit_cmd_t>)
+                process_submit_cmd(get<T>(cmd));
+            else if constexpr (std::is_same_v<T, nplex::close_cmd_t>)
+                process_close_cmd(get<T>(cmd));
+            else if constexpr (std::is_same_v<T, nplex::ping_cmd_t>)
+                process_ping_cmd(get<T>(cmd));
+            else
+                static_assert(false, "non-exhaustive visitor!");
+        }, cmd);
+    }
+}
+
+void nplex::client_t::impl_t::process_recv_msg(const nplex::msgs::Message *msg)
+{
+    if (!msg || !msg->content()) {
+        // TODO: process error
+        error = "Invalid message";
+        return;
+    }
+
+    switch (msg->content_type())
+    {
+        case msgs::MsgContent::LOGIN_RESPONSE:
+            process_login_resp(msg->content_as_LOGIN_RESPONSE());
+            break;
+
+        case msgs::MsgContent::LOAD_RESPONSE:
+            process_load_resp(msg->content_as_LOAD_RESPONSE());
+            break;
+
+        case msgs::MsgContent::SUBMIT_RESPONSE:
+            process_submit_resp(msg->content_as_SUBMIT_RESPONSE());
+            break;
+
+        case msgs::MsgContent::UPDATE_PUSH:
+            process_update_push(msg->content_as_UPDATE_PUSH());
+            break;
+
+        case msgs::MsgContent::KEEPALIVE_PUSH:
+            process_keepalive_push(msg->content_as_KEEPALIVE_PUSH());
+            break;
+
+        case msgs::MsgContent::PING_RESPONSE:
+            process_ping_resp(msg->content_as_PING_RESPONSE());
+            break;
+
+        default:
+            // TODO: process error
+            error = "Invalid message";
+    }
+}
+
+void nplex::client_t::impl_t::process_login_resp(const nplex::msgs::LoginResponse *resp)
+{
+    // save server.crev
+    // retrieve request using cid
+
+    if (resp->code() != msgs::LoginCode::AUTHORIZED)
+    {
+        // TODO: process error
+        error = "Invalid message";
+        return;
+    }
+
+    auto cmd = parent.on_connect(server_addr.str(), resp->rev0(), resp->crev());
+
+    msgs::LoadMode mode = msgs::LoadMode::SNAPSHOT_AT_LAST_REV;
+
+    switch (cmd.first)
+    {
+        case load_mode_e::SNAPSHOT_AT_FIXED_REV:
+            mode = msgs::LoadMode::SNAPSHOT_AT_FIXED_REV;
+            break;
+
+        case load_mode_e::SNAPSHOT_AT_LAST_REV:
+            mode = msgs::LoadMode::SNAPSHOT_AT_LAST_REV;
+            break;
+
+        case load_mode_e::ONLY_UPDATES_FROM_REV:
+            mode = msgs::LoadMode::ONLY_UPDATES_FROM_REV;
+            break;
+
+        default:
+            break;
+    }
+
     send(
         create_load_msg(
             correlation++, 
-            cmd.load_mode, 
-            cmd.rev
+            mode, 
+            cmd.second
         )
     );
+}
+
+void nplex::client_t::impl_t::process_load_resp(const nplex::msgs::LoadResponse *resp)
+{
+    // save server.crev
+    // retrieve request using cid
+
+    if (!resp->accepted())
+    {
+        // TODO: process error
+        error = "Load rejected";
+        return;
+    }
+
+    // TODO: manage state
+
+    if (resp->snapshot())
+        cache->restore(resp->snapshot());
+}
+
+void nplex::client_t::impl_t::process_submit_resp(const nplex::msgs::SubmitResponse *resp)
+{
+    // save server.crev
+    // retrieve request using cid
+    // retrieve tx using cid
+
+    if (resp->code() != msgs::SubmitCode::ACCEPTED)
+    {
+        // TODO: process error
+        error = "Load rejected";
+        //parent.on_reject(tx);
+        return;
+    }
+
+    // update tx status
 }

@@ -138,7 +138,7 @@ class client_t
      * @exception std::invalid_argument Transaction is empty (null).
      * @exception nplex_exception client-not-synced, tx-not-found, tx-not-open, max-queued-commands.
      */
-    bool submit_tx(tx_ptr tx, bool force = false);
+    bool submit_tx(const tx_ptr &tx, bool force = false);
 
     //TODO: create a submit() method returning a future
 
@@ -157,7 +157,7 @@ class client_t
      * @return true if the transaction was removed, 
      *         false otherwise (tx-not-found, invalid-state).
      */
-    bool discard_tx(tx_ptr tx);
+    bool discard_tx(const tx_ptr &tx);
 
     /**
      * Sends a delayed command to disconnect the client.
@@ -190,7 +190,7 @@ class client_t
      * 
      * @return The load command to send to the server.
      */
-    virtual load_cmd_t on_connect([[maybe_unused]] const char *server, [[maybe_unused]] rev_t oldest_rev, [[maybe_unused]] rev_t newest_rev) {
+    virtual load_cmd_t on_connect([[maybe_unused]] const std::string &server, [[maybe_unused]] rev_t oldest_rev, [[maybe_unused]] rev_t newest_rev) {
         return {load_mode_e::SNAPSHOT_AT_LAST_REV, 0};
     }
 
@@ -211,7 +211,7 @@ class client_t
      * 
      * @return The load command to send to the server.
      */
-    virtual load_cmd_t on_reconnect([[maybe_unused]] const char *server, [[maybe_unused]] rev_t oldest_rev, [[maybe_unused]] rev_t newest_rev) {
+    virtual load_cmd_t on_reconnect([[maybe_unused]] const std::string &server, [[maybe_unused]] rev_t oldest_rev, [[maybe_unused]] rev_t newest_rev) {
         return {load_mode_e::ONLY_UPDATES_FROM_REV, rev()};
     }
 
@@ -232,7 +232,7 @@ class client_t
      * @return true if the client should try to reconnect, 
      *         false if the client should close.
      */
-    virtual bool on_disconnect([[maybe_unused]] const char *server, [[maybe_unused]] const char *cause) {
+    virtual bool on_disconnect([[maybe_unused]] const std::string &server, [[maybe_unused]] const std::string &cause) {
         return true;
     }
 
@@ -296,7 +296,7 @@ class client_t
      * 
      * @param[in] msg The error message describing the issue.
      */
-    virtual void on_error([[maybe_unused]] const char *msg) {}
+    virtual void on_error([[maybe_unused]] const std::string &msg) {}
 
   private:
 

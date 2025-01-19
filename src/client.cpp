@@ -67,7 +67,7 @@ nplex::tx_ptr nplex::client_t::create_tx(transaction_t::isolation_e isolation, b
     return tx;
 }
 
-bool nplex::client_t::submit_tx(tx_ptr tx, bool force)
+bool nplex::client_t::submit_tx(const tx_ptr &tx, bool force)
 {
     if (!tx)
         throw std::invalid_argument("Transaction is empty");
@@ -95,7 +95,7 @@ bool nplex::client_t::submit_tx(tx_ptr tx, bool force)
     return true;
 }
 
-bool nplex::client_t::discard_tx(tx_ptr tx)
+bool nplex::client_t::discard_tx(const tx_ptr &tx)
 {
     std::lock_guard<decltype(m_impl->m_mutex)> lock(m_impl->m_mutex);
 

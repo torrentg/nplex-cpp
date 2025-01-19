@@ -42,15 +42,6 @@ struct output_msg_t
     output_msg_t(flatbuffers::DetachedBuffer &&content_);
 };
 
-struct connect_cmd_t {
-    std::string server;      // host:port
-};
-
-struct load_cmd_t {
-    msgs::LoadMode load_mode;
-    rev_t rev;
-};
-
 struct submit_cmd_t {
     tx_impl_ptr tx;
     bool force;
@@ -62,7 +53,7 @@ struct ping_cmd_t {
     std::string payload;
 };
 
-using command_t = std::variant<connect_cmd_t, load_cmd_t, submit_cmd_t, close_cmd_t, ping_cmd_t>;
+using command_t = std::variant<submit_cmd_t, close_cmd_t, ping_cmd_t>;
 
 struct sockaddr_storage get_sockaddr(uv_loop_t *loop, const addr_t &addr);
 flatbuffers::DetachedBuffer create_login_msg(std::size_t cid, const std::string &user, const std::string &password);

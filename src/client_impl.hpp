@@ -43,13 +43,27 @@ struct client_t::impl_t
     ~impl_t();
 
     void run() noexcept;
+    void close();
+    void connect(const addr_t &addr);
+    void do_login();
     void disconnect();
+    void process_commands();
+    void process_recv_msg(const nplex::msgs::Message *msg);
+
+  private:
+
     void send(flatbuffers::DetachedBuffer &&buf);
-    void connect(const nplex::connect_cmd_t &cmd);
-    void load(const nplex::load_cmd_t &cmd);
-    void submit(const nplex::submit_cmd_t &cmd);
-    void close(const nplex::close_cmd_t &cmd);
-    void ping(const nplex::ping_cmd_t &cmd);
+
+    void process_submit_cmd(const nplex::submit_cmd_t &cmd);
+    void process_close_cmd(const nplex::close_cmd_t &cmd);
+    void process_ping_cmd(const nplex::ping_cmd_t &cmd);
+
+    void process_login_resp(const nplex::msgs::LoginResponse *resp);
+    void process_load_resp(const nplex::msgs::LoadResponse *resp);
+    void process_submit_resp(const nplex::msgs::SubmitResponse *resp);
+    void process_update_push(const nplex::msgs::UpdatePush *resp);
+    void process_keepalive_push(const nplex::msgs::KeepAlivePush *resp);
+    void process_ping_resp(const nplex::msgs::PingResponse *resp);
 };
 
 } // namespace nplex
