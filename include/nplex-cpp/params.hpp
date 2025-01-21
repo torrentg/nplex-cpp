@@ -11,6 +11,7 @@ struct params_t
     std::string password;                       //!< User password.
     std::uint32_t max_num_concurrent_tx;        //!< Maximum number of concurrent transactions.
     std::uint32_t max_num_queued_commands;      //!< Maximum number of pending commands.
+    std::uint32_t max_msg_bytes;                //!< Maximum message size.
 
     std::uint32_t timeout;                      //!< Connection timeout.
     std::uint32_t reconnect;                    //!< Reconnect interval.

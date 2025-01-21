@@ -177,10 +177,28 @@ void nplex::client_t::impl_t::process_commands()
     }
 }
 
+void nplex::client_t::impl_t::process_submit_cmd(const nplex::submit_cmd_t &cmd)
+{
+    UNUSED(cmd);
+    // TODO: implement
+}
+
+void nplex::client_t::impl_t::process_close_cmd(const nplex::close_cmd_t &cmd)
+{
+    UNUSED(cmd);
+    // TODO: implement
+}
+
+void nplex::client_t::impl_t::process_ping_cmd(const nplex::ping_cmd_t &cmd)
+{
+    UNUSED(cmd);
+    // TODO: implement
+}
+
 void nplex::client_t::impl_t::process_recv_msg(const nplex::msgs::Message *msg)
 {
     if (!msg || !msg->content()) {
-        // TODO: process error
+        // TODO: process error -> disconnect
         error = "Invalid message";
         return;
     }
@@ -293,4 +311,22 @@ void nplex::client_t::impl_t::process_submit_resp(const nplex::msgs::SubmitRespo
     }
 
     // update tx status
+}
+
+void nplex::client_t::impl_t::process_update_push(const nplex::msgs::UpdatePush *resp)
+{
+    UNUSED(resp);
+    // TODO: implement
+}
+
+void nplex::client_t::impl_t::process_keepalive_push(const nplex::msgs::KeepAlivePush *resp)
+{
+    UNUSED(resp);
+    // TODO: implement
+}
+
+void nplex::client_t::impl_t::process_ping_resp(const nplex::msgs::PingResponse *resp)
+{
+    UNUSED(resp);
+    // TODO: implement
 }

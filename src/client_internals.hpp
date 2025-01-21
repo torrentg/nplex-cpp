@@ -40,6 +40,7 @@ struct output_msg_t
     std::uint32_t len;          // Total message length (including len, metadata, content, checksum) (big-endian)
 
     output_msg_t(flatbuffers::DetachedBuffer &&content_);
+    std::uint32_t length() const { return ntohl(len); }
 };
 
 struct submit_cmd_t {
@@ -58,6 +59,8 @@ using command_t = std::variant<submit_cmd_t, close_cmd_t, ping_cmd_t>;
 struct sockaddr_storage get_sockaddr(uv_loop_t *loop, const addr_t &addr);
 flatbuffers::DetachedBuffer create_login_msg(std::size_t cid, const std::string &user, const std::string &password);
 flatbuffers::DetachedBuffer create_load_msg(std::size_t cid, msgs::LoadMode mode, rev_t rev);
+flatbuffers::DetachedBuffer create_submit_msg(std::size_t cid, rev_t crev, bool force, const tx_impl_ptr &tx);
+const nplex::msgs::Message * parse_network_msg(const char *ptr, size_t len);
 
 void cb_process_async(uv_async_t *handle);
 void cb_close_handle(uv_handle_t *handle, void *arg);

@@ -29,9 +29,10 @@ struct client_t::impl_t
     std::unique_ptr<uv_async_t> async;              //!< Signals that there are input commands.
     std::unique_ptr<uv_tcp_t> con;                  //!< Connection to the server.
     char input_buffer[UINT16_MAX];                  //!< Input buffer.
+    std::string input_msg;                          //!< Input message.
     std::thread thread_loop;                        //!< Event loop thread, process input commands.
     mqueue<command_t> commands;                     //!< Commands pending to be digested by the event loop.
-    gto::cqueue<std::unique_ptr<output_msg_t>> msgs;
+    gto::cqueue<output_msg_t> msgs;                 //!< Ongoing messages to server.
     std::set<tx_impl_ptr, shared_ptr_less_t> ongoing_tx;  //!< List of ongoing transactions (user working on it).
     gto::cqueue<tx_impl_ptr> pending_tx;            //!< List of pending transactions (awaiting server response).
     cache_ptr cache;                                //!< Database content.

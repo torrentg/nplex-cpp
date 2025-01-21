@@ -1,5 +1,6 @@
 #include "cppcrc.h"
 #include "nplex-cpp/exception.hpp"
+#include "transaction_impl.hpp"
 #include "client_impl.hpp"
 #include "client_internals.hpp"
 
@@ -89,8 +90,9 @@ struct sockaddr_storage nplex::get_sockaddr(uv_loop_t *loop, const addr_t &addr)
 flatbuffers::DetachedBuffer nplex::create_login_msg(std::size_t cid, const std::string &user, const std::string &password)
 {
     using namespace msgs;
+    using namespace flatbuffers;
 
-    flatbuffers::FlatBufferBuilder builder;
+    FlatBufferBuilder builder;
 
     auto msg = CreateMessage(builder, 
         MsgContent::LOGIN_REQUEST, 
@@ -108,11 +110,12 @@ flatbuffers::DetachedBuffer nplex::create_login_msg(std::size_t cid, const std::
 flatbuffers::DetachedBuffer nplex::create_load_msg(std::size_t cid, msgs::LoadMode mode, rev_t rev)
 {
     using namespace msgs;
+    using namespace flatbuffers;
 
-    flatbuffers::FlatBufferBuilder builder;
+    FlatBufferBuilder builder;
 
     auto msg = CreateMessage(builder, 
-        MsgContent::LOGIN_REQUEST, 
+        MsgContent::LOAD_REQUEST,
         CreateLoadRequest(builder, 
             cid, 
             mode,
@@ -122,6 +125,100 @@ flatbuffers::DetachedBuffer nplex::create_load_msg(std::size_t cid, msgs::LoadMo
 
     builder.Finish(msg);
     return builder.Release();
+}
+
+flatbuffers::DetachedBuffer nplex::create_submit_msg(std::size_t cid, rev_t crev, bool force, const tx_impl_ptr &tx)
+{
+    using namespace msgs;
+    using namespace flatbuffers;
+
+    FlatBufferBuilder builder;
+    std::vector<Offset<KeyValue>> upserts_v;
+    std::vector<Offset<String>> deletes_v;
+    std::vector<Offset<Acl>> ensures_v;
+
+    for (const auto &item : tx->items())
+    {
+        switch (std::get<transaction_impl_t::action_e>(item.second))
+        {
+            case transaction_impl_t::action_e::DELETE:
+                deletes_v.push_back(builder.CreateString(item.first));
+                break;
+
+            case transaction_impl_t::action_e::UPSERT:
+                upserts_v.push_back(
+                    CreateKeyValue(
+                        builder, 
+                        builder.CreateString(item.first), 
+                        builder.CreateVector(
+                            (uint8_t *) std::get<value_ptr>(item.second)->data().c_str(), 
+                            std::get<value_ptr>(item.second)->data().size()
+                        )
+                    )
+                );
+                break;
+
+            default:
+                break;
+        }
+    }
+
+    for (const auto &item : tx->ensures())
+    {
+        ensures_v.push_back(
+            CreateAcl(
+                builder, 
+                builder.CreateString(item.first), 
+                item.second
+            )
+        );
+    }
+
+    auto msg = CreateMessage(builder, 
+        MsgContent::SUBMIT_REQUEST, 
+        CreateSubmitRequest(builder, 
+            cid,
+            (tx->isolation() == transaction_t::isolation_e::SERIALIZABLE ? tx->rev_creation() : crev),
+            tx->type(),
+            builder.CreateVector(upserts_v),
+            builder.CreateVector(deletes_v),
+            builder.CreateVector(ensures_v),
+            force
+        ).Union()
+    );
+
+    builder.Finish(msg);
+    return builder.Release();
+}
+
+const nplex::msgs::Message * nplex::parse_network_msg(const char *ptr, size_t len)
+{
+    using namespace nplex;
+    using namespace nplex::msgs;
+    using namespace flatbuffers;
+
+    if (len <= 3 * sizeof(std::uint32_t))
+        return nullptr;
+
+    if (len != ntohl(*((const uint32_t *) ptr)))
+        return nullptr;
+
+    std::uint32_t metadata = ntohl(*((const uint32_t *) (ptr + sizeof(std::uint32_t))));
+    // TODO: uncompress if (metadata & LZ4)
+    UNUSED(metadata);
+
+    std::uint32_t checksum = ntohl(*((const std::uint32_t *) (ptr + len - sizeof(std::uint32_t))));
+
+    if (checksum != CRC32::CRC32::calc(reinterpret_cast<const uint8_t *>(ptr), len - sizeof(std::uint32_t)))
+        return nullptr;
+
+    ptr += 2 * sizeof(std::uint32_t);
+    len -= 3 * sizeof(std::uint32_t);
+
+    auto verifier = flatbuffers::Verifier((const uint8_t *) ptr, len);
+    verifier.VerifyBuffer<nplex::msgs::Message>(nullptr);
+
+    return flatbuffers::GetRoot<nplex::msgs::Message>(ptr);
 }
 
 void nplex::cb_process_async(uv_async_t *handle)
@@ -151,8 +248,7 @@ void nplex::cb_close_handle(uv_handle_t *handle, void *arg)
 void nplex::cb_tcp_alloc(uv_handle_t *handle, size_t suggested_size, uv_buf_t *buf)
 {
     UNUSED(suggested_size);
-    uv_tcp_t *con = (uv_tcp_t *) handle;
-    nplex::client_t::impl_t *impl = (nplex::client_t::impl_t *) con->loop->data;
+    nplex::client_t::impl_t *impl = (nplex::client_t::impl_t *) handle->loop->data;
 
     buf->base = impl->input_buffer;
     buf->len = sizeof(impl->input_buffer);
@@ -166,93 +262,42 @@ void nplex::cb_tcp_read(uv_stream_t *stream, ssize_t nread, const uv_buf_t *buf)
 
     uv_tcp_t *con = (uv_tcp_t *) stream;
     nplex::client_t::impl_t *impl = (nplex::client_t::impl_t *) con->loop->data;
-    char *ptr = buf->base;
-    size_t len = buf->len;
 
     if (nread < 0 || buf->base == NULL) {
-        impl->error = fmt::format("Tcp read error: {}", uv_strerror(nread));
+        impl->error = fmt::format("Tcp read error: {}", uv_strerror((int)nread));
         impl->close();
         return;
     }
 
-    // if (nread == UV_EOF) {
-    //     rft_close_connection(con);
-    //     return;
-    // }
+    if (nread == UV_EOF) {
+        // TODO: update state
+        impl->error = fmt::format("Connection closed");
+        return;
+    }
 
-    // if (con->input_msg_data == NULL) {
-    //     con->input_msg_data = malloc(MIN_MSG_SIZE);
-    //     con->input_msg_reserved = MIN_MSG_SIZE;
-    // }
+    impl->input_msg.append(buf->base, buf->len);
 
-    // while (len > 0)
-    // {
-    //     assert(con->input_msg_data && con->input_msg_reserved);
-    //     assert(con->input_msg_pos <= con->input_msg_reserved);
-    //     assert(con->input_msg_len <= con->input_msg_pos);
-    //     assert(con->input_msg_len <= con->input_msg_reserved);
+    while (impl->input_msg.size() >= sizeof(output_msg_t::len))
+    {
+        const char *ptr = impl->input_msg.c_str();
+        std::uint32_t len = ntohl(*((const std::uint32_t *) ptr));
 
-    //     // msg data is preceded by its length (4-bytes in network format).
-    //     // msg data can be split into multiple on_tcp_read() calls.
-    //     // msg length can be split between two consecutive on_tcp_read() calls.
+        if (len > impl->params.max_msg_bytes)
+        {
+            // TODO: manage this error
+            impl->error = fmt::format("Message too big: {}", len);
+            impl->close();
+            return;
+        }
 
-    //     if (con->input_msg_len == 0)
-    //     {
-    //         assert(con->input_msg_pos < sizeof(uint32_t));
+        if (impl->input_msg.size() < len)
+            break;
 
-    //         size_t aux = MIN(sizeof(uint32_t) - con->input_msg_pos, len);
-    //         memcpy(con->input_msg_data + con->input_msg_pos, ptr, aux);
-    //         con->input_msg_pos += aux;
-    //         ptr += aux;
-    //         len -= aux;
+        auto msg = parse_network_msg(ptr, len);
+        impl->process_recv_msg(msg);
 
-    //         if (con->input_msg_pos < sizeof(uint32_t))
-    //             return;
-
-    //         uint32_t num = 0;
-    //         memcpy(&num, con->input_msg_data, sizeof(uint32_t));
-
-    //         con->input_msg_len = ntohl(num);
-    //         con->input_msg_pos = 0;
-
-    //         if (con->input_msg_len == 0) {
-    //             LOG(RAFT_LOG_WARNING, "Received empty message, remote=%s", con->address);
-    //             rft_close_connection(con);
-    //             return;
-    //         }
-
-    //         if (con->input_msg_len > params->max_msg_size) {
-    //             LOG(RAFT_LOG_WARNING, "Received message exceeding max size (%d), remote=%s", 
-    //                     (int) params->max_msg_size, con->address);
-    //             rft_close_connection(con);
-    //             con->input_msg_len = 0;
-    //             return;
-    //         }
-
-    //         if (con->input_msg_len > con->input_msg_reserved) {
-    //             free(con->input_msg_data);
-    //             con->input_msg_data = malloc(con->input_msg_len);
-    //             con->input_msg_reserved = con->input_msg_len;
-    //         }
-    //     }
-
-    //     assert(con->input_msg_pos < con->input_msg_len);
-
-    //     size_t aux = MIN(con->input_msg_len - con->input_msg_pos, len);
-    //     memcpy(con->input_msg_data + con->input_msg_pos, ptr, aux);
-    //     con->input_msg_pos += aux;
-    //     ptr += aux;
-    //     len -= aux;
-
-    //     assert(con->input_msg_pos <= con->input_msg_len);
-
-    //     if (con->input_msg_pos == con->input_msg_len)
-    //     {
-    //         process_input_message(con);
-    //         con->input_msg_len = 0;
-    //         con->input_msg_pos = 0;
-    //     }
-    // }
+        impl->input_msg.erase(0, len);
+    }
 }
 
 void nplex::cb_tcp_write(uv_write_t *req, int status)
@@ -261,6 +306,7 @@ void nplex::cb_tcp_write(uv_write_t *req, int status)
     uv_tcp_t *con = (uv_tcp_t *) req->handle;
     nplex::client_t::impl_t *impl = (nplex::client_t::impl_t *) con->loop->data;
 
+    UNUSED(msg);
     // assert(XXX);
     // // TODO: pop message
     // output_queue_release(con, tcp_msg);

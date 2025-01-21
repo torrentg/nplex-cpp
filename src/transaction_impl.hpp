@@ -58,6 +58,7 @@ class transaction_impl_t : public transaction_t
     virtual std::uint32_t type() const override { return m_type; }
     virtual void type(std::uint32_t type) override { m_type = type; }
     virtual rev_t rev() const override;
+    virtual rev_t rev_creation() const { return m_rev_creation; }
 
     virtual value_ptr read(const char *key, bool check = false) override;
     virtual bool upsert(const char *key, const std::string_view &data, bool force = false) override;
@@ -67,7 +68,8 @@ class transaction_impl_t : public transaction_t
     virtual std::size_t for_each(const char *pattern, const callback_t &callback) override;
 
     void update(const std::vector<change_t> &changes);
-    flatbuffers::DetachedBuffer create_submit_msg(std::size_t cid, rev_t crev, bool force) const;
+    const items_t & items() const { return m_items; }
+    const ensures_t & ensures() const { return m_ensures; }
 };
 
 using tx_impl_ptr = std::shared_ptr<transaction_impl_t>;

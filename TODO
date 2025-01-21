@@ -14,6 +14,7 @@
 * Move mqueue to client_internals ?
 * Rename cache_t::restore() to load() ?
 * Review client_impl_t members access (currently public)
+* Add cause to client_t::disconnect(cause), client::close(cause)
 
 ## Useful commands
 
