@@ -11,10 +11,41 @@
  *   - C-style pointer casting.
  */
 
+// ==========================================================
+// Internal (static) functions
+// ==========================================================
+
+static void cb_process_async(uv_async_t *handle)
+{
+    nplex::client_t::impl_t *impl = (nplex::client_t::impl_t *) handle->data;
+    impl->process_commands();
+}
+
+static void cb_close_handle(uv_handle_t *handle, void *arg)
+{
+    UNUSED(arg);
+
+    if (uv_is_closing(handle))
+        return;
+
+    switch(handle->type)
+    {
+        case UV_TCP:
+        case UV_ASYNC:
+            uv_close(handle, NULL);
+            break;
+        default:
+            uv_close(handle, (uv_close_cb) free);
+    }
+}
+
+// ==========================================================
+// client_t::impl_t methods
+// ==========================================================
+
 nplex::client_t::impl_t::impl_t(client_t &parent_, const params_t &params_) : 
     parent(parent_),
     params(params_), 
-    input_buffer{0},
     commands(params.max_num_queued_commands),
     state{client_t::state_e::INITIALIZING}
 {
@@ -22,35 +53,32 @@ nplex::client_t::impl_t::impl_t(client_t &parent_, const params_t &params_) :
         throw nplex_exception("Invalid params: no servers");
 
     cache = std::make_shared<cache_t>();
-    async = std::make_unique<uv_async_t>();
+
     loop = std::make_unique<uv_loop_t>();
-    con = std::make_unique<uv_tcp_t>();
+
+    if (uv_loop_init(loop.get()) != 0)
+        throw nplex_exception("Error initializing event loop (uv_loop_init)");
+
+    loop->data = this;
+
+    async = std::make_unique<uv_async_t>();
+
+    if (uv_async_init(loop.get(), async.get(), ::cb_process_async) != 0)
+        throw nplex_exception("Error initializing event loop (uv_async_init)");
+
+    // TODO: iterate over all servers
+    connections.push_back(std::make_unique<connection_t>(params.servers, loop.get(), params));
 }
 
 void nplex::client_t::impl_t::run() noexcept
 {
     std::unique_lock<decltype(m_mutex)> guard(m_mutex);
 
-    if (state != client_t::state_e::INITIALIZING)
-        return;
-
-    assert(loop);
-    if (!loop || uv_loop_init(loop.get()) != 0) {
-        error = "Error initializing event loop (uv_loop_init)";
-        return;
-    }
-
-    loop->data = this;
-
-    assert(async);
-    if (!async || uv_async_init(loop.get(), async.get(), cb_process_async) != 0) {
-        error = "Error initializing event loop (uv_async_init)";
-        return;
-    }
+    assert (state == client_t::state_e::INITIALIZING);
 
     try
     {
-        connect(params.servers);
+        connect();
         guard.unlock();
         uv_run(loop.get(), UV_RUN_DEFAULT);
     }
@@ -61,7 +89,7 @@ void nplex::client_t::impl_t::run() noexcept
         error = "Unknown error in the event loop";
     }
 
-    uv_walk(loop.get(), cb_close_handle, NULL);
+    uv_walk(loop.get(), ::cb_close_handle, NULL);
     while (uv_run(loop.get(), UV_RUN_NOWAIT));
     uv_loop_close(loop.get());
 
@@ -70,57 +98,25 @@ void nplex::client_t::impl_t::run() noexcept
     return;
 }
 
-void nplex::client_t::impl_t::connect(const addr_t &addr)
+void nplex::client_t::impl_t::connect()
 {
-    int rc = 0;
-
-    // TODO: Check if the client is already connected
-    // TODO: manage on-fly messages (clear + reject tx)
-
-    state = client_t::state_e::CONNECTING;
-
-    struct sockaddr_storage addr_in = get_sockaddr(loop.get(), addr);
-
-    assert(con);
-    if ((rc = uv_tcp_init(loop.get(), con.get())) != 0)
-        throw nplex_exception(uv_strerror(rc));
-
-    uv_connect_t* connect = NULL;
-    if ((connect = (uv_connect_t*) malloc(sizeof(uv_connect_t))) == NULL)
-        throw std::bad_alloc();
-
-    if ((rc = uv_tcp_connect(connect, con.get(), (const struct sockaddr*) &addr_in, cb_tcp_connect)) != 0) {
-        free(connect);
-        throw nplex_exception(uv_strerror(rc));
-    }
+    // TODO: check state
+    // TODO: set state to CONNECTING
+    // TODO: send connection request to all servers
 }
 
-void nplex::client_t::impl_t::do_login()
+void nplex::client_t::impl_t::on_connection_established(const addr_t &addr)
 {
-    state = nplex::client_t::state_e::LOGGING_IN;
+    UNUSED(addr);
+    // TODO: check state (already logged?)
 
-    send(
-        create_login_msg(
-            correlation++, 
-            params.user, 
-            params.password
-        )
-    );
-}
-
-void nplex::client_t::impl_t::disconnect()
-{
-    switch (state)
-    {
-        case client_t::state_e::LOGGING_IN:
-        case client_t::state_e::SYNCHRONIZING:
-        case client_t::state_e::SYNCED:
-            state = client_t::state_e::DISCONNECTING;
-            uv_close((uv_handle_t *) con.get(), NULL);
-            break;
-        default:
-            break;
-    }
+    // con->send(
+    //     create_login_msg(
+    //         correlation++, 
+    //         params.user, 
+    //         params.password
+    //     )
+    // );
 }
 
 void nplex::client_t::impl_t::close()
@@ -143,16 +139,6 @@ void nplex::client_t::impl_t::close()
     }
 
     uv_stop(loop.get());
-}
-
-void nplex::client_t::impl_t::send(flatbuffers::DetachedBuffer &&buf)
-{
-    output_msg_t msg(std::move(buf));
-
-    // TODO: add msg to msg_queue
-    // rft_tcp_msg_t *msg = con->output_queue_front;
-
-    uv_write(&msg.req, (uv_stream_t *) con.get(), msg.buf.data(), msg.buf.size(), cb_tcp_write);
 }
 
 void nplex::client_t::impl_t::process_commands()
@@ -247,7 +233,7 @@ void nplex::client_t::impl_t::process_login_resp(const nplex::msgs::LoginRespons
         return;
     }
 
-    auto cmd = parent.on_connect(server_addr.str(), resp->rev0(), resp->crev());
+    auto cmd = parent.on_connect(con->addr.str(), resp->rev0(), resp->crev());
 
     msgs::LoadMode mode = msgs::LoadMode::SNAPSHOT_AT_LAST_REV;
 
@@ -269,7 +255,7 @@ void nplex::client_t::impl_t::process_login_resp(const nplex::msgs::LoginRespons
             break;
     }
 
-    send(
+    con->send(
         create_load_msg(
             correlation++, 
             mode, 

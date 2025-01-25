@@ -56,13 +56,13 @@ nplex::tx_ptr nplex::client_t::create_tx(transaction_t::isolation_e isolation, b
     if (m_impl->state == state_e::CLOSED)
         throw nplex_exception("Client is closed");
 
-    size_t num_concurrent_tx = m_impl->ongoing_tx.size() + m_impl->pending_tx.size();
-    if (num_concurrent_tx >= m_impl->params.max_num_concurrent_tx)
+    size_t num_txs = m_impl->transactions.size();
+    if (num_txs >= m_impl->params.max_num_concurrent_tx)
         throw nplex_exception("Too many concurrent transactions (max={})", m_impl->params.max_num_concurrent_tx);
 
     auto tx = std::make_shared<transaction_impl_t>(m_impl->cache, isolation, read_only);
 
-    m_impl->ongoing_tx.insert(tx);
+    m_impl->transactions.insert(tx);
 
     return tx;
 }
@@ -77,11 +77,11 @@ bool nplex::client_t::submit_tx(const tx_ptr &tx, bool force)
 
     std::lock_guard<decltype(m_impl->m_mutex)> lock(m_impl->m_mutex);
 
-    if (m_impl->state != state_e::SYNCED)
+    if (m_impl->state != state_e::SYNCHRONIZED)
         throw nplex_exception("Client not synced");
 
-    auto it = m_impl->ongoing_tx.find(tx);
-    if (it == m_impl->ongoing_tx.end())
+    auto it = m_impl->transactions.find(tx);
+    if (it == m_impl->transactions.end())
         throw nplex_exception("Transaction not found");
 
     // TODO: check if there are actions to submit (not-only-reads)
@@ -102,11 +102,16 @@ bool nplex::client_t::discard_tx(const tx_ptr &tx)
     if (m_impl->state == state_e::CLOSED)
         return false;
 
-    auto it = m_impl->ongoing_tx.find(tx);
+    auto it = m_impl->transactions.find(tx);
     
-    if (it == m_impl->ongoing_tx.end())
+    if (it == m_impl->transactions.end())
         return false;
 
-    m_impl->ongoing_tx.erase(it);
+    m_impl->transactions.erase(it);
     return true;
+}
+
+uv_loop_t * nplex::client_t::loop() const
+{
+    return m_impl->loop.get();
 }

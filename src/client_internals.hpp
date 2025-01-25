@@ -4,18 +4,15 @@
 #include <string>
 #include <memory>
 #include <variant>
-#include <arpa/inet.h>
-#include <flatbuffers/flatbuffers.h>
 #include <uv.h>
 #include "nplex-cpp/types.hpp"
 #include "transaction_impl.hpp"
 #include "messages.hpp"
-#include "addr.hpp"
 
 #define UNUSED(x) (void)(x)
 
 /**
- * Collection of classes and functions used by client_t::impl_t.
+ * Collection of classes and functions used by client_t::impl_t and connection_t.
  */
 
 namespace nplex {
@@ -43,6 +40,10 @@ struct output_msg_t
     std::uint32_t length() const { return ntohl(len); }
 };
 
+inline std::size_t get_msg_length(const flatbuffers::DetachedBuffer &buf) noexcept {
+    return buf.size() + 3 * sizeof(std::uint32_t);
+}
+
 struct submit_cmd_t {
     tx_impl_ptr tx;
     bool force;
@@ -56,17 +57,10 @@ struct ping_cmd_t {
 
 using command_t = std::variant<submit_cmd_t, close_cmd_t, ping_cmd_t>;
 
-struct sockaddr_storage get_sockaddr(uv_loop_t *loop, const addr_t &addr);
 flatbuffers::DetachedBuffer create_login_msg(std::size_t cid, const std::string &user, const std::string &password);
 flatbuffers::DetachedBuffer create_load_msg(std::size_t cid, msgs::LoadMode mode, rev_t rev);
 flatbuffers::DetachedBuffer create_submit_msg(std::size_t cid, rev_t crev, bool force, const tx_impl_ptr &tx);
-const nplex::msgs::Message * parse_network_msg(const char *ptr, size_t len);
 
-void cb_process_async(uv_async_t *handle);
-void cb_close_handle(uv_handle_t *handle, void *arg);
-void cb_tcp_alloc(uv_handle_t *handle, size_t suggested_size, uv_buf_t *buf);
-void cb_tcp_read(uv_stream_t *stream, ssize_t nread, const uv_buf_t *buf);
-void cb_tcp_write(uv_write_t *req, int status);
-void cb_tcp_connect(uv_connect_t *req, int status);
+const nplex::msgs::Message * parse_network_msg(const char *ptr, size_t len);
 
 } // namespace nplex

@@ -7,6 +7,9 @@
 #include "exception.hpp"
 #include "transaction.hpp"
 
+// Forward declarations
+struct uv_loop_s;
+
 namespace nplex {
 
 /**
@@ -59,8 +62,8 @@ class client_t
         INITIALIZING,                           //!< Client is initializing.
         CONNECTING,                             //!< Connecting to the server.
         LOGGING_IN,                             //!< Logging in to the server.
-        SYNCHRONIZING,                          //!< Initializing the cache.
-        SYNCED,                                 //!< Client is synced with the server.
+        SYNCHRONIZING,                          //!< Initializing the cache (load or crev != update.rev).
+        SYNCHRONIZED,                           //!< Client is synced with the server.
         DISCONNECTING,                          //!< Client is disconnecting.
         DISCONNECTED,                           //!< Client is disconnected.
         RECONNECTING,                           //!< Reconnecting to the server.
@@ -166,7 +169,6 @@ class client_t
      * All pending commands and pending responses are discarded.
      * This is a blocking command, it waits for the event loop to finish.
      * 
-     * @triggers on_disconnected().
      * @triggers on_closed().
      */
     void close();
@@ -174,7 +176,24 @@ class client_t
   protected:
 
     /**
-     * Callback function that is called when the client successfully connects to the server.
+     * Returns the event loop.
+     * 
+     * Act responsibly; with great power comes great responsibility.
+     * Call this method only from protected methods (methods executed into the event loop).
+     * 
+     * The event loop allows you to:
+     *   - get the current time (uv_now)
+     *   - create timers (uv_timer_t)
+     *   - ...
+     * 
+     * On close, all remaining objects will be deallocated using standard free().
+     * 
+     * @return The event loop (can be NULL).
+     */
+    struct uv_loop_s * loop() const;
+
+    /**
+     * Callback function that is called when the client successfully logs in to the server.
      * 
      * This function handles the connection event and determines the initial load command
      * to send to the server.
@@ -195,44 +214,22 @@ class client_t
     }
 
     /**
-     * Callback function that is called when the client successfully reconnects to the server.
+     * Callback function that is called when connection to server fails.
      * 
-     * This function handles the reconnection event and determines the load command
-     * to send to the server.
-     * 
-     * This function is executed in the event loop thread. Do not block it.
-     * 
-     * @triggers on_snapshot() If snapshot was requested.
-     * @triggers on_commit() On every new commit.
-     * 
-     * @param[in] server Server identifier (host:port).
-     * @param[in] oldest_rev Oldest revision available on the server.
-     * @param[in] newest_rev Newest revision available on the server.
-     * 
-     * @return The load command to send to the server.
-     */
-    virtual load_cmd_t on_reconnect([[maybe_unused]] const std::string &server, [[maybe_unused]] rev_t oldest_rev, [[maybe_unused]] rev_t newest_rev) {
-        return {load_mode_e::ONLY_UPDATES_FROM_REV, rev()};
-    }
-
-    /**
-     * Callback function that is called when the client is disconnected from the server.
-     * 
-     * This function handles the disconnection event, performing necessary cleanup and
-     * attempting to reconnect if applicable.
+     * This function handles the connection lost event, performing necessary 
+     * cleanup and attempting to reconnect if applicable.
      * 
      * This function is executed in the event loop thread. Do not block it.
      * 
-     * @triggers on_reconnect() If the client reconnects (returns true).
+     * @triggers on_connect() If the client reconnects (returns true).
      * @triggers on_close() If the client is closed (returns false).
      * 
      * @param[in] server Server identifier (host:port).
-     * @param[in] cause Disconnection cause.
      * 
      * @return true if the client should try to reconnect, 
      *         false if the client should close.
      */
-    virtual bool on_disconnect([[maybe_unused]] const std::string &server, [[maybe_unused]] const std::string &cause) {
+    virtual bool on_connection_lost([[maybe_unused]] const std::string &server) {
         return true;
     }
 

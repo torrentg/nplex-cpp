@@ -11,12 +11,13 @@
 * submit_tx_fut returns a future (attached to tx.promise)
 * extends key_t from cstring_t adding validation (length, double-, ending/, utf8) on construct, key_part, key_preffix, key_suffix, etc.
 * Review client_t::impl_t::m_mutex usage. Is it required?
-* Move mqueue to client_internals ?
+* Move mqueue class definition to client_internals ?
 * Rename cache_t::restore() to load() ?
 * Review client_impl_t members access (currently public)
 * Add cause to client_t::disconnect(cause), client::close(cause)
+* In client_impl_t, move uv_tcp_init to constructor `remove initializing state
 
 ## Useful commands
 
 * cloc --exclude-content="automatically generated" src test
-* cppcheck --enable=all --inconclusive --std=c++20 --force --suppress=missingIncludeSystem --suppress=unusedFunction --suppress=useInitializationList --suppress=noExplicitConstructor -Ideps -Isrc -Iinclude src &> removeme.txt
+* cppcheck --enable=all --inconclusive --std=c++20 --force --suppress=missingIncludeSystem --suppress=unusedFunction --suppress=useInitializationList --suppress=noExplicitConstructor --suppress=cstyleCast -Ideps -Isrc -Iinclude src &> removeme.txt

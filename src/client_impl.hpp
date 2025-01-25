@@ -1,6 +1,7 @@
 #pragma once
 
 #include <set>
+#include <vector>
 #include <mutex>
 #include <thread>
 #include <atomic>
@@ -11,6 +12,7 @@
 #include "mqueue.hpp"
 #include "cache.hpp"
 #include "addr.hpp"
+#include "connection.hpp"
 #include "client_internals.hpp"
 
 namespace nplex {
@@ -20,21 +22,19 @@ namespace nplex {
  */
 struct client_t::impl_t
 {
+    using connection_ptr = std::unique_ptr<connection_t>;
+
     client_t &parent;                               //!< Parent client.
-    addr_t server_addr;                             //!< Server address.
+    std::vector<connection_ptr> connections;        //!< Server connections.
+    connection_t *con = nullptr;                    //!< Current connection.
     std::size_t correlation = 0;                    //!< Last correlation id.
     params_t params;                                //!< Client params.
     std::mutex m_mutex;                             //!< Mutex to protect the client state.
     std::unique_ptr<uv_loop_t> loop;                //!< Event loop.
     std::unique_ptr<uv_async_t> async;              //!< Signals that there are input commands.
-    std::unique_ptr<uv_tcp_t> con;                  //!< Connection to the server.
-    char input_buffer[UINT16_MAX];                  //!< Input buffer.
-    std::string input_msg;                          //!< Input message.
     std::thread thread_loop;                        //!< Event loop thread, process input commands.
     mqueue<command_t> commands;                     //!< Commands pending to be digested by the event loop.
-    gto::cqueue<output_msg_t> msgs;                 //!< Ongoing messages to server.
-    std::set<tx_impl_ptr, shared_ptr_less_t> ongoing_tx;  //!< List of ongoing transactions (user working on it).
-    gto::cqueue<tx_impl_ptr> pending_tx;            //!< List of pending transactions (awaiting server response).
+    std::set<tx_impl_ptr, shared_ptr_less_t> transactions;  //!< List of current transactions.
     cache_ptr cache;                                //!< Database content.
     std::atomic<client_t::state_e> state;           //!< Client state.
     bool can_force = false;                         //!< User can force transactions (set by server at login).
@@ -44,16 +44,19 @@ struct client_t::impl_t
     ~impl_t();
 
     void run() noexcept;
-    void close();
-    void connect(const addr_t &addr);
-    void do_login();
-    void disconnect();
     void process_commands();
     void process_recv_msg(const nplex::msgs::Message *msg);
 
+    // TODO: args = con_ptr + cause (libuv rc) + print message
+    void on_connection_established(const addr_t &addr);
+    void on_connection_closed(const addr_t &addr);
+
   private:
 
-    void send(flatbuffers::DetachedBuffer &&buf);
+    void close();
+    void connect();
+    void do_login();
+    void disconnect();
 
     void process_submit_cmd(const nplex::submit_cmd_t &cmd);
     void process_close_cmd(const nplex::close_cmd_t &cmd);
