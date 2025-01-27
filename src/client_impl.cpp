@@ -47,7 +47,7 @@ nplex::client_t::impl_t::impl_t(client_t &parent_, const params_t &params_) :
     parent(parent_),
     params(params_), 
     commands(params.max_num_queued_commands),
-    state{client_t::state_e::INITIALIZING}
+    state{client_t::state_e::CONNECTING}
 {
     if (params.servers.empty())
         throw nplex_exception("Invalid params: no servers");
@@ -72,14 +72,11 @@ nplex::client_t::impl_t::impl_t(client_t &parent_, const params_t &params_) :
 
 void nplex::client_t::impl_t::run() noexcept
 {
-    std::unique_lock<decltype(m_mutex)> guard(m_mutex);
-
-    assert (state == client_t::state_e::INITIALIZING);
+    assert (state == client_t::state_e::CONNECTING);
 
     try
     {
         connect();
-        guard.unlock();
         uv_run(loop.get(), UV_RUN_DEFAULT);
     }
     catch (const std::exception &e) {
@@ -105,9 +102,9 @@ void nplex::client_t::impl_t::connect()
     // TODO: send connection request to all servers
 }
 
-void nplex::client_t::impl_t::on_connection_established(const addr_t &addr)
+void nplex::client_t::impl_t::on_connection_established(connection_t *con)
 {
-    UNUSED(addr);
+    UNUSED(con);
     // TODO: check state (already logged?)
 
     // con->send(
@@ -119,14 +116,16 @@ void nplex::client_t::impl_t::on_connection_established(const addr_t &addr)
     // );
 }
 
+void nplex::client_t::impl_t::on_connection_closed(connection_t *con)
+{
+    UNUSED(con);
+    // TODO: complete this method
+}
+
 void nplex::client_t::impl_t::close()
 {
     switch (state)
     {
-        case client_t::state_e::INITIALIZING:
-            state = client_t::state_e::CLOSED;
-            return;
-
         case client_t::state_e::CLOSING:
         case client_t::state_e::CLOSED:
             return;
@@ -181,8 +180,17 @@ void nplex::client_t::impl_t::process_ping_cmd(const nplex::ping_cmd_t &cmd)
     // TODO: implement
 }
 
-void nplex::client_t::impl_t::process_recv_msg(const nplex::msgs::Message *msg)
+void nplex::client_t::impl_t::on_msg_delivered(connection_t *con, const msgs::Message *msg)
 {
+    UNUSED(con);
+    UNUSED(msg);
+    //TODO: implementation pending
+}
+
+void nplex::client_t::impl_t::on_msg_received(connection_t *con, const msgs::Message *msg)
+{
+    UNUSED(con);
+
     if (!msg || !msg->content()) {
         // TODO: process error -> disconnect
         error = "Invalid message";

@@ -1,5 +1,7 @@
 #pragma once
 
+#include <mutex>
+#include <thread>
 #include <memory>
 #include <utility>
 #include "types.hpp"
@@ -56,15 +58,12 @@ class client_t
 {
   public:
 
-    struct impl_t;
+    class impl_t;
 
     enum class state_e : std::uint8_t {
-        INITIALIZING,                           //!< Client is initializing.
         CONNECTING,                             //!< Connecting to the server.
-        LOGGING_IN,                             //!< Logging in to the server.
         SYNCHRONIZING,                          //!< Initializing the cache (load or crev != update.rev).
         SYNCHRONIZED,                           //!< Client is synced with the server.
-        DISCONNECTING,                          //!< Client is disconnecting.
         DISCONNECTED,                           //!< Client is disconnected.
         RECONNECTING,                           //!< Reconnecting to the server.
         CLOSING,                                //!< Client is closing.
@@ -298,6 +297,8 @@ class client_t
   private:
 
     std::unique_ptr<impl_t> m_impl;
+    std::thread thread_loop;
+    std::mutex m_mutex;
 };
 
 }; // namespace nplex

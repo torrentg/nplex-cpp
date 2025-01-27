@@ -1,7 +1,6 @@
 #pragma once
 
 #include <uv.h>
-#include "client_internals.hpp"
 #include "client_impl.hpp"
 #include "addr.hpp"
 
@@ -10,15 +9,14 @@ namespace nplex {
 /**
  * Internal class representing a connection to a server.
  * 
- * client_impl can be accessed via con.loop->data.
+ * client_impl is accessed via tcp.loop->data.
  */
 struct connection_t
 {
     enum class state_e : std::uint8_t {
         CLOSED,
         CONNECTING,
-        CONNECTED,
-        ERROR
+        CONNECTED
     };
 
     uv_tcp_t tcp;
@@ -52,8 +50,6 @@ struct connection_t
     void send(flatbuffers::DetachedBuffer &&buf);
 
     client_t::impl_t * client() const { return (client_t::impl_t *) tcp.loop->data; }
-    bool is_disconnected() const { return state == state_e::CLOSED || state == state_e::ERROR; }
-
 };
 
 } // namespace nplex

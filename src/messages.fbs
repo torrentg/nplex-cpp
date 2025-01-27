@@ -62,7 +62,7 @@ table Snapshot
 table Acl
 {
     pattern: string;                // Pattern (glob)
-    mode: ubyte;                    // Mode (1=CREATE, 2=UPDATE, 4=DELETE)
+    mode: ubyte;                    // Mode (1=CREATE, 2=READ, 4=UPDATE, 8=DELETE)
 }
 
 // ========================================================

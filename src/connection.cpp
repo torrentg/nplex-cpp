@@ -1,3 +1,4 @@
+#include <cassert>
 #include <arpa/inet.h>
 #include "nplex-cpp/exception.hpp"
 #include "client_impl.hpp"
@@ -127,8 +128,12 @@ static void cb_tcp_read(uv_stream_t *stream, ssize_t nread, const uv_buf_t *buf)
 
         auto msg = parse_network_msg(ptr, len);
 
-        impl->process_recv_msg(msg);
-        // TODO: call con->receive(msg);
+        if (!msg) {
+            con->disconnect(UV_EREMOTEIO);
+            return;
+        }
+
+        impl->on_msg_received(con, msg);
 
         con->input_msg.erase(0, len);
     }
@@ -151,7 +156,7 @@ static void cb_tcp_connect(uv_connect_t *req, int status)
 
     con->state = connection_t::state_e::CONNECTED;
 
-    con->client()->on_connection_established(con->addr);
+    con->client()->on_connection_established(con);
 }
 
 static void cb_tcp_close(uv_handle_t *handle)
@@ -160,16 +165,17 @@ static void cb_tcp_close(uv_handle_t *handle)
 
     connection_t *con = (connection_t *) handle;
 
-    con->state = (con->error < 0 ? connection_t::state_e::ERROR : connection_t::state_e::CLOSED);
-    con->client()->on_connection_closed(con->addr);
+    con->state = connection_t::state_e::CLOSED;
+    con->client()->on_connection_closed(con);
 }
 
 static void cb_tcp_write(uv_write_t *req, int status)
 {
     using namespace nplex;
 
-    auto *msg = (output_msg_t *) req;
+    auto msg = std::unique_ptr<output_msg_t>((output_msg_t *) req);
     auto *con = (connection_t *) req->handle;
+    auto *impl = con->client();
 
     assert(con->stats.unack_msgs > 0);
     assert(con->stats.unack_bytes >= msg->length());
@@ -179,10 +185,15 @@ static void cb_tcp_write(uv_write_t *req, int status)
     con->stats.sent_msgs++;
     con->stats.sent_bytes += msg->length();
 
-    delete msg;
-
-    if (status < 0)
+    if (status < 0) {
         con->disconnect(status);
+        return;
+    }
+
+    auto *ptr = flatbuffers::GetRoot<nplex::msgs::Message>(msg->content.data());
+    assert(ptr);
+
+    impl->on_msg_delivered(con, ptr);
 }
 
 // ==========================================================
@@ -199,9 +210,9 @@ nplex::connection_t::connection_t(const addr_t &addr_, uv_loop_t *loop_, const p
     state = state_e::CLOSED;
     error = 0;
 
-    params.max_msg_bytes = params_.max_msg_bytes;
-    params.max_unack_msgs = params_.max_unakc_msgs;
-    params.max_unack_bytes = params_.max_unakc_bytes;
+    params.max_msg_bytes = (params_.max_msg_bytes == 0 ? UINT32_MAX : params_.max_msg_bytes);
+    params.max_unack_msgs = (params_.max_unack_msgs == 0 ? UINT32_MAX : params_.max_unack_msgs);
+    params.max_unack_bytes = (params_.max_unack_bytes == 0 ? UINT32_MAX : params_.max_unack_bytes);
 
     if ((rc = uv_tcp_init(loop_, &tcp)) != 0)
         throw nplex_exception(uv_strerror(rc));
@@ -211,14 +222,14 @@ nplex::connection_t::connection_t(const addr_t &addr_, uv_loop_t *loop_, const p
 
 nplex::connection_t::~connection_t()
 {
-    assert(state == state_e::CLOSED || state == state_e::ERROR);
+    assert(state == state_e::CLOSED);
 }
 
 void nplex::connection_t::connect()
 {
     int rc = 0;
 
-    if (!is_disconnected())
+    if (state != state_e::CLOSED)
         throw nplex_exception("Trying to connect a non-closed connection");
 
     error = 0;
@@ -238,7 +249,7 @@ void nplex::connection_t::connect()
 
 void nplex::connection_t::disconnect(int rc)
 {
-    if (is_disconnected())
+    if (state == state_e::CLOSED)
         return;
 
     if (!error)
@@ -252,13 +263,13 @@ void nplex::connection_t::send(flatbuffers::DetachedBuffer &&buf)
     auto len = get_msg_length(buf);
 
     if (stats.unack_msgs >= params.max_unack_msgs)
-        throw nplex_mqueue_exceeded("Output message queue is full");
+        throw nplex_exception("Output message queue is full");
 
     if (len > params.max_msg_bytes)
         throw nplex_exception("Message too large");
 
     if (stats.unack_bytes + len >= params.max_unack_msgs)
-        throw nplex_mqueue_exceeded("Too many output unacked bytes");
+        throw nplex_exception("Too many output unacked bytes");
 
     auto *msg = new output_msg_t(std::move(buf));
 
