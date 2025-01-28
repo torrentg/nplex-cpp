@@ -950,6 +950,7 @@ struct LoginResponseT : public ::flatbuffers::NativeTable {
   uint64_t rev0 = 0;
   uint64_t crev = 0;
   bool can_force = false;
+  uint32_t keepalive = 0;
 };
 
 struct LoginResponse FLATBUFFERS_FINAL_CLASS : private ::flatbuffers::Table {
@@ -962,7 +963,8 @@ struct LoginResponse FLATBUFFERS_FINAL_CLASS : private ::flatbuffers::Table {
     VT_SESSION = 8,
     VT_REV0 = 10,
     VT_CREV = 12,
-    VT_CAN_FORCE = 14
+    VT_CAN_FORCE = 14,
+    VT_KEEPALIVE = 16
   };
   uint64_t cid() const {
     return GetField<uint64_t>(VT_CID, 0);
@@ -982,6 +984,9 @@ struct LoginResponse FLATBUFFERS_FINAL_CLASS : private ::flatbuffers::Table {
   bool can_force() const {
     return GetField<uint8_t>(VT_CAN_FORCE, 0) != 0;
   }
+  uint32_t keepalive() const {
+    return GetField<uint32_t>(VT_KEEPALIVE, 0);
+  }
   bool Verify(::flatbuffers::Verifier &verifier) const {
     return VerifyTableStart(verifier) &&
            VerifyField<uint64_t>(verifier, VT_CID, 8) &&
@@ -991,6 +996,7 @@ struct LoginResponse FLATBUFFERS_FINAL_CLASS : private ::flatbuffers::Table {
            VerifyField<uint64_t>(verifier, VT_REV0, 8) &&
            VerifyField<uint64_t>(verifier, VT_CREV, 8) &&
            VerifyField<uint8_t>(verifier, VT_CAN_FORCE, 1) &&
+           VerifyField<uint32_t>(verifier, VT_KEEPALIVE, 4) &&
            verifier.EndTable();
   }
   LoginResponseT *UnPack(const ::flatbuffers::resolver_function_t *_resolver = nullptr) const;
@@ -1020,6 +1026,9 @@ struct LoginResponseBuilder {
   void add_can_force(bool can_force) {
     fbb_.AddElement<uint8_t>(LoginResponse::VT_CAN_FORCE, static_cast<uint8_t>(can_force), 0);
   }
+  void add_keepalive(uint32_t keepalive) {
+    fbb_.AddElement<uint32_t>(LoginResponse::VT_KEEPALIVE, keepalive, 0);
+  }
   explicit LoginResponseBuilder(::flatbuffers::FlatBufferBuilder &_fbb)
         : fbb_(_fbb) {
     start_ = fbb_.StartTable();
@@ -1038,11 +1047,13 @@ inline ::flatbuffers::Offset<LoginResponse> CreateLoginResponse(
     ::flatbuffers::Offset<::flatbuffers::String> session = 0,
     uint64_t rev0 = 0,
     uint64_t crev = 0,
-    bool can_force = false) {
+    bool can_force = false,
+    uint32_t keepalive = 0) {
   LoginResponseBuilder builder_(_fbb);
   builder_.add_crev(crev);
   builder_.add_rev0(rev0);
   builder_.add_cid(cid);
+  builder_.add_keepalive(keepalive);
   builder_.add_session(session);
   builder_.add_can_force(can_force);
   builder_.add_code(code);
@@ -1061,7 +1072,8 @@ inline ::flatbuffers::Offset<LoginResponse> CreateLoginResponseDirect(
     const char *session = nullptr,
     uint64_t rev0 = 0,
     uint64_t crev = 0,
-    bool can_force = false) {
+    bool can_force = false,
+    uint32_t keepalive = 0) {
   auto session__ = session ? _fbb.CreateString(session) : 0;
   return nplex::msgs::CreateLoginResponse(
       _fbb,
@@ -1070,7 +1082,8 @@ inline ::flatbuffers::Offset<LoginResponse> CreateLoginResponseDirect(
       session__,
       rev0,
       crev,
-      can_force);
+      can_force,
+      keepalive);
 }
 
 ::flatbuffers::Offset<LoginResponse> CreateLoginResponse(::flatbuffers::FlatBufferBuilder &_fbb, const LoginResponseT *_o, const ::flatbuffers::rehasher_function_t *_rehasher = nullptr);
@@ -2193,6 +2206,7 @@ inline void LoginResponse::UnPackTo(LoginResponseT *_o, const ::flatbuffers::res
   { auto _e = rev0(); _o->rev0 = _e; }
   { auto _e = crev(); _o->crev = _e; }
   { auto _e = can_force(); _o->can_force = _e; }
+  { auto _e = keepalive(); _o->keepalive = _e; }
 }
 
 inline ::flatbuffers::Offset<LoginResponse> LoginResponse::Pack(::flatbuffers::FlatBufferBuilder &_fbb, const LoginResponseT* _o, const ::flatbuffers::rehasher_function_t *_rehasher) {
@@ -2209,6 +2223,7 @@ inline ::flatbuffers::Offset<LoginResponse> CreateLoginResponse(::flatbuffers::F
   auto _rev0 = _o->rev0;
   auto _crev = _o->crev;
   auto _can_force = _o->can_force;
+  auto _keepalive = _o->keepalive;
   return nplex::msgs::CreateLoginResponse(
       _fbb,
       _cid,
@@ -2216,7 +2231,8 @@ inline ::flatbuffers::Offset<LoginResponse> CreateLoginResponse(::flatbuffers::F
       _session,
       _rev0,
       _crev,
-      _can_force);
+      _can_force,
+      _keepalive);
 }
 
 inline PingRequestT *PingRequest::UnPack(const ::flatbuffers::resolver_function_t *_resolver) const {

@@ -1,8 +1,38 @@
 #include "nplex-cpp/client.hpp"
+#include "nplex-cpp/exception.hpp"
+#include "addr.hpp"
 #include "client_impl.hpp"
+
+// ==========================================================
+// Internal (static) functions
+// ==========================================================
+
+static void check_params(const nplex::params_t &params)
+{
+    if (params.user.empty())
+        throw nplex::nplex_exception("Invalid params: no user");
+
+    if (params.password.empty())
+        throw nplex::nplex_exception("Invalid params: no password");
+
+    if (params.servers.empty())
+        throw nplex::nplex_exception("Invalid params: no servers");
+
+    for (auto &str : params.servers)
+        nplex::addr_t{str};
+
+    if (params.timeout_factor <= 1.0)
+        throw nplex::nplex_exception("Invalid params: timeout factor <= 1.0");
+}
+
+// ==========================================================
+// client_t methods
+// ==========================================================
 
 nplex::client_t::client_t(const params_t &params)
 {
+    check_params(params);
+
     m_impl = std::make_unique<impl_t>(*this, params);
 
     thread_loop = std::thread([this]() {
@@ -12,7 +42,7 @@ nplex::client_t::client_t(const params_t &params)
 
 nplex::client_t::state_e nplex::client_t::state() const
 { 
-    return m_impl->state;
+    return m_impl->state();
 }
 
 nplex::rev_t nplex::client_t::rev() const
@@ -24,30 +54,22 @@ void nplex::client_t::close()
 {
     std::lock_guard<decltype(m_mutex)> lock(m_mutex);
 
-    switch (m_impl->state)
-    {
-        case state_e::CLOSED:
-            return;
+    if (m_impl->state() == state_e::CLOSED)
+        return;
 
-        case state_e::CLOSING:
-            break;
+    m_impl->commands.clear();
+    if (m_impl->commands.push(close_cmd_t{}) == 1)
+        uv_async_send(m_impl->async.get());
 
-        default:
-            m_impl->state = state_e::CLOSING;
-            m_impl->commands.clear();
-            if (m_impl->commands.push(close_cmd_t{}) == 1)
-                uv_async_send(m_impl->async.get());
-            break;
-    }
-
-    thread_loop.join();
+    if (thread_loop.joinable())
+        thread_loop.join();
 }
 
 nplex::tx_ptr nplex::client_t::create_tx(transaction_t::isolation_e isolation, bool read_only)
 {
     std::lock_guard<decltype(m_mutex)> lock_impl(m_mutex);
 
-    if (m_impl->state == state_e::CLOSED)
+    if (m_impl->state() == state_e::CLOSED)
         throw nplex_exception("Client is closed");
 
     size_t num_txs = m_impl->transactions.size();
@@ -72,7 +94,7 @@ bool nplex::client_t::submit_tx(const tx_ptr &tx, bool force)
 
     std::lock_guard<decltype(m_mutex)> lock(m_mutex);
 
-    if (m_impl->state != state_e::SYNCHRONIZED)
+    if (m_impl->state() != state_e::SYNCHRONIZED)
         throw nplex_exception("Client not synced");
 
     //TODO: caution, m_impl->transactions is not thread-safe
@@ -96,7 +118,7 @@ bool nplex::client_t::discard_tx(const tx_ptr &tx)
 {
     std::lock_guard<decltype(m_mutex)> lock(m_mutex);
 
-    if (m_impl->state == state_e::CLOSED)
+    if (m_impl->state() == state_e::CLOSED)
         return false;
 
     auto it = m_impl->transactions.find(tx);

@@ -60,7 +60,8 @@ TEST_CASE("LoginResponse")
         "3b12-7aac7",   // session
         456,            // rev0
         2048,           // crev
-        false           // can_force
+        false,          // can_force
+        3000            // keepalive
     };
 
     auto buf = serialize(resp);
@@ -72,6 +73,8 @@ TEST_CASE("LoginResponse")
     CHECK(ptr->session()->str() == "3b12-7aac7");
     CHECK(ptr->rev0() == 456);
     CHECK(ptr->crev() == 2048);
+    CHECK(ptr->can_force() == false);
+    CHECK(ptr->keepalive() == 3000);
 }
 
 TEST_CASE("PingRequest")

@@ -5,16 +5,12 @@
 * allow ssl connections (see project tlsuv)
 * add user permissions on login_response
 * README: explain nplex purpose
-* improve params_t class: set default values + setters returning ref to obj
-* utility class to read config from file (optional)
 * submit_tx_fut returns a future (attached to tx.promise)
 * extends key_t from cstring_t adding validation (length, double-, ending/, utf8) on construct, key_part, key_preffix, key_suffix, etc.
 * Move mqueue class definition to client_internals ?
 * Rename cache_t::restore() to load() ?
 * Review client_impl_t members access (currently public)
 * Add cause to client_t::disconnect(cause), client::close(cause)
-* In client_impl_t, move uv_tcp_init to constructor `remove initializing state
-* Check for connection-lost (timeout x factor)
 
 ## Useful commands
 

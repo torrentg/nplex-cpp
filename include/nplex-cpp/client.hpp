@@ -65,8 +65,6 @@ class client_t
         SYNCHRONIZING,                          //!< Initializing the cache (load or crev != update.rev).
         SYNCHRONIZED,                           //!< Client is synced with the server.
         DISCONNECTED,                           //!< Client is disconnected.
-        RECONNECTING,                           //!< Reconnecting to the server.
-        CLOSING,                                //!< Client is closing.
         CLOSED                                  //!< Client is closed.
     };
 
@@ -89,7 +87,7 @@ class client_t
      * 
      * @param[in] params Connection parameters.
      * 
-     * @exception nplex_exception Thrown if the parameters are invalid.
+     * @exception nplex_exception Thrown if the parameters are invalid (no-servers, no-user, no-password, etc).
      */
     client_t(const params_t &params);
     virtual ~client_t() { close(); }

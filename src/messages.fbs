@@ -83,7 +83,8 @@ table LoginResponse
     rev0: uint64;                   // Oldest revision available
     crev: uint64;                   // Current database revision
     can_force: bool;                // Can force transactions
-    // TODO: add timeout + keepalive + permissions
+    keepalive: uint32;              // Keepalive timeout (in milliseconds)
+    // TODO: add permissions
 }
 
 table PingRequest

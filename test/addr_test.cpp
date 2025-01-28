@@ -150,7 +150,7 @@ TEST_CASE("addr")
     for (auto entry : valid_hosts)
     {
         string server = entry.host + ":12345";
-        
+
         REQUIRE_NOTHROW(addr = addr_t{server});
 
         if (addr.family() == AF_INET6) 
