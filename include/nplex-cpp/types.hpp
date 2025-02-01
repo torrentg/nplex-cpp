@@ -117,4 +117,4 @@ struct key_less_t
     bool operator()(const std::string_view &lhs, const key_t &rhs) const { return (lhs < rhs.view()); }
 };
 
-}; // namespace nplex
+} // namespace nplex

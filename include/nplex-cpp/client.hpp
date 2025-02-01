@@ -299,4 +299,4 @@ class client_t
     std::mutex m_mutex;
 };
 
-}; // namespace nplex
+} // namespace nplex

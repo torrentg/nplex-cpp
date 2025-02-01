@@ -263,4 +263,4 @@ class transaction_t
 
 using tx_ptr = std::shared_ptr<transaction_t>;
 
-}; // namespace nplex
+} // namespace nplex

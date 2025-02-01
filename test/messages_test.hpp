@@ -90,5 +90,5 @@ namespace tests {
         return ret;
     }
 
-}; // namespace tests
-}; // namespace nplex
+} // namespace tests
+} // namespace nplex

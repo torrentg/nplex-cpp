@@ -99,7 +99,6 @@ static void cb_tcp_read(uv_stream_t *stream, ssize_t nread, const uv_buf_t *buf)
     using namespace nplex;
 
     connection_t *con = (connection_t *) stream;
-    client_t::impl_t *impl = con->client();
 
     if (nread < 0 || buf->base == NULL) {
         con->disconnect((int) nread);
@@ -133,7 +132,7 @@ static void cb_tcp_read(uv_stream_t *stream, ssize_t nread, const uv_buf_t *buf)
             return;
         }
 
-        impl->on_msg_received(con, msg);
+        con->client()->on_msg_received(con, msg);
 
         con->input_msg.erase(0, len);
     }
@@ -175,7 +174,6 @@ static void cb_tcp_write(uv_write_t *req, int status)
 
     auto msg = std::unique_ptr<output_msg_t>((output_msg_t *) req);
     auto *con = (connection_t *) req->handle;
-    auto *impl = con->client();
 
     assert(con->stats.unack_msgs > 0);
     assert(con->stats.unack_bytes >= msg->length());
@@ -193,7 +191,7 @@ static void cb_tcp_write(uv_write_t *req, int status)
     auto *ptr = flatbuffers::GetRoot<nplex::msgs::Message>(msg->content.data());
     assert(ptr);
 
-    impl->on_msg_delivered(con, ptr);
+    con->client()->on_msg_delivered(con, ptr);
 }
 
 // ==========================================================

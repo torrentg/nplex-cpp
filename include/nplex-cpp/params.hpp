@@ -44,4 +44,4 @@ struct params_t
 
 };
 
-}; // namespace nplex
+} // namespace nplex

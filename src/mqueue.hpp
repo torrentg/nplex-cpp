@@ -101,4 +101,4 @@ class mqueue
     }
 };
 
-}; // namespace nplex
+} // namespace nplex

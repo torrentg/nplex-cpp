@@ -103,4 +103,4 @@ struct cache_t
 
 using cache_ptr = std::shared_ptr<cache_t>;
 
-}; // namespace nplex
+} // namespace nplex
