@@ -17,7 +17,7 @@
 
 static void cb_process_async(uv_async_t *handle)
 {
-    nplex::client_t::impl_t *impl = (nplex::client_t::impl_t *) handle->data;
+    auto *impl = (nplex::client_t::impl_t *) handle->loop->data;
     impl->process_commands();
 }
 
@@ -32,6 +32,7 @@ static void cb_close_handle(uv_handle_t *handle, void *arg)
     {
         case UV_TCP:
         case UV_ASYNC:
+        case UV_TIMER:
             uv_close(handle, NULL);
             break;
         default:
@@ -39,10 +40,18 @@ static void cb_close_handle(uv_handle_t *handle, void *arg)
     }
 }
 
-static void cb_timer_timeout(uv_timer_t *handle)
+static void cb_timer_keepalive_timeout(uv_timer_t *timer)
 {
-    nplex::client_t::impl_t *impl = (nplex::client_t::impl_t *) handle->data;
+    auto *impl = (nplex::client_t::impl_t *) timer->loop->data;
     impl->on_keepalive_timeout();
+}
+
+static void cb_timer_connect_timeout(uv_timer_t *timer)
+{
+    auto *impl = (nplex::client_t::impl_t *) timer->loop->data;
+    uv_timer_stop(timer);
+    uv_close((uv_handle_t *) timer, (uv_close_cb) free);
+    impl->connect();
 }
 
 // ==========================================================
@@ -51,7 +60,7 @@ static void cb_timer_timeout(uv_timer_t *handle)
 
 nplex::client_t::impl_t::impl_t(client_t &parent_, const params_t &params_) : 
     parent(parent_),
-    m_state{client_t::state_e::CONNECTING},
+    m_state{client_t::state_e::DISCONNECTED},
     params(params_)
 {
     if (params.servers.empty())
@@ -80,9 +89,14 @@ nplex::client_t::impl_t::impl_t(client_t &parent_, const params_t &params_) :
         connections.push_back(std::make_unique<connection_t>(server, loop.get(), params));
 }
 
+nplex::client_t::impl_t::~impl_t()
+{
+    // nothing to do
+}
+
 void nplex::client_t::impl_t::run() noexcept
 {
-    assert (m_state == client_t::state_e::CONNECTING);
+    assert (m_state == client_t::state_e::DISCONNECTED);
 
     try
     {
@@ -101,8 +115,6 @@ void nplex::client_t::impl_t::run() noexcept
     uv_loop_close(loop.get());
 
     parent.on_close();
-
-    return;
 }
 
 void nplex::client_t::impl_t::report_server_activity()
@@ -114,12 +126,15 @@ void nplex::client_t::impl_t::report_server_activity()
 
     auto handle = reinterpret_cast<uv_handle_t*>(timer.get());
 
-    if (uv_is_active(handle) && !uv_is_closing(handle))
+    if (handle && uv_is_active(handle) && !uv_is_closing(handle))
         uv_timer_again(timer.get());
 }
 
 void nplex::client_t::impl_t::connect()
 {
+    if (m_state != client_t::state_e::DISCONNECTED)
+        return;
+
     m_state = client_t::state_e::CONNECTING;
     m_con = nullptr;
 
@@ -160,27 +175,27 @@ void nplex::client_t::impl_t::on_connection_closed(connection_t *con)
             if (server->state != connection_t::state_e::CLOSED)
                 return;  // there is hope
         }
+    }
 
-        // all connections failed
+    std::string addr = (m_con ? m_con->addr.str() : "");
+
+    close_timer();
+    m_con = nullptr;
+    m_state = client_t::state_e::DISCONNECTED;
+
+    uint32_t wait_time = parent.on_connection_lost(addr);
+
+    if (wait_time == 0) {
         m_state = client_t::state_e::CLOSED;
         uv_stop(loop.get());
         return;
     }
 
-    // case: connection lost
-    close_timer();
-    m_con = nullptr;
-    m_state = client_t::state_e::DISCONNECTED;
-
-    bool try_reconnection = parent.on_connection_lost(con->addr.str());
-
-    if (try_reconnection) {
-        connect();
-        return;
-    }
-
-    m_state = client_t::state_e::CLOSED;
-    uv_stop(loop.get());
+    // schedule reconnection
+    uv_timer_t *reconnect_timer = (uv_timer_t *) malloc(sizeof(uv_timer_t));
+    uv_timer_init(loop.get(), reconnect_timer);
+    reconnect_timer->data = this;
+    uv_timer_start(reconnect_timer, ::cb_timer_connect_timeout, wait_time, 0);
 }
 
 void nplex::client_t::impl_t::on_keepalive_timeout()
@@ -320,7 +335,7 @@ void nplex::client_t::impl_t::process_login_resp(connection_t *con, const nplex:
     if (resp->keepalive()) {
         auto timeout = static_cast<uint64_t>(resp->keepalive() * static_cast<double>(params.timeout_factor));
 
-        uv_timer_start(timer.get(), ::cb_timer_timeout, timeout, timeout);
+        uv_timer_start(timer.get(), ::cb_timer_keepalive_timeout, timeout, timeout);
     }
 
     for (auto &server : connections)

@@ -29,11 +29,11 @@ class client_t::impl_t
     connection_t *m_con = nullptr;                  //!< Current connection.
     std::size_t correlation = 0;                    //!< Last correlation id.
     bool can_force = false;                         //!< User can force transactions (set by server at login).
-    std::string error;                              //!< Error message (empty if no error).
     std::atomic<client_t::state_e> m_state;         //!< Client state.
 
   public:
 
+    std::string error;                              //!< Error message (empty if no error).
     std::unique_ptr<uv_loop_t> loop;                //!< Event loop.
     std::unique_ptr<uv_async_t> async;              //!< Signals that there are input commands.
     std::unique_ptr<uv_timer_t> timer;              //!< Connection-lost timer. 
@@ -51,6 +51,7 @@ class client_t::impl_t
     void process_commands();
     void report_server_activity();
 
+    void connect();
     void on_keepalive_timeout();
     void on_connection_established(connection_t *con);
     void on_connection_closed(connection_t *con);
@@ -59,7 +60,6 @@ class client_t::impl_t
 
   private:
 
-    void connect();
     void abort(const std::string &msg);
     void close_timer();
 

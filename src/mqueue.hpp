@@ -46,7 +46,7 @@ class mqueue
      */
     void clear()
     {
-        std::unique_lock<std::mutex> lock(m_mutex);
+        std::lock_guard<std::mutex> lock(m_mutex);
         m_queue.clear();
     }
 
@@ -61,7 +61,7 @@ class mqueue
      */
     auto push(const T &item)
     {
-        std::unique_lock<std::mutex> lock(m_mutex);
+        std::lock_guard<std::mutex> lock(m_mutex);
 
         if (m_queue.full())
             throw nplex_mqueue_exceeded("mqueue exceeded capacity");
@@ -72,7 +72,7 @@ class mqueue
 
     auto push(T &&item)
     {
-        std::unique_lock<std::mutex> lock(m_mutex);
+        std::lock_guard<std::mutex> lock(m_mutex);
 
         if (m_queue.full())
             throw nplex_mqueue_exceeded("mqueue exceeded capacity");
@@ -91,7 +91,7 @@ class mqueue
      */
     bool try_pop(T &item)
     {
-        std::unique_lock<std::mutex> lock(m_mutex);
+        std::lock_guard<std::mutex> lock(m_mutex);
 
         if (m_queue.empty())
             return false;

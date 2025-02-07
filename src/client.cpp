@@ -32,12 +32,30 @@ static void check_params(const nplex::params_t &params)
 nplex::client_t::client_t(const params_t &params)
 {
     check_params(params);
-
     m_impl = std::make_unique<impl_t>(*this, params);
+}
+
+void nplex::client_t::start()
+{
+    if (m_impl->state() != state_e::DISCONNECTED)
+        return;
 
     thread_loop = std::thread([this]() {
-        m_impl->run();
+        try {
+            m_impl->run();
+        }
+        catch(const std::exception &e) {
+            m_impl->error = e.what();
+        }
+        catch(...) {
+            m_impl->error = "Unknown error in the event loop";
+        }
     });
+}
+
+nplex::client_t::~client_t()
+{
+    close();
 }
 
 nplex::client_t::state_e nplex::client_t::state() const

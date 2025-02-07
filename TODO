@@ -12,6 +12,9 @@
 * Review client_impl_t members access (currently public)
 * Add cause to client_t::disconnect(cause), client::close(cause)
 * Add traces to debug
+* In cb_close_handle(), connect_timer can be skipped
+* Create class listener_t with on_xxx() methods
+* listener_t::on_error(), add severity + msg
 
 ## Useful commands
 

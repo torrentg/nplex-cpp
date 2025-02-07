@@ -156,10 +156,35 @@ target_link_libraries(
     nplex-cpp
     "$<$<STREQUAL:${ENABLE_SANITIZERS},ON>:-lasan>"
     "$<$<STREQUAL:${ENABLE_SANITIZERS},ON>:-lubsan>"
+    "$<$<STREQUAL:${ENABLE_COVERAGE},ON>:-lgcov>"
     Threads::Threads
     libuv::uv
     fmt::fmt
     flatbuffers::flatbuffers_shared
+)
+
+add_executable(
+    my_app
+)
+
+target_sources(
+    my_app
+    PRIVATE
+    ${CMAKE_CURRENT_LIST_DIR}/examples/my_app.cpp
+)
+
+target_include_directories(
+    my_app
+    PRIVATE
+    ${PROJECT_SOURCE_DIR}/deps
+)
+
+target_link_libraries(
+    my_app
+    "$<$<STREQUAL:${ENABLE_SANITIZERS},ON>:-lasan>"
+    "$<$<STREQUAL:${ENABLE_SANITIZERS},ON>:-lubsan>"
+    "$<$<STREQUAL:${ENABLE_COVERAGE},ON>:-lgcov>"
+    nplex-cpp
 )
 
 include(CTest)

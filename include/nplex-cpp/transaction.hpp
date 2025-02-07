@@ -128,7 +128,8 @@ class transaction_t
      * @param[in] check If true, checks at commit time that the key-value pair was not modified.
      *                  Is equivalent to call 'ensure(key, NPLEX_CREATE|NPLEX_UPDATE|NPLEX_DELETE)'.
      * 
-     * @return The value associated with the key (empty if not found or previously deleted).
+     * @return The value associated with the key,
+     *         empty if not found or previously deleted.
      *         If the value was previously upsert, then its metadata is empty.
      * 
      * @exception std::invalid_argument Invalid key.

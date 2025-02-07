@@ -14,6 +14,170 @@ struct uv_loop_s;
 
 namespace nplex {
 
+// Forward declaration
+class client_t;
+
+/**
+ * Nplex listener interface.
+ * 
+ * This interface provides callback methods to handle various events related to the Nplex client.
+ * 
+ * By default, the Nplex client will:
+ *   - Close if the server is not available.
+ *   - Close if the connection is lost.
+ *   - Do nothing on initial data loading.
+ *   - Do nothing on each new update.
+ * 
+ * Implementing and extending this interface allows you to:
+ *   - Manage actions when the server is not available (ex: retry after 30 sec).
+ *   - Handle connection lost events.
+ *   - Handle initial data loading.
+ *   - Handle each new update.
+ * 
+ * Note:
+ * All these methods are executed in the event loop thread.
+ * Avoid using long-running tasks or blocking functions (write to file, rpc call, etc).
+ */
+class listener_t
+{
+  public:
+
+    enum class load_mode_e : std::uint8_t {
+        SNAPSHOT_AT_FIXED_REV,   //!< Sends snapshot at a fixed revision and subsequent commits.
+        SNAPSHOT_AT_LAST_REV,    //!< Sends snapshot at the last revision and subsequent commits.
+        ONLY_UPDATES_FROM_REV    //!< Sends only updates from a revision.   
+    };
+
+    using load_cmd_t = std::pair<load_mode_e, rev_t>;
+
+    virtual ~listener_t() {}
+
+    /**
+     * Callback function that is called when the client successfully logs in to the server.
+     * 
+     * This function handles the connection event and determines the initial load command
+     * to send to the server.
+     * 
+     * This function is executed in the event loop thread. Do not block it.
+     * 
+     * @triggers on_snapshot() If snapshot was requested.
+     * @triggers on_update() On every new commit.
+     * 
+     * @param[in] server Server identifier (host:port).
+     * @param[in] oldest_rev Oldest revision available on the server.
+     * @param[in] newest_rev Newest revision available on the server.
+     * 
+     * @return The load command to send to the server.
+     */
+    virtual load_cmd_t on_connected([[maybe_unused]] const std::string &server, [[maybe_unused]] rev_t oldest_rev, [[maybe_unused]] rev_t newest_rev) {
+        return {load_mode_e::SNAPSHOT_AT_LAST_REV, 0};
+    }
+
+    /**
+     * Callback function that is invoked when connection attempt fails or when an established 
+     * connection is lost.
+     * 
+     * This function is responsible for handling the disconnection event and determining
+     * the reconnection strategy. It returns the number of milliseconds to wait before
+     * attempting a reconnection. If the return value is 0, the connection should be closed.
+     * 
+     * This function is executed in the event loop thread. Do not block it.
+     * 
+     * @triggers on_connected() If the client reconnects (returns true).
+     * @triggers on_closed() If the client is closed (returns false).
+     * 
+     * @param[in] server Server identifier (host:port). Empty string if there was no previously established connection.
+     * 
+     * @return The number of milliseconds to wait before trying a reconnection, 
+     *         if 0, close the connection.
+     */
+    virtual std::uint32_t on_connection_lost([[maybe_unused]] const std::string &server) {
+        return 0;
+    }
+
+    /**
+     * Callback function that is called when the client is closed.
+     * 
+     * After this function is called, the client is no longer valid.
+     * 
+     * This function is executed in the event loop thread. At this stage, 
+     * you can block it if required (write to disk, etc).
+     */
+    virtual void on_closed() {}
+
+    /**
+     * Callback function that is called when a snapshot is received from the server.
+     * 
+     * When this method is called, the client is in the SYNCHRONIZING state and the 
+     * local database was just reseted to the snapshot content.
+     * 
+     * This function is executed in the event loop thread. Do not block it.
+     * 
+     * Use this method to update your business objects.
+     */
+    virtual void on_snapshot() {}
+
+    /**
+     * Callback function that is called when an update is received from the server.
+     * 
+     * When this method is called, changes was already applied to the local database.
+     * Use this method to update your business objects.
+     * 
+     * This function is executed in the event loop thread. Do not block it.
+     *
+     * @param[in] meta Transaction metadata.
+     * @param[in] changes List of changes.
+     */
+    virtual void on_update([[maybe_unused]] const meta_ptr &meta, [[maybe_unused]] const std::vector<change_t> &changes) {}
+
+    /**
+     * Callback function that is called when a transaction is rejected by the server.
+     * 
+     * This function handles the event when a transaction is rejected, allowing the client
+     * to take appropriate actions, such as logging the rejection or retrying the transaction.
+     * 
+     * If you need to resubmit the transaction, creates a new one.
+     * 
+     * This function is executed in the event loop thread. Do not block it.
+     * 
+     * @param[in] tx The transaction that was rejected.
+     */
+    virtual void on_rejected([[maybe_unused]] tx_ptr tx) {}
+
+    /**
+     * Callback function that is called when an error occurs.
+     * 
+     * This function handles error events, allowing the client to take appropriate actions,
+     * such as logging the error or attempting recovery.
+     * 
+     * This function is executed in the event loop thread. Do not block it.
+     * 
+     * @param[in] msg The error message describing the issue.
+     */
+    virtual void on_error([[maybe_unused]] const std::string &msg) {}
+
+  protected:
+
+    /**
+     * Returns the event loop.
+     * 
+     * Act responsibly; with great power comes great responsibility.
+     * Call this method only from protected methods (methods executed into the event loop).
+     * 
+     * The event loop allows you to:
+     *   - get the current time (uv_now)
+     *   - create timers (uv_timer_t)
+     *   - ...
+     * 
+     * On close, all remaining objects will be deallocated using standard free().
+     * 
+     * @return The event loop (can be NULL).
+     */
+    client_t *m_client;
+
+    struct uv_loop_s *m_loop;
+};
+
 /**
  * Async nplex client.
  * 
@@ -90,7 +254,7 @@ class client_t
      * @exception nplex_exception Thrown if the parameters are invalid (no-servers, no-user, no-password, etc).
      */
     client_t(const params_t &params);
-    virtual ~client_t() { close(); }
+    virtual ~client_t();
 
     /**
      * Returns current client state.
@@ -170,6 +334,9 @@ class client_t
      */
     void close();
 
+// required because we can start the thread and the derived object is still in the constructor
+void start();
+
   protected:
 
     /**
@@ -211,23 +378,25 @@ class client_t
     }
 
     /**
-     * Callback function that is called when connection to server fails.
+     * Callback function that is invoked when connection attempt fails or when an established 
+     * connection is lost.
      * 
-     * This function handles the connection lost event, performing necessary 
-     * cleanup and attempting to reconnect if applicable.
+     * This function is responsible for handling the disconnection event and determining
+     * the reconnection strategy. It returns the number of milliseconds to wait before
+     * attempting a reconnection. If the return value is 0, the connection should be closed.
      * 
      * This function is executed in the event loop thread. Do not block it.
      * 
      * @triggers on_connect() If the client reconnects (returns true).
      * @triggers on_close() If the client is closed (returns false).
      * 
-     * @param[in] server Server identifier (host:port).
+     * @param[in] server Server identifier (host:port). Empty string if there was no previously established connection.
      * 
-     * @return true if the client should try to reconnect, 
-     *         false if the client should close.
+     * @return The number of milliseconds to wait before trying a reconnection, 
+     *         if 0, close the connection.
      */
-    virtual bool on_connection_lost([[maybe_unused]] const std::string &server) {
-        return true;
+    virtual std::uint32_t on_connection_lost([[maybe_unused]] const std::string &server) {
+        return 0;
     }
 
     /**
@@ -265,20 +434,6 @@ class client_t
      * @param[in] tx User transaction that originated the changes (null if this update is not related to a user commit).
      */
     virtual void on_update([[maybe_unused]] const meta_ptr &meta, [[maybe_unused]] const std::vector<change_t> &changes, [[maybe_unused]] tx_ptr tx = nullptr) {}
-
-    /**
-     * Callback function that is called when a transaction is rejected by the server.
-     * 
-     * This function handles the event when a transaction is rejected, allowing the client
-     * to take appropriate actions, such as logging the rejection or retrying the transaction.
-     * 
-     * If you need to resubmit the transaction, creates a new one.
-     * 
-     * This function is executed in the event loop thread. Do not block it.
-     * 
-     * @param[in] tx The transaction that was rejected.
-     */
-    virtual void on_reject([[maybe_unused]] tx_ptr tx) {}
 
     /**
      * Callback function that is called when an error occurs.

@@ -10,8 +10,8 @@ namespace nplex {
 
 // Forward declarations
 namespace msgs {
-    class Snapshot;
-    class Update;
+    struct Snapshot;
+    struct Update;
 }
 
 /**

@@ -41,7 +41,7 @@ using meta_ptr = std::shared_ptr<meta_t>;
 class value_t
 {
     static const gto::cstring EMPTY;
-    friend class cache_t;
+    friend struct cache_t;
 
   private:
     gto::cstring m_data;
@@ -92,10 +92,6 @@ struct change_t
 inline bool is_valid_key(const std::string_view &key) { return !key.empty(); }
 inline bool is_valid_key(const char *key) { return (key && is_valid_key(std::string_view{key})); }
 inline bool is_valid_key(const key_t &key) { return is_valid_key(key.view()); }
-std::string_view key_part(const key_t &key, std::size_t index, char delimiter = KEY_DELIMITER);
-std::string_view key_prefix(const key_t &key, std::size_t index, char delimiter = KEY_DELIMITER);
-std::string_view key_suffix(const key_t &key, std::size_t index, char delimiter = KEY_DELIMITER);
-key_t operator+(const key_t &lhs, const char *rhs);
 
 struct key_less_t
 {
