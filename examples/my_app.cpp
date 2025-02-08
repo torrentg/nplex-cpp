@@ -62,15 +62,14 @@ struct sensor_t
     bool active;
 };
 
-class my_client_t : public nplex::client_t
+class my_listener_t : public nplex::listener_t
 {
   private:
 
-    const std::uint32_t millis_between_attempts = 1000;
+    const std::int32_t millis_between_attempts = 3000;
     const std::size_t max_failed_attempts = 3;
 
     std::size_t num_failed_attempts = 0;
-    std::uint64_t connection_timestamp = 0;
     nplex::rev_t last_rev = 0;
 
     std::map<std::string, sensor_t> sensors;
@@ -146,23 +145,15 @@ class my_client_t : public nplex::client_t
 
   public:
 
-    using client_t::client_t;
-    ~my_client_t() override  { fmt::print("my_client_t::~my_client_t()\n"); }
+    using listener_t::listener_t;
 
   protected:
 
-    void on_close() override
+    load_cmd_t on_connected([[maybe_unused]] nplex::client_t &client, const std::string &server, nplex::rev_t oldest_rev, nplex::rev_t newest_rev) override
     {
-        sensors.clear();
-        fmt::print("All objects removed\n");
-    }
-#if 0
-    load_cmd_t on_connect(const std::string &server, nplex::rev_t oldest_rev, nplex::rev_t newest_rev) override
-    {
-        fmt::print("Connected to server {} having revs [{}, {}]\n", server, oldest_rev, newest_rev);
+        fmt::print("Nplex client connected to server {}, available revs = [{}, {}]\n", server, oldest_rev, newest_rev);
 
         num_failed_attempts = 0;
-        connection_timestamp = uv_now(loop());
 
         if (last_rev == 0)
             return {load_mode_e::SNAPSHOT_AT_LAST_REV, 0};
@@ -170,7 +161,7 @@ class my_client_t : public nplex::client_t
             return {load_mode_e::ONLY_UPDATES_FROM_REV, last_rev};
     }
 
-    uint32_t on_connection_lost(const std::string &server) override
+    std::int32_t on_connection_lost([[maybe_unused]] nplex::client_t &client, const std::string &server) override
     {
         // Case: failed to connect to cluster
         if (server.empty())
@@ -187,19 +178,23 @@ class my_client_t : public nplex::client_t
         }
 
         // Case: current connection was lost
-        auto millis = uv_now(loop()) - connection_timestamp;
-        fmt::print("Connection lost to {} after {} ms\n", server, millis);
-        connection_timestamp = 0;
-        // try to reconnect immediately (1 ms delay)
-        return 1;
+        fmt::print("Connection lost to {}\n", server);
+        // try to reconnect immediately
+        return 0;
     }
 
-    void on_snapshot() override
+    void on_closed([[maybe_unused]] nplex::client_t &client) override
     {
-        fmt::print("Received snapshot at rev {}\n", rev());
+        sensors.clear();
+        fmt::print("Nplex client closed\n");
+    }
+
+    void on_snapshot(nplex::client_t &client) override
+    {
+        fmt::print("Received snapshot at rev {}\n", client.rev());
 
         // we need a tx to access the database content
-        auto tx = create_tx(nplex::transaction_t::isolation_e::READ_COMMITTED, true);
+        auto tx = client.create_tx(nplex::transaction_t::isolation_e::READ_COMMITTED, true);
 
         // initializing bussiness objects with database content
         tx->for_each("/sensors/*/*", [this](const gto::cstring &key, const nplex::value_t &value) {
@@ -216,14 +211,9 @@ class my_client_t : public nplex::client_t
                 key, obj.active, obj.position.x, obj.position.y, obj.position.z , obj.value);
     }
 
-    void on_update(const nplex::meta_ptr &meta, const std::vector<nplex::change_t> &changes, nplex::tx_ptr tx) override
+    void on_update([[maybe_unused]] nplex::client_t &client, const nplex::meta_ptr &meta, const std::vector<nplex::change_t> &changes) override
     {
-        fmt::print("Received update at rev {}", meta->rev);
-
-        if (tx)
-            fmt::print(" from local tx\n", tx->rev());
-        else
-            fmt::print(" from user {}\n", meta->user);
+        fmt::print("Received update at rev {}\n", meta->rev);
 
         for (const auto &change : changes)
         {
@@ -247,12 +237,6 @@ class my_client_t : public nplex::client_t
 
         last_rev = meta->rev;
     }
-
-    void on_reject(nplex::tx_ptr tx) override 
-    {
-        fmt::print("Transaction {} was rejected", tx->type());
-    }
-#endif
 };
 
 int main(int argc, char *argv[])
@@ -261,10 +245,11 @@ int main(int argc, char *argv[])
     std::string user = "jdoe";
     std::string passwd = "s3cr3t";
 
-    my_client_t nplex{{servers, user, passwd}};
-
+    
     try {
-        nplex.start();
+        my_listener_t listener;
+        nplex::client_t nplex{{servers, user, passwd}, listener};
+        nplex.join();
     }
     catch(...) {
         fmt::print(stderr, "Error: unable to start nplex client\n");

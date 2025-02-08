@@ -58,13 +58,14 @@ static void cb_timer_connect_timeout(uv_timer_t *timer)
 // client_t::impl_t methods
 // ==========================================================
 
-nplex::client_t::impl_t::impl_t(client_t &parent_, const params_t &params_) : 
+nplex::client_t::impl_t::impl_t(const params_t &params_, listener_t &listener_, client_t &parent_) : 
     parent(parent_),
-    m_state{client_t::state_e::DISCONNECTED},
+    listener(listener_),
+    m_state{state_e::DISCONNECTED},
     params(params_)
 {
     if (params.servers.empty())
-        throw nplex_exception("Invalid params: no servers");
+        throw invalid_config("Invalid params: no servers");
 
     cache = std::make_shared<cache_t>();
 
@@ -80,9 +81,9 @@ nplex::client_t::impl_t::impl_t(client_t &parent_, const params_t &params_) :
     if (uv_async_init(loop.get(), async.get(), ::cb_process_async) != 0)
         throw nplex_exception("Error initializing event loop (uv_async_init)");
 
-    timer = std::make_unique<uv_timer_t>();
+    timer_keepalive = std::make_unique<uv_timer_t>();
 
-    if (uv_timer_init(loop.get(), timer.get()) != 0)
+    if (uv_timer_init(loop.get(), timer_keepalive.get()) != 0)
         throw nplex_exception("Error initializing event loop (uv_timer_init)");
 
     for (auto &server : params.servers)
@@ -91,12 +92,12 @@ nplex::client_t::impl_t::impl_t(client_t &parent_, const params_t &params_) :
 
 nplex::client_t::impl_t::~impl_t()
 {
-    // nothing to do
+    assert (m_state == state_e::CLOSED);
 }
 
 void nplex::client_t::impl_t::run() noexcept
 {
-    assert (m_state == client_t::state_e::DISCONNECTED);
+    assert (m_state == state_e::DISCONNECTED);
 
     try
     {
@@ -106,40 +107,57 @@ void nplex::client_t::impl_t::run() noexcept
     catch (const std::exception &e) {
         error = e.what();
     }
-    catch (...) {
-        error = "Unknown error in the event loop";
+
+    try
+    {
+        uv_walk(loop.get(), ::cb_close_handle, NULL);
+        while (uv_run(loop.get(), UV_RUN_NOWAIT));
+        uv_loop_close(loop.get());
+
+        set_state(state_e::CLOSED);
+        listener.on_closed(parent);
     }
+    catch (const std::exception &e) {
+        error = e.what();
+    }
+}
 
-    uv_walk(loop.get(), ::cb_close_handle, NULL);
-    while (uv_run(loop.get(), UV_RUN_NOWAIT));
-    uv_loop_close(loop.get());
+void nplex::client_t::impl_t::abort(const std::string &msg)
+{
+    error = msg;
+    close_timer();
+    set_state(state_e::CLOSED);
+    uv_stop(loop.get());
+}
 
-    parent.on_close();
+void nplex::client_t::impl_t::set_state(state_e state)
+{
+    m_state = state;
+    m_cv.notify_all();
 }
 
 void nplex::client_t::impl_t::report_server_activity()
 {
-    if (!m_con || m_state == client_t::state_e::CLOSED || m_state == client_t::state_e::DISCONNECTED) {
+    if (!m_con || m_state == state_e::CLOSED || m_state == state_e::DISCONNECTED) {
         close_timer();
         return;
     }
 
-    auto handle = reinterpret_cast<uv_handle_t*>(timer.get());
+    auto handle = reinterpret_cast<uv_handle_t*>(timer_keepalive.get());
 
     if (handle && uv_is_active(handle) && !uv_is_closing(handle))
-        uv_timer_again(timer.get());
+        uv_timer_again(timer_keepalive.get());
 }
 
 void nplex::client_t::impl_t::connect()
 {
-    if (m_state != client_t::state_e::DISCONNECTED)
+    if (m_state != state_e::DISCONNECTED)
         return;
 
-    m_state = client_t::state_e::CONNECTING;
+    set_state(state_e::CONNECTING);
     m_con = nullptr;
 
-    for (auto &con : connections)
-    {
+    for (auto &con : connections) {
         assert(con->state == connection_t::state_e::CLOSED);
         con->connect();
     }
@@ -147,13 +165,13 @@ void nplex::client_t::impl_t::connect()
 
 void nplex::client_t::impl_t::on_connection_established(connection_t *con)
 {
-    if (m_state != client_t::state_e::CONNECTING) {
-        con->disconnect(0);
+    if (m_state != state_e::CONNECTING) {
+        con->disconnect();
         return;
     }
 
     if (m_con != nullptr) {
-        con->disconnect(0);
+        con->disconnect();
         return;
     }
 
@@ -168,12 +186,20 @@ void nplex::client_t::impl_t::on_connection_established(connection_t *con)
 
 void nplex::client_t::impl_t::on_connection_closed(connection_t *con)
 {
-    // case: trying to connect (connection failed)
+    // Case: unable to connect
     if (con != m_con)
     {
         for (auto &server : connections) {
             if (server->state != connection_t::state_e::CLOSED)
-                return;  // there is hope
+                // Already connected or there is an ongoing connection attempt
+                return;  
+        }
+
+        // All servers failed to connect
+
+        if (num_logins == 0) {
+            abort("Cannot connect to cluster");
+            return;
         }
     }
 
@@ -181,13 +207,12 @@ void nplex::client_t::impl_t::on_connection_closed(connection_t *con)
 
     close_timer();
     m_con = nullptr;
-    m_state = client_t::state_e::DISCONNECTED;
+    set_state(state_e::DISCONNECTED);
 
-    uint32_t wait_time = parent.on_connection_lost(addr);
+    auto wait_time = listener.on_connection_lost(parent, addr);
 
-    if (wait_time == 0) {
-        m_state = client_t::state_e::CLOSED;
-        uv_stop(loop.get());
+    if (wait_time < 0) {
+        abort("Connection lost");
         return;
     }
 
@@ -195,7 +220,7 @@ void nplex::client_t::impl_t::on_connection_closed(connection_t *con)
     uv_timer_t *reconnect_timer = (uv_timer_t *) malloc(sizeof(uv_timer_t));
     uv_timer_init(loop.get(), reconnect_timer);
     reconnect_timer->data = this;
-    uv_timer_start(reconnect_timer, ::cb_timer_connect_timeout, wait_time, 0);
+    uv_timer_start(reconnect_timer, ::cb_timer_connect_timeout, (uint64_t) wait_time, 0);
 }
 
 void nplex::client_t::impl_t::on_keepalive_timeout()
@@ -240,13 +265,8 @@ void nplex::client_t::impl_t::process_close_cmd(const nplex::close_cmd_t &cmd)
 {
     UNUSED(cmd);
 
-    if (m_state == client_t::state_e::CLOSED)
+    if (m_state == state_e::CLOSED)
         return;
-
-    if(!uv_loop_alive(loop.get())) {
-        m_state = client_t::state_e::CLOSED;
-        return;
-    }
 
     uv_stop(loop.get());
 }
@@ -270,7 +290,7 @@ void nplex::client_t::impl_t::on_msg_delivered(connection_t *con, const msgs::Me
 void nplex::client_t::impl_t::on_msg_received(connection_t *con, const msgs::Message *msg)
 {
     if (!msg || !msg->content()) {
-        con->disconnect(0);
+        con->disconnect(UV_EPROTO);
         return;
     }
 
@@ -280,7 +300,7 @@ void nplex::client_t::impl_t::on_msg_received(connection_t *con, const msgs::Mes
     }
 
     if (con != m_con) {
-        con->disconnect(0);
+        con->disconnect();
         return;
     }
 
@@ -309,54 +329,56 @@ void nplex::client_t::impl_t::on_msg_received(connection_t *con, const msgs::Mes
             break;
 
         default:
-            con->disconnect(0);
+            con->disconnect(UV_EPROTO);
     }
 }
 
 void nplex::client_t::impl_t::process_login_resp(connection_t *con, const nplex::msgs::LoginResponse *resp)
 {
     if (m_con) {
-        con->disconnect(0);
+        con->disconnect();
         return;
     }
 
-    assert(m_state == client_t::state_e::CONNECTING);
+    assert(m_state == state_e::CONNECTING);
 
     if (resp->code() != msgs::LoginCode::AUTHORIZED) {
-        con->disconnect(0);
+        listener.on_error(parent, fmt::format("Login failed on server {}", con->addr.str()));
+        con->disconnect();
         return;
     }
 
     m_con = con;
-    m_state = client_t::state_e::SYNCHRONIZING;
+    num_logins++;
+    set_state(state_e::SYNCHRONIZING);
     can_force = resp->can_force();
     // TODO: get permissions
 
     if (resp->keepalive()) {
         auto timeout = static_cast<uint64_t>(resp->keepalive() * static_cast<double>(params.timeout_factor));
 
-        uv_timer_start(timer.get(), ::cb_timer_keepalive_timeout, timeout, timeout);
+        uv_timer_start(timer_keepalive.get(), ::cb_timer_keepalive_timeout, timeout, timeout);
     }
 
     for (auto &server : connections)
         if (server.get() != m_con)
-            server->disconnect(0);
+            server->disconnect();
 
-    auto cmd = parent.on_connect(m_con->addr.str(), resp->rev0(), resp->crev());
+    auto cmd = listener.on_connected(parent, m_con->addr.str(), resp->rev0(), resp->crev());
 
     msgs::LoadMode mode = msgs::LoadMode::SNAPSHOT_AT_LAST_REV;
 
     switch (cmd.first)
     {
-        case load_mode_e::SNAPSHOT_AT_FIXED_REV:
+        case listener_t::load_mode_e::SNAPSHOT_AT_FIXED_REV:
             mode = msgs::LoadMode::SNAPSHOT_AT_FIXED_REV;
             break;
 
-        case load_mode_e::SNAPSHOT_AT_LAST_REV:
+        case listener_t::load_mode_e::SNAPSHOT_AT_LAST_REV:
             mode = msgs::LoadMode::SNAPSHOT_AT_LAST_REV;
             break;
 
-        case load_mode_e::ONLY_UPDATES_FROM_REV:
+        case listener_t::load_mode_e::ONLY_UPDATES_FROM_REV:
             mode = msgs::LoadMode::ONLY_UPDATES_FROM_REV;
             break;
 
@@ -375,7 +397,7 @@ void nplex::client_t::impl_t::process_login_resp(connection_t *con, const nplex:
 
 void nplex::client_t::impl_t::process_load_resp(const nplex::msgs::LoadResponse *resp)
 {
-    if (m_state != client_t::state_e::SYNCHRONIZING) {
+    if (m_state != state_e::SYNCHRONIZING) {
         // unexpected message
         m_con->disconnect(UV_EPROTO);
         return;
@@ -389,10 +411,10 @@ void nplex::client_t::impl_t::process_load_resp(const nplex::msgs::LoadResponse 
     if (resp->snapshot())
         cache->restore(resp->snapshot());
 
-    parent.on_snapshot();
+    listener.on_snapshot(parent);
 
     if (cache->m_rev == resp->crev())
-        m_state = client_t::state_e::SYNCHRONIZED;
+        set_state(state_e::SYNCHRONIZED);
 }
 
 void nplex::client_t::impl_t::process_submit_resp(const nplex::msgs::SubmitResponse *resp)
@@ -451,12 +473,12 @@ void nplex::client_t::impl_t::process_update_push(const nplex::msgs::UpdatePush 
     auto meta = cache->m_metas.rbegin();
     assert(meta != cache->m_metas.rend());
 
-    parent.on_update(meta->second, changes, nullptr);
+    listener.on_update(parent, meta->second, changes);
 
     if (cache->m_rev == resp->crev())
-        m_state = client_t::state_e::SYNCHRONIZED;
+        set_state(state_e::SYNCHRONIZED);
 
-    assert(m_state == client_t::state_e::SYNCHRONIZING || cache->m_rev == resp->crev());
+    assert(m_state == state_e::SYNCHRONIZING || cache->m_rev == resp->crev());
 }
 
 void nplex::client_t::impl_t::process_keepalive_push(const nplex::msgs::KeepAlivePush *resp)
@@ -472,8 +494,8 @@ void nplex::client_t::impl_t::process_ping_resp(const nplex::msgs::PingResponse 
 
 void nplex::client_t::impl_t::close_timer()
 {
-    auto handle = reinterpret_cast<uv_handle_t*>(timer.get());
+    auto handle = reinterpret_cast<uv_handle_t*>(timer_keepalive.get());
 
-    if (uv_is_active(handle) && !uv_is_closing(handle))
+    if (!uv_is_closing(handle))
         uv_close(handle, nullptr);
 }

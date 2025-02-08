@@ -3,6 +3,8 @@
 #include <set>
 #include <vector>
 #include <atomic>
+#include <mutex>
+#include <condition_variable>
 #include <uv.h>
 #include "nplex-cpp/client.hpp"
 #include "transaction_impl.hpp"
@@ -25,24 +27,29 @@ class client_t::impl_t
     using connection_ptr = std::unique_ptr<connection_t>;
 
     client_t &parent;                               //!< Parent client.
+    listener_t &listener;                           //!< Listener.
     std::vector<connection_ptr> connections;        //!< Server connections.
     connection_t *m_con = nullptr;                  //!< Current connection.
     std::size_t correlation = 0;                    //!< Last correlation id.
     bool can_force = false;                         //!< User can force transactions (set by server at login).
+    std::uint32_t num_logins = 0;                   //!< Number of successful logins.
+    
+    public:
+    
+    std::mutex m_mutex;                             //!< Mutex to protect the state.
+    std::condition_variable m_cv;                   //!< Condition variable to wait for changes in state.
     std::atomic<client_t::state_e> m_state;         //!< Client state.
-
-  public:
-
     std::string error;                              //!< Error message (empty if no error).
+
     std::unique_ptr<uv_loop_t> loop;                //!< Event loop.
     std::unique_ptr<uv_async_t> async;              //!< Signals that there are input commands.
-    std::unique_ptr<uv_timer_t> timer;              //!< Connection-lost timer. 
+    std::unique_ptr<uv_timer_t> timer_keepalive;    //!< Connection-lost timer. 
     std::set<tx_impl_ptr, shared_ptr_less_t> transactions;  //!< List of current transactions.
     mqueue<command_t> commands;                     //!< Commands pending to be digested by the event loop.
     cache_ptr cache;                                //!< Database content.
     params_t params;                                //!< Client params.
 
-    impl_t(client_t &parent_, const params_t &params_);
+    impl_t(const params_t &params_, listener_t &listener, client_t &parent);
     ~impl_t();
 
     client_t::state_e state() const { return m_state; }
@@ -61,6 +68,7 @@ class client_t::impl_t
   private:
 
     void abort(const std::string &msg);
+    void set_state(client_t::state_e state);
     void close_timer();
 
     void process_submit_cmd(const nplex::submit_cmd_t &cmd);

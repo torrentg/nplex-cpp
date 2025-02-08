@@ -200,8 +200,6 @@ static void cb_tcp_write(uv_write_t *req, int status)
 
 nplex::connection_t::connection_t(const addr_t &addr_, uv_loop_t *loop_, const params_t &params_) : addr(addr_)
 {
-    int rc = 0;
-
     if (addr.port() == 0)
         throw nplex_exception("Invalid address: {}", addr.str());
 
@@ -212,9 +210,7 @@ nplex::connection_t::connection_t(const addr_t &addr_, uv_loop_t *loop_, const p
     params.max_unack_msgs = (params_.max_unack_msgs == 0 ? UINT32_MAX : params_.max_unack_msgs);
     params.max_unack_bytes = (params_.max_unack_bytes == 0 ? UINT32_MAX : params_.max_unack_bytes);
 
-    if ((rc = uv_tcp_init(loop_, &tcp)) != 0)
-        throw nplex_exception(uv_strerror(rc));
-
+    tcp.loop = loop_;
     tcp.data = this;
 }
 
@@ -234,6 +230,11 @@ void nplex::connection_t::connect()
     state = state_e::CONNECTING;
 
     struct sockaddr_storage addr_in = ::get_sockaddr(tcp.loop, addr);
+
+    if ((rc = uv_tcp_init(tcp.loop, &tcp)) != 0)
+        throw nplex_exception(uv_strerror(rc));
+
+    tcp.data = this;
 
     uv_connect_t* connect = NULL;
     if ((connect = (uv_connect_t*) malloc(sizeof(uv_connect_t))) == NULL)

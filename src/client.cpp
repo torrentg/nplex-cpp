@@ -10,36 +10,40 @@
 static void check_params(const nplex::params_t &params)
 {
     if (params.user.empty())
-        throw nplex::nplex_exception("Invalid params: no user");
+        throw nplex::invalid_config("User not found");
 
     if (params.password.empty())
-        throw nplex::nplex_exception("Invalid params: no password");
+        throw nplex::invalid_config("Password not found");
 
     if (params.servers.empty())
-        throw nplex::nplex_exception("Invalid params: no servers");
+        throw nplex::invalid_config("Servers not found");
 
-    for (auto &str : params.servers)
-        nplex::addr_t{str};
+    try {
+        for (auto &str : params.servers)
+            nplex::addr_t{str};
+    }
+    catch(const nplex::nplex_exception &e) {
+        throw nplex::invalid_config(e.what());
+    }
 
     if (params.timeout_factor <= 1.0)
-        throw nplex::nplex_exception("Invalid params: timeout factor <= 1.0");
+        throw nplex::invalid_config("Invalid params: timeout factor <= 1.0");
 }
 
 // ==========================================================
-// client_t methods
+// client_t definitions
 // ==========================================================
 
-nplex::client_t::client_t(const params_t &params)
+// default listener initialization
+nplex::listener_t nplex::client_t::default_listener{};
+
+nplex::client_t::client_t(const params_t &params, listener_t &listener)
 {
     check_params(params);
-    m_impl = std::make_unique<impl_t>(*this, params);
-}
 
-void nplex::client_t::start()
-{
-    if (m_impl->state() != state_e::DISCONNECTED)
-        return;
+    m_impl = std::make_unique<impl_t>(params, listener, *this);
 
+    // Starts the event loop
     thread_loop = std::thread([this]() {
         try {
             m_impl->run();
@@ -51,6 +55,18 @@ void nplex::client_t::start()
             m_impl->error = "Unknown error in the event loop";
         }
     });
+
+    // Wait until connection or ... failure
+    std::unique_lock lock(m_impl->m_mutex);
+    m_impl->m_cv.wait(lock, [this]{ 
+        return (m_impl->m_state != state_e::DISCONNECTED && m_impl->m_state != state_e::CONNECTING);
+    });
+
+    // If connection to cluster failed -> exception
+    if (m_impl->m_state == state_e::CLOSED) {
+        close();
+        throw connection_failed(m_impl->error);
+    }
 }
 
 nplex::client_t::~client_t()
@@ -72,13 +88,18 @@ void nplex::client_t::close()
 {
     std::lock_guard<decltype(m_mutex)> lock(m_mutex);
 
-    if (m_impl->state() == state_e::CLOSED)
-        return;
-
-    m_impl->commands.clear();
-    if (m_impl->commands.push(close_cmd_t{}) == 1)
+    if (m_impl->state() != state_e::CLOSED)
+    {
+        m_impl->commands.clear();
+        m_impl->commands.push(close_cmd_t{});
         uv_async_send(m_impl->async.get());
+    }
 
+    join();
+}
+
+void nplex::client_t::join()
+{
     if (thread_loop.joinable())
         thread_loop.join();
 }
@@ -88,7 +109,7 @@ nplex::tx_ptr nplex::client_t::create_tx(transaction_t::isolation_e isolation, b
     std::lock_guard<decltype(m_mutex)> lock_impl(m_mutex);
 
     if (m_impl->state() == state_e::CLOSED)
-        throw nplex_exception("Client is closed");
+        throw connection_failed(m_impl->error);
 
     size_t num_txs = m_impl->transactions.size();
     if (num_txs >= m_impl->params.max_num_concurrent_tx)
@@ -111,6 +132,9 @@ bool nplex::client_t::submit_tx(const tx_ptr &tx, bool force)
         throw nplex_exception("Transaction is not open");
 
     std::lock_guard<decltype(m_mutex)> lock(m_mutex);
+
+    if (m_impl->state() == state_e::CLOSED)
+        throw connection_failed(m_impl->error);
 
     if (m_impl->state() != state_e::SYNCHRONIZED)
         throw nplex_exception("Client not synced");
@@ -136,19 +160,9 @@ bool nplex::client_t::discard_tx(const tx_ptr &tx)
 {
     std::lock_guard<decltype(m_mutex)> lock(m_mutex);
 
-    if (m_impl->state() == state_e::CLOSED)
-        return false;
+    // TODO: consider the state == CLOSED
+    // TODO: send async command to discard tx
 
-    auto it = m_impl->transactions.find(tx);
-
-    if (it == m_impl->transactions.end())
-        return false;
-
-    m_impl->transactions.erase(it);
+    UNUSED(tx);
     return true;
-}
-
-uv_loop_t * nplex::client_t::loop() const
-{
-    return m_impl->loop.get();
 }

@@ -24,6 +24,14 @@ class nplex_exception : public std::runtime_error
     virtual ~nplex_exception() noexcept = default;
 };
 
+struct invalid_config : public nplex_exception {
+    using nplex_exception::nplex_exception;
+};
+
+struct connection_failed : public nplex_exception {
+    using nplex_exception::nplex_exception;
+};
+
 struct nplex_mqueue_exceeded : public nplex_exception {
     using nplex_exception::nplex_exception;
 };
