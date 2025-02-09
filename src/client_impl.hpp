@@ -50,7 +50,7 @@ class client_t::impl_t
     cache_ptr cache;                                //!< Database content.
     params_t params;                                //!< Client params.
 
-    impl_t(const params_t &params_, listener_t &listener, client_t &parent);
+    impl_t(const params_t &params_, listener_t &listener_, client_t &parent_);
     ~impl_t();
 
     client_t::state_e state() const { return m_state; }

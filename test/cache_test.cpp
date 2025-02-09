@@ -9,7 +9,7 @@ using namespace nplex::msgs;
 using namespace nplex::tests;
 using namespace flatbuffers;
 
-TEST_CASE("cache_restore")
+TEST_CASE("cache_load")
 {
     auto snapshot = make_snapshot(
         1024,
@@ -35,7 +35,7 @@ TEST_CASE("cache_restore")
     auto *ptr = ::GetRoot<nplex::msgs::Snapshot>(buf.data());
     cache_t cache;
 
-    REQUIRE_NOTHROW(cache.restore(ptr));
+    REQUIRE_NOTHROW(cache.load(ptr));
 
     CHECK(cache.m_rev == 1024);
 
@@ -82,7 +82,7 @@ TEST_CASE("cache_restore")
     CHECK(data_it->second->data() == gto::cstring{"f"});
 }
 
-TEST_CASE("cache_restore_empty")
+TEST_CASE("cache_load_empty")
 {
     auto snapshot = make_snapshot(
         1024,
@@ -93,7 +93,7 @@ TEST_CASE("cache_restore_empty")
     auto *ptr = ::GetRoot<nplex::msgs::Snapshot>(buf.data());
     cache_t cache;
 
-    REQUIRE_NOTHROW(cache.restore(ptr));
+    REQUIRE_NOTHROW(cache.load(ptr));
 
     CHECK(cache.m_rev == 1024);
     CHECK(cache.m_users.size() == 0);
@@ -101,11 +101,11 @@ TEST_CASE("cache_restore_empty")
     CHECK(cache.m_data.size() == 0);
 }
 
-TEST_CASE("cache_restore_nullptr")
+TEST_CASE("cache_load_nullptr")
 {
     cache_t cache;
 
-    REQUIRE_NOTHROW(cache.restore(nullptr));
+    REQUIRE_NOTHROW(cache.load(nullptr));
 
     CHECK(cache.m_rev == 0);
     CHECK(cache.m_users.size() == 0);
@@ -113,7 +113,7 @@ TEST_CASE("cache_restore_nullptr")
     CHECK(cache.m_data.size() == 0);
 }
 
-TEST_CASE("cache_restore_error_has_tx_rev_gt_rev")
+TEST_CASE("cache_load_error_has_tx_rev_gt_rev")
 {
     auto snapshot = make_snapshot(
         100,
@@ -139,10 +139,10 @@ TEST_CASE("cache_restore_error_has_tx_rev_gt_rev")
     auto *ptr = ::GetRoot<nplex::msgs::Snapshot>(buf.data());
     cache_t cache;
 
-    CHECK_THROWS_AS(cache.restore(ptr), nplex_exception);
+    CHECK_THROWS_AS(cache.load(ptr), nplex_exception);
 }
 
-TEST_CASE("cache_restore_error_unsorted_tx")
+TEST_CASE("cache_load_error_unsorted_tx")
 {
     auto snapshot = make_snapshot(
         1024,
@@ -168,10 +168,10 @@ TEST_CASE("cache_restore_error_unsorted_tx")
     auto *ptr = ::GetRoot<nplex::msgs::Snapshot>(buf.data());
     cache_t cache;
 
-    CHECK_THROWS_AS(cache.restore(ptr), nplex_exception);
+    CHECK_THROWS_AS(cache.load(ptr), nplex_exception);
 }
 
-TEST_CASE("cache_restore_error_invalid_key")
+TEST_CASE("cache_load_error_invalid_key")
 {
     auto snapshot = make_snapshot(
         1024,
@@ -189,10 +189,10 @@ TEST_CASE("cache_restore_error_invalid_key")
     auto *ptr = ::GetRoot<nplex::msgs::Snapshot>(buf.data());
     cache_t cache;
 
-    CHECK_THROWS_AS(cache.restore(ptr), nplex_exception);
+    CHECK_THROWS_AS(cache.load(ptr), nplex_exception);
 }
 
-TEST_CASE("cache_restore_error_invalid_value")
+TEST_CASE("cache_load_error_invalid_value")
 {
     auto snapshot = make_snapshot(
         1024,
@@ -210,7 +210,7 @@ TEST_CASE("cache_restore_error_invalid_value")
     auto *ptr = ::GetRoot<nplex::msgs::Snapshot>(buf.data());
     cache_t cache;
 
-    CHECK_THROWS_AS(cache.restore(ptr), nplex_exception);
+    CHECK_THROWS_AS(cache.load(ptr), nplex_exception);
 }
 
 TEST_CASE("cache_update")
@@ -237,7 +237,7 @@ TEST_CASE("cache_update")
     detached_buf = serialize(snapshot);
     auto *snapshot_ptr = ::GetRoot<nplex::msgs::Snapshot>(detached_buf.data());
 
-    REQUIRE_NOTHROW(cache.restore(snapshot_ptr));
+    REQUIRE_NOTHROW(cache.load(snapshot_ptr));
 
     // content = {key1, key2, key3}
     CHECK(cache.m_rev == 1024);

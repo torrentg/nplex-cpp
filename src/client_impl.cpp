@@ -432,7 +432,7 @@ void nplex::client_t::impl_t::process_load_resp(const nplex::msgs::LoadResponse 
         throw nplex_exception("Load rejected");
 
     if (resp->snapshot())
-        cache->restore(resp->snapshot());
+        cache->load(resp->snapshot());
 
     listener.on_snapshot(parent);
 

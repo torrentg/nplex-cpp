@@ -48,9 +48,9 @@ class listener_t
     };
 
     enum class load_mode_e : std::uint8_t {
-        SNAPSHOT_AT_FIXED_REV,   //!< Sends snapshot at a fixed revision and subsequent commits.
-        SNAPSHOT_AT_LAST_REV,    //!< Sends snapshot at the last revision and subsequent commits.
-        ONLY_UPDATES_FROM_REV    //!< Sends only updates from a revision.
+        SNAPSHOT_AT_FIXED_REV,   //!< Requests snapshot at a fixed revision and subsequent commits.
+        SNAPSHOT_AT_LAST_REV,    //!< Requests snapshot at the last revision and subsequent commits.
+        ONLY_UPDATES_FROM_REV    //!< Requests only updates from a revision.
     };
 
     using load_cmd_t = std::pair<load_mode_e, rev_t>;
@@ -77,7 +77,10 @@ class listener_t
      * 
      * @return The load command to send to the server.
      */
-    virtual load_cmd_t on_connected([[maybe_unused]] client_t &client, [[maybe_unused]] const std::string &server, [[maybe_unused]] rev_t min_rev, [[maybe_unused]] rev_t max_rev) {
+    virtual load_cmd_t on_connected([[maybe_unused]] client_t &client, 
+                                    [[maybe_unused]] const std::string &server, 
+                                    [[maybe_unused]] rev_t min_rev, 
+                                    [[maybe_unused]] rev_t max_rev) {
         return {load_mode_e::SNAPSHOT_AT_LAST_REV, 0};
     }
 
@@ -103,7 +106,8 @@ class listener_t
      * @return The number of milliseconds to wait before trying a reconnection, 
      *         a negative value close nplex.
      */
-    virtual std::int32_t on_connection_lost([[maybe_unused]] client_t &client, [[maybe_unused]] const std::string &server) {
+    virtual std::int32_t on_connection_lost([[maybe_unused]] client_t &client, 
+                                            [[maybe_unused]] const std::string &server) {
         return -1;
     }
 
@@ -146,7 +150,9 @@ class listener_t
      * @param[in] meta Transaction metadata.
      * @param[in] changes List of changes.
      */
-    virtual void on_update([[maybe_unused]] client_t &client, [[maybe_unused]] const meta_ptr &meta, [[maybe_unused]] const std::vector<change_t> &changes) {}
+    virtual void on_update([[maybe_unused]] client_t &client, 
+                           [[maybe_unused]] const meta_ptr &meta, 
+                           [[maybe_unused]] const std::vector<change_t> &changes) {}
 
     /**
      * Function used by Nplex to trace messages.
@@ -158,7 +164,9 @@ class listener_t
      * @param[in] msg Message to log.
      * @param[in] severity Severity.
      */
-    virtual void log([[maybe_unused]] client_t &client, [[maybe_unused]] const std::string &msg, [[maybe_unused]] log_level_e severity) {}
+    virtual void log([[maybe_unused]] client_t &client, 
+                     [[maybe_unused]] const std::string &msg, 
+                     [[maybe_unused]] log_level_e severity) {}
 
     /**
      * Returns the log level.

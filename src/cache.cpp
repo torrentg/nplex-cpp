@@ -118,7 +118,7 @@ nplex::change_t nplex::cache_t::delete_entry(const char *key)
     return change;
 }
 
-void nplex::cache_t::restore(const msgs::Snapshot *snapshot)
+void nplex::cache_t::load(const msgs::Snapshot *snapshot)
 {
     std::lock_guard<decltype(m_mutex)> lock(m_mutex);
 

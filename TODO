@@ -3,15 +3,12 @@
 * value_t::as_millis() convert from ISO-8601 string (instead of number)
 * Only a public header -> nplex-cpp.hpp
 * allow ssl connections (see project tlsuv)
-* add user permissions on login_response
 * README: explain nplex purpose
-* submit_tx_fut returns a future (attached to tx.promise)
-* extends key_t from cstring_t adding validation (length, double-, ending/, utf8) on construct, key_part, key_preffix, key_suffix, etc.
 * Move mqueue class definition to client_internals ?
-* Rename cache_t::restore() to load() ?
 * Review client_impl_t members access (currently public)
-* In cb_close_handle(), connect_timer can be skipped
+* submit_tx_fut returns a future (attached to tx.promise)
 * client_t constructor waits until synchronized
+* add user permissions on login_response
 
 ## Useful commands
 

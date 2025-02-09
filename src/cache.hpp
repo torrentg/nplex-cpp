@@ -36,15 +36,15 @@ struct cache_t
     std::map<gto::cstring, std::uint32_t> m_users; // value=num_refs
 
     /**
-     * Restore the database content from a snapshot.
+     * Load the database content from a snapshot.
      * 
      * On exception, the database is left in an inconsistent state.
      * 
-     * @param[in] snapshot Content to restore (nullptr reset cache).
+     * @param[in] snapshot Content to load (nullptr reset cache).
      * 
      * @exception nplex_exception Invalid snapshot.
      */
-    void restore(const msgs::Snapshot *snapshot = nullptr);
+    void load(const msgs::Snapshot *snapshot = nullptr);
 
     /**
      * Apply a commit to the database.

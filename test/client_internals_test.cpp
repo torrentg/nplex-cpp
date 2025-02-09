@@ -41,5 +41,5 @@ TEST_CASE("output_msg")
     CHECK(parsed_msg->content_as_LOGIN_REQUEST()->user()->str() == "jdoe");
     CHECK(parsed_msg->content_as_LOGIN_REQUEST()->password()->str() == "password");
 
-    delete network_msg.base;
+    free(network_msg.base);
 }
