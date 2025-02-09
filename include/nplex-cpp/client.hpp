@@ -9,9 +9,6 @@
 #include "exception.hpp"
 #include "transaction.hpp"
 
-// Forward declarations
-struct uv_loop_s;
-
 namespace nplex {
 
 // Forward declaration
@@ -20,7 +17,7 @@ class client_t;
 /**
  * Nplex listener interface.
  * 
- * This interface provides callback methods to handle various events related to the Nplex client.
+ * This interface provides callback methods to handle the Nplex events.
  * 
  * Extending this interface allows you to:
  *   - Manage actions when the server is not available (ex: retry after 30 sec).
@@ -43,6 +40,13 @@ class listener_t
 {
   public:
 
+    enum log_level_e : std::uint8_t {
+        DEBUG,                   //!< Debug messages.
+        INFO,                    //!< Informational messages.
+        WARN,                    //!< Warning messages.
+        ERROR                    //!< Error messages.
+    };
+
     enum class load_mode_e : std::uint8_t {
         SNAPSHOT_AT_FIXED_REV,   //!< Sends snapshot at a fixed revision and subsequent commits.
         SNAPSHOT_AT_LAST_REV,    //!< Sends snapshot at the last revision and subsequent commits.
@@ -51,6 +55,7 @@ class listener_t
 
     using load_cmd_t = std::pair<load_mode_e, rev_t>;
 
+    listener_t(log_level_e level = log_level_e::INFO) : m_log_level{level} {}
     virtual ~listener_t() {}
 
     /**
@@ -107,8 +112,7 @@ class listener_t
      * 
      * After this function is called, the client is no longer valid.
      * 
-     * This function is executed in the event loop thread. Do not block it.
-     * If an exception is thrown, the client will terminate.
+     * This method can block if required (write to disk, etc).
      *  
      * @param[in] client Nplex instance.
      */
@@ -145,35 +149,43 @@ class listener_t
     virtual void on_update([[maybe_unused]] client_t &client, [[maybe_unused]] const meta_ptr &meta, [[maybe_unused]] const std::vector<change_t> &changes) {}
 
     /**
-     * Callback function that is called when an error occurs.
-     * 
-     * This function handles error events, allowing the client to take appropriate actions,
-     * such as logging the error or attempting recovery.
+     * Function used by Nplex to trace messages.
      * 
      * This function is executed in the event loop thread. Do not block it.
      * If an exception is thrown, the client will terminate.
      * 
      * @param[in] client Nplex instance.
-     * @param[in] msg The error message describing the issue.
+     * @param[in] msg Message to log.
+     * @param[in] severity Severity.
      */
-    virtual void on_error([[maybe_unused]] client_t &client, [[maybe_unused]] const std::string &msg) {}
+    virtual void log([[maybe_unused]] client_t &client, [[maybe_unused]] const std::string &msg, [[maybe_unused]] log_level_e severity) {}
+
+    /**
+     * Returns the log level.
+     * 
+     * You don't need to override this method.
+     * 
+     * @return Log level.
+     */
+    log_level_e log_level() const noexcept { return m_log_level; }
+
+  protected:
+
+    log_level_e m_log_level;
 };
 
 /**
- * Async nplex client.
- * 
- * Extend this class to create a client fulfilling your needs.
- * Add your business members and override the virtual functions.
+ * Nplex client.
  * 
  * Nplex is a centralized key-value database.
  * Each client has an in-memory copy of the database that is updated via streaming.
- * Client accesses the in-memory data using a transaction granting the required isolation level. 
+ * Client access the in-memory data using a transaction granting the required isolation level. 
  * This transaction can be invalidated on new commits arrival.
  * To alter the database content, the client submits the transaction to the server, which commits them 
  * (and notifies to all clients) if data integrity is preserved, or rejects them if there is a conflict. 
  * 
  * PROS:
- *   - High performance (in-memory speed).
+ *   - High performance (in-memory + async).
  *   - Serialization is granted (data consistency, integrity).
  * CONS:
  *   - Transaction validation delayed until submit and commit stages.
@@ -267,7 +279,7 @@ class client_t
      * @return The transaction.
      * 
      * @exception nplex_exception max-tx-exceeded.
-     * @exception nplex::connection_failed Connection not available
+     * @exception nplex::connection_failed Connection not available.
      */
     tx_ptr create_tx(transaction_t::isolation_e isolation = transaction_t::isolation_e::READ_COMMITTED, bool read_only = false);
 
@@ -288,7 +300,7 @@ class client_t
      * 
      * @exception std::invalid_argument Transaction is empty (null).
      * @exception nplex_exception client-not-synced, tx-not-found, tx-not-open, max-queued-commands.
-     * @exception nplex::connection_failed Connection not available
+     * @exception nplex::connection_failed Connection not available.
      */
     bool submit_tx(const tx_ptr &tx, bool force = false);
 

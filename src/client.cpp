@@ -3,6 +3,16 @@
 #include "addr.hpp"
 #include "client_impl.hpp"
 
+#define LOG(severity, ...) \
+    do { \
+        if (static_cast<int>(m_impl->listener.log_level()) <= static_cast<int>(severity)) \
+            m_impl->listener.log(*this, fmt::format(__VA_ARGS__), severity); \
+    } while(0)
+#define LOG_DEBUG(...)  LOG(listener_t::log_level_e::DEBUG, __VA_ARGS__)
+#define LOG_INFO(...)   LOG(listener_t::log_level_e::INFO , __VA_ARGS__)
+#define LOG_WARN(...)   LOG(listener_t::log_level_e::WARN , __VA_ARGS__)
+#define LOG_ERROR(...)  LOG(listener_t::log_level_e::ERROR, __VA_ARGS__)
+
 // ==========================================================
 // Internal (static) functions
 // ==========================================================
@@ -27,7 +37,18 @@ static void check_params(const nplex::params_t &params)
     }
 
     if (params.timeout_factor <= 1.0)
-        throw nplex::invalid_config("Invalid params: timeout factor <= 1.0");
+        throw nplex::invalid_config("Timeout factor <= 1.0");
+}
+
+static const char * to_str(nplex::transaction_t::isolation_e isolation)
+{
+    switch(isolation)
+    {
+        case nplex::transaction_t::isolation_e::READ_COMMITTED: return "READ_COMMITTED";
+        case nplex::transaction_t::isolation_e::REPEATABLE_READ: return "REPEATABLE_READ";
+        case nplex::transaction_t::isolation_e::SERIALIZABLE: return "SERIALIZABLE";
+        default: return "UNKNOWN";
+    }
 }
 
 // ==========================================================
@@ -49,14 +70,14 @@ nplex::client_t::client_t(const params_t &params, listener_t &listener)
             m_impl->run();
         }
         catch(const std::exception &e) {
-            m_impl->error = e.what();
+            LOG_ERROR("{}", e.what());
         }
         catch(...) {
-            m_impl->error = "Unknown error in the event loop";
+            LOG_ERROR("Unknown error in the event loop");
         }
     });
 
-    // Wait until connection or ... failure
+    // Wait until connection or failure
     std::unique_lock lock(m_impl->m_mutex);
     m_impl->m_cv.wait(lock, [this]{ 
         return (m_impl->m_state != state_e::DISCONNECTED && m_impl->m_state != state_e::CONNECTING);
@@ -119,6 +140,8 @@ nplex::tx_ptr nplex::client_t::create_tx(transaction_t::isolation_e isolation, b
 
     auto tx = std::make_shared<transaction_impl_t>(m_impl->cache, isolation, read_only);
     m_impl->transactions.insert(tx);
+
+    LOG_DEBUG("Transaction created, isolation={}, read_only={}", ::to_str(isolation), read_only);
 
     return tx;
 }

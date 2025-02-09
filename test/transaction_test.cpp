@@ -197,11 +197,11 @@ TEST_CASE("transaction_test")
         CHECK(tx->read("key99")->rev() == 3);
     }
 
-    SUBCASE("repeatable_reads_basic")
+    SUBCASE("repeatable_read_basic")
     {
-        auto tx = std::make_shared<transaction_impl_t>(cache, transaction_t::isolation_e::REPEATABLE_READS);
+        auto tx = std::make_shared<transaction_impl_t>(cache, transaction_t::isolation_e::REPEATABLE_READ);
 
-        CHECK(tx->isolation() == transaction_t::isolation_e::REPEATABLE_READS);
+        CHECK(tx->isolation() == transaction_t::isolation_e::REPEATABLE_READ);
 
         basic_step_1(tx);
 

@@ -307,7 +307,7 @@ void nplex::transaction_impl_t::update(const std::vector<change_t> &changes)
             update_serializable(changes);
             break;
         case isolation_e::READ_COMMITTED:
-        case isolation_e::REPEATABLE_READS:
+        case isolation_e::REPEATABLE_READ:
             update_default(changes);
             break;
     }

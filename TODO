@@ -10,12 +10,8 @@
 * Move mqueue class definition to client_internals ?
 * Rename cache_t::restore() to load() ?
 * Review client_impl_t members access (currently public)
-* Add cause to client_t::disconnect(cause), client::close(cause)
-* Add traces to debug
 * In cb_close_handle(), connect_timer can be skipped
-* listener_t::on_error(), add severity + msg
-* Params supports connection string nplex://jdoe:s3cr3t@fobos.ccruncher.net:9444
-* Remove timer_keepalive from client_t::impl_t members
+* client_t constructor waits until synchronized
 
 ## Useful commands
 

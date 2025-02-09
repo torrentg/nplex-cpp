@@ -81,7 +81,7 @@ class transaction_t
 
     enum class isolation_e : std::uint8_t {
         READ_COMMITTED,                         //!< Read always most recent data.
-        REPEATABLE_READS,                       //!< Read data will not change during the transaction.
+        REPEATABLE_READ,                        //!< Read data will not change during the transaction.
         SERIALIZABLE                            //!< All read data will not change during the transaction.
     };
 
