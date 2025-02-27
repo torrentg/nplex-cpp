@@ -42,15 +42,15 @@ static struct sockaddr_storage get_sockaddr(uv_loop_t *loop, const nplex::addr_t
     switch(addr.family())
     {
         case AF_INET:
-            if ((rc = uv_ip4_addr(addr.host().c_str(), addr.port(), (struct sockaddr_in*) &ret)) != 0) {
+            if ((rc = uv_ip4_addr(addr.host().c_str(), addr.port(), (struct sockaddr_in*) &ret)) != 0)
                 throw nplex_exception(uv_strerror(rc));
-            }
             break;
+
         case AF_INET6:
-            if ((rc = uv_ip6_addr(addr.host().c_str(), addr.port(), (struct sockaddr_in6*) &ret)) != 0) {
+            if ((rc = uv_ip6_addr(addr.host().c_str(), addr.port(), (struct sockaddr_in6*) &ret)) != 0)
                 throw nplex_exception(uv_strerror(rc));
-            }
             break;
+
         case AF_UNSPEC:
         {
             uv_getaddrinfo_t req;
@@ -63,9 +63,9 @@ static struct sockaddr_storage get_sockaddr(uv_loop_t *loop, const nplex::addr_t
             hints.ai_protocol = IPPROTO_TCP;
 
             // request address info made synchronously (at this point no other tasks are done)
-            if ((rc = uv_getaddrinfo(loop, &req, NULL, addr.host().c_str(), NULL, &hints)) != 0) {
+            std::string port = std::to_string(addr.port());
+            if ((rc = uv_getaddrinfo(loop, &req, NULL, addr.host().c_str(), port.c_str(), &hints)) != 0)
                 throw nplex_exception(uv_strerror(rc));
-            }
 
             if (req.addrinfo->ai_family != AF_INET && req.addrinfo->ai_family != AF_INET6) {
                 uv_freeaddrinfo(req.addrinfo);
@@ -76,6 +76,7 @@ static struct sockaddr_storage get_sockaddr(uv_loop_t *loop, const nplex::addr_t
             uv_freeaddrinfo(req.addrinfo);
             break;
         }
+
         default:
             throw nplex_exception(fmt::format("Unrecognized address family: {}", addr.str()));
     }
@@ -100,17 +101,17 @@ static void cb_tcp_read(uv_stream_t *stream, ssize_t nread, const uv_buf_t *buf)
 
     connection_t *con = (connection_t *) stream;
 
-    if (nread < 0 || buf->base == NULL) {
+    if (nread == UV_EOF || buf->base == NULL) {
+        con->disconnect(ERR_CLOSED_BY_PEER);
+        return;
+    }
+
+    if (nread < 0) {
         con->disconnect((int) nread);
         return;
     }
 
-    if (nread == UV_EOF) {
-        con->disconnect(0);
-        return;
-    }
-
-    con->input_msg.append(buf->base, buf->len);
+    con->input_msg.append(buf->base, static_cast<std::size_t>(nread));
 
     while (con->input_msg.size() >= sizeof(output_msg_t::len))
     {
@@ -118,7 +119,7 @@ static void cb_tcp_read(uv_stream_t *stream, ssize_t nread, const uv_buf_t *buf)
         std::uint32_t len = ntohl(*((const std::uint32_t *) ptr));
 
         if (len > con->params.max_msg_bytes) {
-            con->disconnect(UV_EMSGSIZE);
+            con->disconnect(ERR_MSG_SIZE);
             return;
         }
 
@@ -128,7 +129,7 @@ static void cb_tcp_read(uv_stream_t *stream, ssize_t nread, const uv_buf_t *buf)
         auto msg = parse_network_msg(ptr, len);
 
         if (!msg) {
-            con->disconnect(UV_EREMOTEIO);
+            con->disconnect(ERR_MSG_ERROR);
             return;
         }
 
@@ -267,7 +268,7 @@ void nplex::connection_t::send(flatbuffers::DetachedBuffer &&buf)
     if (len > params.max_msg_bytes)
         throw nplex_exception("Message too large");
 
-    if (stats.unack_bytes + len >= params.max_unack_msgs)
+    if (stats.unack_bytes + len >= params.max_unack_bytes)
         throw nplex_exception("Too many output unacked bytes");
 
     auto *msg = new output_msg_t(std::move(buf));
@@ -278,4 +279,23 @@ void nplex::connection_t::send(flatbuffers::DetachedBuffer &&buf)
 
     stats.unack_msgs++;
     stats.unack_bytes += static_cast<std::uint32_t>(len);
+}
+
+std::string nplex::connection_t::strerror() const
+{
+    if (error < 0)
+        return uv_strerror(error);
+
+    switch (error)
+    {
+        case ERR_CLOSED_BY_LOCAL: return "closed by local";
+        case ERR_CLOSED_BY_PEER: return "closed by peer";
+        case ERR_MSG_ERROR: return "invalid message";
+        case ERR_MSG_UNEXPECTED: return "unexpected message";
+        case ERR_MSG_SIZE: return "message too large";
+        case ERR_ALREADY_CONNECTED: return "already connected";
+        case ERR_KEEPALIVE: return "keepalive not received";
+        case ERR_AUTH: return "unauthorized";
+        default: return fmt::format("unknow error -{}-", error);
+    }
 }

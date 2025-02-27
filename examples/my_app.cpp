@@ -175,7 +175,7 @@ class my_listener_t : public nplex::listener_t
 
             if (++num_failed_attempts >= max_failed_attempts) {
                 fmt::print(stderr, "Error: closing nplex client after {} reconnection attempts\n", max_failed_attempts);
-                return 0;
+                return -1;
             }
 
             fmt::print("Next connection attempt in {} ms\n", millis_between_attempts);
@@ -184,6 +184,7 @@ class my_listener_t : public nplex::listener_t
 
         // Case: current connection was lost
         fmt::print("Connection lost to {}\n", server);
+
         // try to reconnect immediately
         return 0;
     }
@@ -243,7 +244,7 @@ class my_listener_t : public nplex::listener_t
         last_rev = meta->rev;
     }
 
-    void log([[maybe_unused]] nplex::client_t &client, const std::string &msg, log_level_e severity) override
+    void log([[maybe_unused]] nplex::client_t &client, log_level_e severity, const std::string &msg) override
     {
         // Get the current time
         auto now = std::chrono::system_clock::now();
@@ -276,18 +277,17 @@ class my_listener_t : public nplex::listener_t
 
 int main(int argc, char *argv[])
 {
-    std::string servers = "localhost:8080, localhost:8081";
-    std::string user = "jdoe";
+    std::string servers = "localhost:14022, localhost:8081";
+    std::string user = "admin";
     std::string passwd = "s3cr3t";
 
-    
     try {
         my_listener_t listener{nplex::listener_t::log_level_e::DEBUG};
         nplex::client_t nplex{{servers, user, passwd}, listener};
         nplex.join();
     }
-    catch(...) {
-        fmt::print(stderr, "Error: unable to start nplex client\n");
+    catch(const std::exception &e) {
+        fmt::print(stderr, "Error: {}\n", e.what());
         return 1;
     }
 }

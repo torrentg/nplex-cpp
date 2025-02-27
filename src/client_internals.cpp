@@ -3,6 +3,8 @@
 #include "transaction_impl.hpp"
 #include "client_internals.hpp"
 
+#define API_VERSION 10
+
 /**
  * Notes on this compilation unit:
  * 
@@ -46,6 +48,7 @@ flatbuffers::DetachedBuffer nplex::create_login_msg(std::size_t cid, const std::
         MsgContent::LOGIN_REQUEST, 
         CreateLoginRequest(builder, 
             cid, 
+            API_VERSION,
             builder.CreateString(user), 
             builder.CreateString(password)
         ).Union()

@@ -4,6 +4,15 @@
 #include "client_impl.hpp"
 #include "addr.hpp"
 
+#define ERR_CLOSED_BY_LOCAL 1000
+#define ERR_CLOSED_BY_PEER 1001
+#define ERR_MSG_ERROR 1002
+#define ERR_MSG_UNEXPECTED 1003
+#define ERR_MSG_SIZE 1004
+#define ERR_ALREADY_CONNECTED 1005
+#define ERR_KEEPALIVE 1006
+#define ERR_AUTH 1007
+
 namespace nplex {
 
 /**
@@ -48,6 +57,7 @@ struct connection_t
     void connect();
     void disconnect(int rc = 0);
     void send(flatbuffers::DetachedBuffer &&buf);
+    std::string strerror() const;
 
     client_t::impl_t * client() const { return (client_t::impl_t *) tcp.loop->data; }
 };

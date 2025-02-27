@@ -15,6 +15,12 @@
 
 namespace nplex {
 
+struct acl_t
+{
+    std::uint8_t mode;      // Attributes (1=CREATE, 2=READ, 4=UPDATE, 8=DELETE).
+    std::string pattern;    // Pattern (glob).
+};
+
 /**
  * Internal class hidding client_t implementation details.
  * 
@@ -30,11 +36,12 @@ class client_t::impl_t
     std::vector<connection_ptr> connections;        //!< Server connections.
     connection_t *m_con = nullptr;                  //!< Current connection.
     std::size_t correlation = 0;                    //!< Last correlation id.
-    bool can_force = false;                         //!< User can force transactions (set by server at login).
     std::uint32_t num_logins = 0;                   //!< Number of successful logins.
-    
-    public:
-    
+    bool can_force = false;                         //!< User can force transactions (set by server at login).
+    std::vector<acl_t> permissions;                 //!< User permissions (set by server at login).
+
+  public:
+
     std::mutex m_mutex;                             //!< Mutex to protect the state.
     std::condition_variable m_cv;                   //!< Condition variable to wait for changes in state.
     std::atomic<client_t::state_e> m_state;         //!< Client state.

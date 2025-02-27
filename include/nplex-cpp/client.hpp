@@ -161,12 +161,12 @@ class listener_t
      * If an exception is thrown, the client will terminate.
      * 
      * @param[in] client Nplex instance.
+     * @param[in] severity Message severity.
      * @param[in] msg Message to log.
-     * @param[in] severity Severity.
      */
     virtual void log([[maybe_unused]] client_t &client, 
-                     [[maybe_unused]] const std::string &msg, 
-                     [[maybe_unused]] log_level_e severity) {}
+                     [[maybe_unused]] log_level_e severity,
+                     [[maybe_unused]] const std::string &msg) {}
 
     /**
      * Returns the log level.

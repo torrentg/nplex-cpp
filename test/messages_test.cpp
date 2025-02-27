@@ -16,6 +16,7 @@ TEST_CASE("LoginRequest")
 
         auto req = CreateLoginRequest(builder, 
             1, 
+            10,
             builder.CreateString("jdoe"), 
             builder.CreateString("password"));
 
@@ -28,6 +29,7 @@ TEST_CASE("LoginRequest")
         auto *ptr = ::GetRoot<nplex::msgs::LoginRequest>(buf.data());
         REQUIRE(ptr);
         CHECK(ptr->cid() == 1);
+        CHECK(ptr->api_version() == 10);
         CHECK(ptr->user()->str() == "jdoe");
         CHECK(ptr->password()->str() == "password");
     }
@@ -37,6 +39,7 @@ TEST_CASE("LoginRequest")
         LoginRequestT req = {
             {},         // Native table
             1,          // cid
+            10,         // api-version
             "jdoe",     // user
             "password"  // password
         };
@@ -46,6 +49,7 @@ TEST_CASE("LoginRequest")
 
         REQUIRE(ptr);
         CHECK(ptr->cid() == 1);
+        CHECK(ptr->api_version() == 10);
         CHECK(ptr->user()->str() == "jdoe");
         CHECK(ptr->password()->str() == "password");
     }
@@ -53,16 +57,17 @@ TEST_CASE("LoginRequest")
 
 TEST_CASE("LoginResponse")
 {
-    LoginResponseT resp = {
-        {},             // Native table
-        1,              // cid
-        LoginCode::AUTHORIZED,
-        "3b12-7aac7",   // session
-        456,            // rev0
-        2048,           // crev
-        false,          // can_force
-        3000            // keepalive
-    };
+    LoginResponseT resp;
+    
+    resp.cid = 1;
+    resp.code = LoginCode::AUTHORIZED;
+    resp.rev0 = 456;
+    resp.crev = 2048;
+    resp.can_force = false;
+    resp.keepalive = 3000;
+    resp.permissions.push_back(std::make_unique<msgs::AclT>(AclT{{}, "/devices/**"s, 15}));
+    resp.permissions.push_back(std::make_unique<msgs::AclT>(AclT{{}, "/user/jdoe/**"s, 6}));
+    resp.permissions.push_back(std::make_unique<msgs::AclT>(AclT{{}, "/alarms/**"s, 7}));
 
     auto buf = serialize(resp);
     auto *ptr = ::GetRoot<nplex::msgs::LoginResponse>(buf.data());
@@ -70,11 +75,17 @@ TEST_CASE("LoginResponse")
     REQUIRE(ptr);
     CHECK(ptr->cid() == 1);
     CHECK(ptr->code() == LoginCode::AUTHORIZED);
-    CHECK(ptr->session()->str() == "3b12-7aac7");
     CHECK(ptr->rev0() == 456);
     CHECK(ptr->crev() == 2048);
     CHECK(ptr->can_force() == false);
     CHECK(ptr->keepalive() == 3000);
+    CHECK(ptr->permissions());
+    CHECK(ptr->permissions()->size() == 3);
+    for (uoffset_t i = 0; i < ptr->permissions()->size(); i++) {
+        auto perm = ptr->permissions()->Get(i);
+        CHECK(perm->pattern()->str() == resp.permissions[i]->pattern);
+        CHECK(perm->mode() == resp.permissions[i]->mode);
+    }
 }
 
 TEST_CASE("PingRequest")
@@ -320,46 +331,43 @@ TEST_CASE("SubmitRequest-hard")
     const char data2[] = {4, 5, 6};
 
     // create vector of upserts
-    std::vector<flatbuffers::Offset<msgs::KeyValue>> upserts_v;
-    upserts_v.push_back(
+    std::vector<flatbuffers::Offset<msgs::KeyValue>> upserts;
+    upserts.push_back(
         CreateKeyValue(
             builder, 
             builder.CreateString("key1"), 
             builder.CreateVector((uint8_t *) data1, sizeof(data1))
         )
     );
-    upserts_v.push_back(
+    upserts.push_back(
         CreateKeyValue(
             builder, 
             builder.CreateString("key2"), 
             builder.CreateVector((uint8_t *) data2, sizeof(data2))
         )
     );
-    auto upserts = builder.CreateVector(upserts_v);
 
     // create vector of deletes
-    std::vector<flatbuffers::Offset<flatbuffers::String>> deletes_v;
-    deletes_v.push_back(builder.CreateString("key3"));
-    deletes_v.push_back(builder.CreateString("key4"));
-    auto deletes = builder.CreateVector(deletes_v);
+    std::vector<flatbuffers::Offset<flatbuffers::String>> deletes;
+    deletes.push_back(builder.CreateString("key3"));
+    deletes.push_back(builder.CreateString("key4"));
 
     // create vector of ensures
-    std::vector<flatbuffers::Offset<msgs::Acl>> ensures_v;
-    ensures_v.push_back(
+    std::vector<flatbuffers::Offset<msgs::Acl>> ensures;
+    ensures.push_back(
         CreateAcl(
             builder, 
             builder.CreateString("/devices/*"), 
             1
         )
     );
-    ensures_v.push_back(
+    ensures.push_back(
         CreateAcl(
             builder, 
             builder.CreateString("/user/**"), 
             7
         )
     );
-    auto ensures = builder.CreateVector(ensures_v);
 
     auto msg = CreateMessage(builder, 
         MsgContent::SUBMIT_REQUEST, 
@@ -367,9 +375,9 @@ TEST_CASE("SubmitRequest-hard")
             4,          // cid
             2048,       // crev
             1,          // type
-            upserts,
-            deletes,
-            ensures,
+            builder.CreateVector(upserts),
+            builder.CreateVector(deletes),
+            builder.CreateVector(ensures),
             true
         ).Union()
     );
@@ -444,6 +452,7 @@ TEST_CASE("Message")
             MsgContent::LOGIN_REQUEST, 
             CreateLoginRequest(builder, 
                 1, 
+                10, 
                 builder.CreateString("jdoe"), 
                 builder.CreateString("password")
             ).Union()
@@ -462,6 +471,7 @@ TEST_CASE("Message")
         auto *login = ptr->content_as_LOGIN_REQUEST();
         REQUIRE(login);
         CHECK(login->cid() == 1);
+        CHECK(login->api_version() == 10);
         CHECK(login->user()->str() == "jdoe");
         CHECK(login->password()->str() == "password");
     }
@@ -472,6 +482,7 @@ TEST_CASE("Message")
             LoginRequestT{
                 {},         // Native table
                 1,          // cid
+                10,         // api-version
                 "jdoe",     // user
                 "password"  // password
             });
@@ -485,6 +496,7 @@ TEST_CASE("Message")
         auto *login = ptr->content_as_LOGIN_REQUEST();
         REQUIRE(login);
         CHECK(login->cid() == 1);
+        CHECK(login->api_version() == 10);
         CHECK(login->user()->str() == "jdoe");
         CHECK(login->password()->str() == "password");
     }

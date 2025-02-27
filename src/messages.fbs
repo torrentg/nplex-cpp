@@ -12,18 +12,23 @@ namespace nplex.msgs;
 enum LoginCode: byte {
     UNKNOW,
     AUTHORIZED,
-    INVALID_CREDENTIALS,
     COMPAT_MISMATCH,
-    ALREADY_LOGGED,
-    NOT_LEADER,
-    DBID_MISMATCH
+    INVALID_CREDENTIALS,
+    TOO_MANY_CONNECTIONS,
+    UNSUPPORTED_API_VERSION
 }
 
 enum SubmitCode : byte {
     UNKNOW,
     ACCEPTED,
-    REJECTED,
-    ERRORS
+    NO_MODIFICATIONS,
+    ERROR_INVALID_REVISION,
+    ERROR_INVALID_KEY,
+    ERROR_DUPLICATE_KEY,
+    ERROR_MESSAGE,
+    REJECTED_PERMISSION,
+    REJECTED_INTEGRITY,
+    REJECTED_ENSURE
 }
 
 enum LoadMode: byte
@@ -71,6 +76,7 @@ table Acl
 table LoginRequest
 {
     cid: uint64;                    // Correlation id (used to match responses to requests)
+    api_version: uint32;            // API version
     user: string;                   // User name
     password: string;               // User password
 }
@@ -79,12 +85,11 @@ table LoginResponse
 {
     cid: uint64;                    // Correlation id (loginRequest cid)
     code: LoginCode = UNKNOW;       // Response code
-    session: string;                // Session assigned
     rev0: uint64;                   // Oldest revision available
     crev: uint64;                   // Current database revision
     can_force: bool;                // Can force transactions
     keepalive: uint32;              // Keepalive timeout (in milliseconds)
-    // TODO: add permissions
+    permissions: [Acl];             // List of acls
 }
 
 table PingRequest

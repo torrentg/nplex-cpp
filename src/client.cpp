@@ -6,7 +6,7 @@
 #define LOG(severity, ...) \
     do { \
         if (static_cast<int>(m_impl->listener.log_level()) <= static_cast<int>(severity)) \
-            m_impl->listener.log(*this, fmt::format(__VA_ARGS__), severity); \
+            m_impl->listener.log(*this, severity, fmt::format(__VA_ARGS__)); \
     } while(0)
 #define LOG_DEBUG(...)  LOG(listener_t::log_level_e::DEBUG, __VA_ARGS__)
 #define LOG_INFO(...)   LOG(listener_t::log_level_e::INFO , __VA_ARGS__)

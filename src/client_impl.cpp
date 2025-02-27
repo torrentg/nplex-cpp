@@ -1,4 +1,6 @@
 #include <cassert>
+#include <fmt/ranges.h>
+#include <fmt/format.h>
 #include "client_impl.hpp"
 
 /**
@@ -14,7 +16,7 @@
 #define LOG(severity, ...) \
     do { \
         if (static_cast<int>(listener.log_level()) <= static_cast<int>(severity)) \
-            listener.log(parent, fmt::format(__VA_ARGS__), severity); \
+            listener.log(parent, severity, fmt::format(__VA_ARGS__)); \
     } while(0)
 #define LOG_DEBUG(...)  LOG(listener_t::log_level_e::DEBUG, __VA_ARGS__)
 #define LOG_INFO(...)   LOG(listener_t::log_level_e::INFO , __VA_ARGS__)
@@ -24,6 +26,27 @@
 // ==========================================================
 // Internal (static) functions
 // ==========================================================
+
+static const std::string mode_to_string(uint8_t mode)
+{
+    std::string str = "----";
+
+    if (mode & NPLEX_CREATE) str[0] = 'c';
+    if (mode & NPLEX_READ) str[1] = 'r';
+    if (mode & NPLEX_UPDATE) str[2] = 'u';
+    if (mode & NPLEX_DELETE) str[3] = 'd';
+
+    return str;
+}
+
+template <>
+struct fmt::formatter<nplex::acl_t> {
+  constexpr auto parse (format_parse_context& ctx) { return ctx.begin(); }
+  template <typename Context>
+  constexpr auto format (nplex::acl_t const& obj, Context& ctx) const {
+      return format_to(ctx.out(), "{}:{}", ::mode_to_string(obj.mode), obj.pattern);
+  }
+};
 
 static void cb_process_async(uv_async_t *handle)
 {
@@ -174,12 +197,12 @@ void nplex::client_t::impl_t::on_connection_established(connection_t *con)
     LOG_DEBUG("{} - connection established", con->addr.str());
 
     if (m_state != state_e::CONNECTING) {
-        con->disconnect();
+        con->disconnect(ERR_CLOSED_BY_LOCAL);
         return;
     }
 
     if (m_con != nullptr) {
-        con->disconnect();
+        con->disconnect(ERR_ALREADY_CONNECTED);
         return;
     }
 
@@ -194,10 +217,7 @@ void nplex::client_t::impl_t::on_connection_established(connection_t *con)
 
 void nplex::client_t::impl_t::on_connection_closed(connection_t *con)
 {
-    if (con->error)
-        LOG_WARN("{} - {}", con->addr.str(), uv_strerror(con->error));
-    else
-        LOG_DEBUG("{} - connection closed", con->addr.str());
+    LOG_WARN("{} - {}", con->addr.str(), con->strerror());
 
     // Case: unable to connect
     if (con != m_con)
@@ -248,7 +268,8 @@ void nplex::client_t::impl_t::on_keepalive_timeout()
     }
 
     if (m_con) {
-        m_con->disconnect(UV_ETIMEDOUT);
+        LOG_WARN("{} - connection lost", m_con->addr.str());
+        m_con->disconnect(ERR_KEEPALIVE);
     }
 }
 
@@ -309,7 +330,7 @@ void nplex::client_t::impl_t::on_msg_delivered(connection_t *con, const msgs::Me
 void nplex::client_t::impl_t::on_msg_received(connection_t *con, const msgs::Message *msg)
 {
     if (!msg || !msg->content()) {
-        con->disconnect(UV_EPROTO);
+        con->disconnect(ERR_MSG_ERROR);
         return;
     }
 
@@ -319,7 +340,7 @@ void nplex::client_t::impl_t::on_msg_received(connection_t *con, const msgs::Mes
     }
 
     if (con != m_con) {
-        con->disconnect();
+        con->disconnect(ERR_ALREADY_CONNECTED);
         return;
     }
 
@@ -348,14 +369,14 @@ void nplex::client_t::impl_t::on_msg_received(connection_t *con, const msgs::Mes
             break;
 
         default:
-            con->disconnect(UV_EPROTO);
+            con->disconnect(ERR_MSG_ERROR);
     }
 }
 
 void nplex::client_t::impl_t::process_login_resp(connection_t *con, const nplex::msgs::LoginResponse *resp)
 {
     if (m_con) {
-        con->disconnect();
+        con->disconnect(ERR_ALREADY_CONNECTED);
         return;
     }
 
@@ -363,7 +384,7 @@ void nplex::client_t::impl_t::process_login_resp(connection_t *con, const nplex:
 
     if (resp->code() != msgs::LoginCode::AUTHORIZED) {
         LOG_ERROR("Login failed on server {}", con->addr.str());
-        con->disconnect();
+        con->disconnect(ERR_AUTH);
         return;
     }
 
@@ -371,7 +392,22 @@ void nplex::client_t::impl_t::process_login_resp(connection_t *con, const nplex:
     num_logins++;
     set_state(state_e::SYNCHRONIZING);
     can_force = resp->can_force();
-    // TODO: get permissions
+    permissions.clear();
+
+    if (resp->permissions())
+    {
+        for (flatbuffers::uoffset_t i = 0; i < resp->permissions()->size(); i++) {
+            auto acl = resp->permissions()->Get(i);
+            permissions.push_back({acl->mode(), acl->pattern()->str()});
+        }
+    }
+
+    if (permissions.empty()) {
+        con->disconnect(ERR_AUTH);
+        return;
+    }
+
+    LOG_INFO("can-force = {}, permissions = [{}]", can_force, fmt::join(permissions, ", "));
 
     if (resp->keepalive())
     {
@@ -381,11 +417,14 @@ void nplex::client_t::impl_t::process_login_resp(connection_t *con, const nplex:
         uv_timer_init(loop.get(), timer_keepalive);
     
         uv_timer_start(timer_keepalive, ::cb_timer_keepalive_timeout, timeout, timeout);
+
+        LOG_INFO("keepalive = {}ms, connection-lost = {}ms", resp->keepalive(), timeout);
     }
+
 
     for (auto &server : connections)
         if (server.get() != m_con)
-            server->disconnect();
+            server->disconnect(ERR_ALREADY_CONNECTED);
 
     auto cmd = listener.on_connected(parent, m_con->addr.str(), resp->rev0(), resp->crev());
 
@@ -421,8 +460,7 @@ void nplex::client_t::impl_t::process_login_resp(connection_t *con, const nplex:
 void nplex::client_t::impl_t::process_load_resp(const nplex::msgs::LoadResponse *resp)
 {
     if (m_state != state_e::SYNCHRONIZING) {
-        // unexpected message
-        m_con->disconnect(UV_EPROTO);
+        m_con->disconnect(ERR_MSG_UNEXPECTED);
         return;
     }
 
