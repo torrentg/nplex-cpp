@@ -58,7 +58,7 @@ namespace tests {
         return push;
     }
 
-    inline nplex::msgs::SubmitRequestT make_submit_request(std::size_t cid, std::size_t crev, std::uint32_t type, std::vector<nplex::msgs::KeyValueT> upserts, std::vector<std::string> deletes, std::vector<nplex::msgs::AclT> ensures)
+    inline nplex::msgs::SubmitRequestT make_submit_request(std::size_t cid, std::size_t crev, std::uint32_t type, std::vector<nplex::msgs::KeyValueT> upserts, std::vector<std::string> deletes, std::vector<std::string> ensures)
     {
         nplex::msgs::SubmitRequestT req;
         req.cid = cid;
@@ -66,7 +66,7 @@ namespace tests {
         req.type = type;
         req.upserts = make_vector_unique_ptr(upserts);
         req.deletes = deletes;
-        req.ensures = make_vector_unique_ptr(ensures);
+        req.ensures = ensures;
         return req;
     }
 

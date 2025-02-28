@@ -84,20 +84,20 @@ flatbuffers::DetachedBuffer nplex::create_submit_msg(std::size_t cid, rev_t crev
     using namespace flatbuffers;
 
     FlatBufferBuilder builder;
-    std::vector<Offset<KeyValue>> upserts_v;
-    std::vector<Offset<String>> deletes_v;
-    std::vector<Offset<Acl>> ensures_v;
+    std::vector<Offset<KeyValue>> upserts;
+    std::vector<Offset<String>> deletes;
+    std::vector<Offset<String>> ensures;
 
     for (const auto &item : tx->items())
     {
         switch (std::get<transaction_impl_t::action_e>(item.second))
         {
             case transaction_impl_t::action_e::DELETE:
-                deletes_v.push_back(builder.CreateString(item.first));
+                deletes.push_back(builder.CreateString(item.first));
                 break;
 
             case transaction_impl_t::action_e::UPSERT:
-                upserts_v.push_back(
+                upserts.push_back(
                     CreateKeyValue(
                         builder, 
                         builder.CreateString(item.first), 
@@ -116,13 +116,7 @@ flatbuffers::DetachedBuffer nplex::create_submit_msg(std::size_t cid, rev_t crev
 
     for (const auto &item : tx->ensures())
     {
-        ensures_v.push_back(
-            CreateAcl(
-                builder, 
-                builder.CreateString(item.first), 
-                item.second
-            )
-        );
+        ensures.push_back(builder.CreateString(item));
     }
 
     auto msg = CreateMessage(builder, 
@@ -131,9 +125,9 @@ flatbuffers::DetachedBuffer nplex::create_submit_msg(std::size_t cid, rev_t crev
             cid,
             (tx->isolation() == transaction_t::isolation_e::SERIALIZABLE ? tx->rev_creation() : crev),
             tx->type(),
-            builder.CreateVector(upserts_v),
-            builder.CreateVector(deletes_v),
-            builder.CreateVector(ensures_v),
+            builder.CreateVector(upserts),
+            builder.CreateVector(deletes),
+            builder.CreateVector(ensures),
             force
         ).Union()
     );

@@ -126,7 +126,7 @@ class transaction_t
      * 
      * @param[in] key The key to read.
      * @param[in] check If true, checks at commit time that the key-value pair was not modified.
-     *                  Is equivalent to call 'ensure(key, NPLEX_CREATE|NPLEX_UPDATE|NPLEX_DELETE)'.
+     *                  Is equivalent to call 'ensure(key)'.
      * 
      * @return The value associated with the key,
      *         empty if not found or previously deleted.
@@ -161,10 +161,11 @@ class transaction_t
      * Glob patterns are supported (ex: '/users/\*\/error', '/users/jdoe/\**').
      * When using a pattern, the operation is applied to all matching keys.
      * 
-     * Caution, deletion using a pattern does not grant that all keys was removed at commit-time. 
-     * For example, if you delete a range of values using a pattern, and then a commit adds 
-     * a key satisfying the pattern, this new key continue to exists even if the current 
-     * transaction is committed succesfully. Use ensure() to avoid these cases.
+     * Caution: Deletion using a pattern does not guarantee that all keys will be removed 
+     * at commit time. For example, if you delete a range of values using a pattern, and 
+     * then a commit adds a key satisfying the pattern, this new key continue to exists 
+     * even if the current transaction is committed succesfully. Use ensure() to avoid 
+     * these cases.
      * 
      * @param[in] pattern The key or pattern to remove.
      * 
@@ -183,39 +184,38 @@ class transaction_t
      * guarantee that you delete, create, or update all database entries matching this 
      * pattern at commit time. This is because an intermediate commit may add, delete, 
      * or update an entry satisfying that pattern. To avoid these cases, you can add a 
-     * check to validate that the condition is fulfilled.
+     * check to validate keys matching a pattern that the condition is fulfilled.
      * 
-     * A condition is considered fulfilled when no one has performed any of the 
-     * indicated actions from the time the conditions is established until the commit.
+     * An ensure is a condition verified at commit time to check that keys satisfying a 
+     * pattern have not been modified by an intermediate transaction.
      * 
-     * The transaction will be rejected if any of the conditions are not met.
-     * Transaction ensures applies even in 'force' mode.
+     * The transaction will be rejected by server if any of the ensures are not met.
+     * Ensures applies even in 'force' mode.
      * 
      * Glob patterns are supported (ex: '/users/\*\/error', '/users/jdoe/\**').
      * 
      * The behavior depends on the isolation level:
      * - read-committed:
-     *   - Condition applies to the database state at check time.
+     *   - Condition applies to the database state at transaction submit time.
      * - repeatable-reads:
-     *   - Condition applies to the database state at check time.
+     *   - Condition applies to the database state at transaction submit time.
      * - serializable:
      *   - Condition applies to the database state at transaction creation time.
      * 
-     * @example: Verify that nobody modified or deleted a fixed key.
-     *     tx.ensure("/users/jdoe/name", NPLEX_UPDATE | NPLEX_DELETE);
+     * @example: Verify that nobody modified a fixed key.
+     *     tx.ensure("/users/jdoe/name");
      * 
      * @example: Verify that nobody altered a set of keys.
-     *     tx.ensure("/users/\**", NPLEX_CREATE | NPLEX_UPDATE | NPLEX_DELETE);
+     *     tx.ensure("/users/\**");
      *
      * @param[in] pattern The pattern to check.
-     * @param[in] actions The actions to check (use NPLEX_CREATE, NPLEX_UPDATE, NPLEX_DELETE).
      * 
      * @return true if the condition was set, 
-     *         false otherwise (invalid-pattern, unrecognized-action).
+     *         false otherwise (invalid-pattern).
      * 
      * @exception nplex_exception Transaction is not open.
      */
-    virtual bool ensure(const char *pattern, std::uint8_t actions) = 0;
+    virtual bool ensure(const char *pattern) = 0;
 
     /**
      * Executes the callback function for each key-value.

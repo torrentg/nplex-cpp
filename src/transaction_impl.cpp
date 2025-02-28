@@ -42,7 +42,7 @@ nplex::value_ptr nplex::transaction_impl_t::read(const char *key, bool check)
             return {};
 
         if (check)
-            ensure(key, NPLEX_CREATE | NPLEX_UPDATE | NPLEX_DELETE);
+            ensure(key);
 
         return std::get<value_ptr>(it_tx->second);
     }
@@ -59,7 +59,7 @@ nplex::value_ptr nplex::transaction_impl_t::read(const char *key, bool check)
         m_items.emplace(it_cache->first, std::make_tuple(action_e::READ, it_cache->second));
 
     if (check)
-        ensure(key, NPLEX_CREATE | NPLEX_UPDATE | NPLEX_DELETE);
+        ensure(key);
 
     return it_cache->second;
 }
@@ -174,11 +174,9 @@ std::size_t nplex::transaction_impl_t::remove(const char *pattern)
     return ret;
 }
 
-bool nplex::transaction_impl_t::ensure(const char *pattern, std::uint8_t actions)
+bool nplex::transaction_impl_t::ensure(const char *pattern)
 {
-    actions &= (NPLEX_CREATE | NPLEX_UPDATE | NPLEX_DELETE);
-
-    if (!pattern || !actions)
+    if (!pattern)
         return false;
 
     std::lock_guard<decltype(m_cache->m_mutex)> lock_cache(m_cache->m_mutex);
@@ -186,12 +184,8 @@ bool nplex::transaction_impl_t::ensure(const char *pattern, std::uint8_t actions
     if (m_state != state_e::OPEN)
         throw nplex_exception("Transaction is not open");
 
-    auto it = m_ensures.find(pattern);
-
-    if (it == m_ensures.end())
-        m_ensures.emplace(pattern, actions);
-    else
-        it->second |= actions;
+    if (!m_ensures.contains(pattern))
+        m_ensures.emplace(pattern);
 
     return true;
 }
@@ -230,7 +224,6 @@ std::size_t nplex::transaction_impl_t::for_each(const char *pattern, const callb
 
         while (it_cache != it_cache_end)
         {
-            auto xxx = it_cache->first;
             if (!it_cache->first.starts_with(prefix))
                 it_cache = it_cache_end;
             else if (glob_match(it_cache->first.data(), pattern))
@@ -320,15 +313,11 @@ void nplex::transaction_impl_t::update(const std::vector<change_t> &changes)
     {
         for (const auto &item : m_ensures)
         {
-            if (!glob_match(change.key.data(), item.first.data()))
+            if (!glob_match(change.key.data(), item.data()))
                 continue;
 
-            if (((item.second & NPLEX_CREATE) && change.action == change_t::action_e::CREATE) ||
-                ((item.second & NPLEX_UPDATE) && change.action == change_t::action_e::UPDATE) ||
-                ((item.second & NPLEX_DELETE) && change.action == change_t::action_e::DELETE)) {
-                m_dirty = true;
-                break;
-            }
+            m_dirty = true;
+            break;
         }
     }
 }

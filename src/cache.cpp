@@ -103,9 +103,8 @@ nplex::change_t nplex::cache_t::delete_entry(const char *key)
     change_t change = {change_t::action_e::DELETE, nullptr, nullptr, nullptr};
     auto it = m_data.find(key);
 
-    if (it == m_data.end()) {
+    if (it == m_data.end())
         return change;
-    }
 
     change.key = it->first;
     change.value = it->second;
@@ -185,7 +184,7 @@ std::vector<change_t> nplex::cache_t::update(const msgs::Update *updmsg)
 
             auto change = upsert_entry(key, value);
 
-            if (change.key)
+            if (!change.key.empty())
                 changes.push_back(change);
         }
     }
@@ -201,7 +200,7 @@ std::vector<change_t> nplex::cache_t::update(const msgs::Update *updmsg)
 
             auto change = delete_entry(key->c_str());
 
-            if (change.key)
+            if (!change.key.empty())
                 changes.push_back(change);
         }
     }

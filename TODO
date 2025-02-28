@@ -8,7 +8,7 @@
 * Review client_impl_t members access (currently public)
 * submit_tx_fut returns a future (attached to tx.promise)
 * client_t constructor waits until synchronized
-* add user permissions on login_response
+* check user permissions in transaction
 
 ## Useful commands
 

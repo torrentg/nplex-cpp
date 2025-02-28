@@ -278,8 +278,8 @@ TEST_CASE("SubmitRequest")
             "key4"
         },
         {
-            { .pattern = "/devices/*", .mode = 1},
-            { .pattern = "/user/**", .mode = 7}
+            "/devices/*",
+            "/user/**"
         }
     );
 
@@ -320,7 +320,7 @@ TEST_CASE("SubmitRequest")
 
     for (uoffset_t i = 0; i < ptr->ensures()->size(); i++)
     {
-        CHECK(ptr->ensures()->Get(i)->pattern()->str() == req.ensures[i]->pattern);
+        CHECK(ptr->ensures()->Get(i)->str() == req.ensures[i]);
     }
 }
 
@@ -353,21 +353,9 @@ TEST_CASE("SubmitRequest-hard")
     deletes.push_back(builder.CreateString("key4"));
 
     // create vector of ensures
-    std::vector<flatbuffers::Offset<msgs::Acl>> ensures;
-    ensures.push_back(
-        CreateAcl(
-            builder, 
-            builder.CreateString("/devices/*"), 
-            1
-        )
-    );
-    ensures.push_back(
-        CreateAcl(
-            builder, 
-            builder.CreateString("/user/**"), 
-            7
-        )
-    );
+    std::vector<flatbuffers::Offset<flatbuffers::String>> ensures;
+    ensures.push_back(builder.CreateString("/devices/*"));
+    ensures.push_back(builder.CreateString("/user/**"));
 
     auto msg = CreateMessage(builder, 
         MsgContent::SUBMIT_REQUEST, 

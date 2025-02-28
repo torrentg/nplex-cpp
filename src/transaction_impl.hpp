@@ -1,5 +1,6 @@
 #pragma once
 
+#include <set>
 #include <map>
 #include <tuple>
 #include <atomic>
@@ -24,8 +25,8 @@ class transaction_impl_t : public transaction_t
     };
 
     using entry_t = std::tuple<action_e, value_ptr>;
-    using items_t = std::map<key_t, entry_t, key_less_t>;
-    using ensures_t = std::map<std::string, std::uint8_t>;
+    using items_t = std::map<key_t, entry_t, gto::cstring_compare>;
+    using ensures_t = std::set<std::string>;
 
   private:
 
@@ -64,7 +65,7 @@ class transaction_impl_t : public transaction_t
     virtual bool upsert(const char *key, const std::string_view &data, bool force = false) override;
     virtual bool remove(const key_t &key) override;
     virtual std::size_t remove(const char *pattern) override;
-    virtual bool ensure(const char *pattern, std::uint8_t actions) override;
+    virtual bool ensure(const char *pattern) override;
     virtual std::size_t for_each(const char *pattern, const callback_t &callback) override;
 
     void update(const std::vector<change_t> &changes);

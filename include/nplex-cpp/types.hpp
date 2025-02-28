@@ -93,24 +93,4 @@ inline bool is_valid_key(const std::string_view &key) { return !key.empty(); }
 inline bool is_valid_key(const char *key) { return (key && is_valid_key(std::string_view{key})); }
 inline bool is_valid_key(const key_t &key) { return is_valid_key(key.view()); }
 
-struct key_less_t
-{
-    using is_transparent = std::true_type;
-
-    // key_t vs key_t
-    bool operator()(const key_t &lhs, const key_t &rhs) const { return (lhs < rhs); }
-
-    // key_t vs char *
-    bool operator()(const key_t &lhs, const char *rhs) const { return (lhs < rhs); }
-    bool operator()(const char *lhs, const key_t &rhs) const { return (lhs < rhs); }
-
-    // key_t vs std::string
-    bool operator()(const key_t &lhs, const std::string &rhs) const { return (lhs.view() < rhs); }
-    bool operator()(const std::string &lhs, const key_t &rhs) const { return (lhs < rhs.view()); }
-
-    // key_t vs std::string_view
-    bool operator()(const key_t &lhs, const std::string_view &rhs) const { return (lhs.view() < rhs); }
-    bool operator()(const std::string_view &lhs, const key_t &rhs) const { return (lhs < rhs.view()); }
-};
-
 } // namespace nplex

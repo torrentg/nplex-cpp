@@ -395,7 +395,7 @@ TEST_CASE("transaction_ensure")
     SUBCASE("ensure_all")
     {
         // any change will make the transaction dirty
-        REQUIRE_NOTHROW(tx->ensure("**", NPLEX_CREATE | NPLEX_UPDATE | NPLEX_DELETE));
+        REQUIRE_NOTHROW(tx->ensure("**"));
 
         // updating key1
         tx->dirty(false);
@@ -435,8 +435,8 @@ TEST_CASE("transaction_ensure")
 
     SUBCASE("ensure_some")
     {
-        // any update or delete on keys match key1* will make the transaction dirty
-        REQUIRE_NOTHROW(tx->ensure("key1*", NPLEX_UPDATE | NPLEX_DELETE));
+        // any change on keys matching key1* will make the transaction dirty
+        REQUIRE_NOTHROW(tx->ensure("key1*"));
 
         // updating key1
         tx->dirty(false);
@@ -447,7 +447,7 @@ TEST_CASE("transaction_ensure")
                 {}
             ));
 
-        // adding key11 does nothing
+        // adding key11
         tx->dirty(false);
         changes = update_cache(cache, 
             make_update(4, "jdoe", 1234567890, 15, {
@@ -457,7 +457,7 @@ TEST_CASE("transaction_ensure")
             ));
 
         tx->update(changes);
-        CHECK(!tx->dirty());
+        CHECK(tx->dirty());
 
         // deleting key11
         tx->dirty(false);
@@ -475,6 +475,6 @@ TEST_CASE("transaction_ensure")
     SUBCASE("ensure_error_not_open")
     {
         tx->state(transaction_t::state_e::COMMITTED);
-        CHECK_THROWS_AS(tx->ensure("key1", NPLEX_UPDATE), nplex_exception);
+        CHECK_THROWS_AS(tx->ensure("key1"), nplex_exception);
     }
 }
