@@ -1,6 +1,7 @@
 #include <cassert>
 #include <arpa/inet.h>
 #include "nplex-cpp/exception.hpp"
+#include "errors.hpp"
 #include "client_impl.hpp"
 #include "connection.hpp"
 
@@ -86,56 +87,53 @@ static struct sockaddr_storage get_sockaddr(uv_loop_t *loop, const nplex::addr_t
 
 static void cb_tcp_alloc(uv_handle_t *handle, size_t suggested_size, uv_buf_t *buf)
 {
-    using namespace nplex;
     UNUSED(suggested_size);
 
-    connection_t *con = (connection_t *) handle;
+    auto obj = reinterpret_cast<nplex::connection_s *>(handle);
 
-    buf->base = con->input_buffer;
-    buf->len = sizeof(con->input_buffer);
+    buf->base = obj->m_input_buffer;
+    buf->len = sizeof(obj->m_input_buffer);
 }
 
 static void cb_tcp_read(uv_stream_t *stream, ssize_t nread, const uv_buf_t *buf)
 {
     using namespace nplex;
 
-    connection_t *con = (connection_t *) stream;
+    connection_s *obj = (connection_s *) stream;
 
     if (nread == UV_EOF || buf->base == NULL) {
-        con->disconnect(ERR_CLOSED_BY_PEER);
+        obj->disconnect(ERR_CLOSED_BY_PEER);
         return;
     }
 
     if (nread < 0) {
-        con->disconnect((int) nread);
+        obj->disconnect((int) nread);
         return;
     }
 
-    con->input_msg.append(buf->base, static_cast<std::size_t>(nread));
-
-    while (con->input_msg.size() >= sizeof(output_msg_t::len))
+    obj->m_input_msg.append(buf->base, static_cast<std::size_t>(nread));
+    while (obj->m_input_msg.size() >= sizeof(output_msg_t::len))
     {
-        const char *ptr = con->input_msg.c_str();
+        const char *ptr = obj->m_input_msg.c_str();
         std::uint32_t len = ntohl(*((const std::uint32_t *) ptr));
 
-        if (len > con->params.max_msg_bytes) {
-            con->disconnect(ERR_MSG_SIZE);
+        if (len > obj->m_params.max_msg_bytes) {
+            obj->disconnect(ERR_MSG_SIZE);
             return;
         }
 
-        if (con->input_msg.size() < len)
+        if (obj->m_input_msg.size() < len)
             break;
 
         auto msg = parse_network_msg(ptr, len);
 
         if (!msg) {
-            con->disconnect(ERR_MSG_ERROR);
+            obj->disconnect(ERR_MSG_ERROR);
             return;
         }
 
-        con->client()->on_msg_received(con, msg);
-
-        con->input_msg.erase(0, len);
+        obj->client()->on_msg_received(obj->connection(), msg);
+        obj->m_input_msg.erase(0, len);
     }
 }
 
@@ -143,30 +141,29 @@ static void cb_tcp_connect(uv_connect_t *req, int status)
 {
     using namespace nplex;
 
-    connection_t *con = (connection_t *) req->handle;
+    connection_s *obj = (connection_s *) req->handle;
 
     free(req);
 
     if (status < 0) {
-        con->disconnect(status);
+        obj->disconnect(status);
         return;
     }
 
-    uv_read_start((uv_stream_t *) con, ::cb_tcp_alloc, ::cb_tcp_read);
+    uv_read_start((uv_stream_t *) obj, ::cb_tcp_alloc, ::cb_tcp_read);
+    obj->m_state = connection_s::state_e::CONNECTED;
 
-    con->state = connection_t::state_e::CONNECTED;
-
-    con->client()->on_connection_established(con);
+    obj->client()->on_connection_established(obj->connection());
 }
 
 static void cb_tcp_close(uv_handle_t *handle)
 {
     using namespace nplex;
 
-    connection_t *con = (connection_t *) handle;
+    connection_s *obj = (connection_s *) handle;
 
-    con->state = connection_t::state_e::CLOSED;
-    con->client()->on_connection_closed(con);
+    obj->m_state = connection_s::state_e::CLOSED;
+    obj->client()->on_connection_closed(obj->connection());
 }
 
 static void cb_tcp_write(uv_write_t *req, int status)
@@ -174,128 +171,117 @@ static void cb_tcp_write(uv_write_t *req, int status)
     using namespace nplex;
 
     auto msg = std::unique_ptr<output_msg_t>((output_msg_t *) req);
-    auto *con = (connection_t *) req->handle;
+    auto *obj = (connection_s *) req->handle;
 
-    assert(con->stats.unack_msgs > 0);
-    assert(con->stats.unack_bytes >= msg->length());
+    assert(obj->m_stats.unack_msgs > 0);
+    assert(obj->m_stats.unack_bytes >= msg->length());
 
-    con->stats.unack_msgs--;
-    con->stats.unack_bytes -= msg->length();
-    con->stats.sent_msgs++;
-    con->stats.sent_bytes += msg->length();
+    obj->m_stats.unack_msgs--;
+    obj->m_stats.unack_bytes -= msg->length();
+    obj->m_stats.sent_msgs++;
+    obj->m_stats.sent_bytes += msg->length();
 
     if (status < 0) {
-        con->disconnect(status);
+        obj->disconnect(status);
         return;
     }
 
     auto *ptr = flatbuffers::GetRoot<nplex::msgs::Message>(msg->content.data());
     assert(ptr);
 
-    con->client()->on_msg_delivered(con, ptr);
+    obj->client()->on_msg_delivered(obj->connection(), ptr);
 }
 
 // ==========================================================
-// connection_t methods
+// connection_s methods
 // ==========================================================
 
-nplex::connection_t::connection_t(const addr_t &addr_, uv_loop_t *loop_, const params_t &params_) : addr(addr_)
+nplex::connection_s::connection_s(const addr_t &addr, uv_loop_t *loop, const params_t &params) : m_addr(addr)
 {
-    if (addr.port() == 0)
-        throw nplex_exception("Invalid address: {}", addr.str());
+    if (m_addr.port() == 0)
+        throw nplex_exception("Invalid address: {}", m_addr.str());
 
-    state = state_e::CLOSED;
-    error = 0;
+    m_state = state_e::CLOSED;
+    m_error = 0;
 
-    params.max_msg_bytes = (params_.max_msg_bytes == 0 ? UINT32_MAX : params_.max_msg_bytes);
-    params.max_unack_msgs = (params_.max_unack_msgs == 0 ? UINT32_MAX : params_.max_unack_msgs);
-    params.max_unack_bytes = (params_.max_unack_bytes == 0 ? UINT32_MAX : params_.max_unack_bytes);
+    m_params.max_msg_bytes = (params.max_msg_bytes == 0 ? UINT32_MAX : params.max_msg_bytes);
+    m_params.max_unack_msgs = (params.max_unack_msgs == 0 ? UINT32_MAX : params.max_unack_msgs);
+    m_params.max_unack_bytes = (params.max_unack_bytes == 0 ? UINT32_MAX : params.max_unack_bytes);
 
-    tcp.loop = loop_;
-    tcp.data = this;
+    m_tcp.loop = loop;
+    m_tcp.data = this;
 }
 
-nplex::connection_t::~connection_t()
+nplex::connection_s::~connection_s()
 {
-    assert(state == state_e::CLOSED);
+    assert(m_state == state_e::CLOSED);
 }
 
-void nplex::connection_t::connect()
+bool nplex::connection_s::is_closed() const
+{
+    return m_state == state_e::CLOSED;
+}
+
+void nplex::connection_s::connect()
 {
     int rc = 0;
 
-    if (state != state_e::CLOSED)
+    if (m_state != state_e::CLOSED)
         throw nplex_exception("Trying to connect a non-closed connection");
 
-    error = 0;
-    state = state_e::CONNECTING;
+    m_error = 0;
+    m_state = state_e::CONNECTING;
+    struct sockaddr_storage addr_in = ::get_sockaddr(m_tcp.loop, m_addr);
 
-    struct sockaddr_storage addr_in = ::get_sockaddr(tcp.loop, addr);
-
-    if ((rc = uv_tcp_init(tcp.loop, &tcp)) != 0)
+    if ((rc = uv_tcp_init(m_tcp.loop, &m_tcp)) != 0)
         throw nplex_exception(uv_strerror(rc));
 
-    tcp.data = this;
+    m_tcp.data = this;
 
     uv_connect_t* connect = NULL;
     if ((connect = (uv_connect_t*) malloc(sizeof(uv_connect_t))) == NULL)
         throw std::bad_alloc();
 
-    if ((rc = uv_tcp_connect(connect, &tcp, (const struct sockaddr*) &addr_in, ::cb_tcp_connect)) != 0) {
+    if ((rc = uv_tcp_connect(connect, &m_tcp, (const struct sockaddr*) &addr_in, ::cb_tcp_connect)) != 0) {
         free(connect);
         throw nplex_exception(uv_strerror(rc));
     }
 }
 
-void nplex::connection_t::disconnect(int rc)
+void nplex::connection_s::disconnect(int rc)
 {
-    if (state == state_e::CLOSED)
+    if (m_state == state_e::CLOSED)
         return;
 
-    if (!error)
-        error = rc;
+    if (!m_error)
+        m_error = rc;
 
-    uv_close((uv_handle_t *) &tcp, ::cb_tcp_close);
+    uv_close((uv_handle_t *) &m_tcp, ::cb_tcp_close);
 }
 
-void nplex::connection_t::send(flatbuffers::DetachedBuffer &&buf)
+void nplex::connection_s::send(flatbuffers::DetachedBuffer &&buf)
 {
     auto len = get_msg_length(buf);
 
-    if (stats.unack_msgs >= params.max_unack_msgs)
+    if (m_stats.unack_msgs >= m_params.max_unack_msgs)
         throw nplex_exception("Output message queue is full");
 
-    if (len > params.max_msg_bytes)
+    if (len > m_params.max_msg_bytes)
         throw nplex_exception("Message too large");
 
-    if (stats.unack_bytes + len >= params.max_unack_bytes)
+    if (m_stats.unack_bytes + len >= m_params.max_unack_bytes)
         throw nplex_exception("Too many output unacked bytes");
 
     auto *msg = new output_msg_t(std::move(buf));
 
     assert(len == msg->length());
 
-    uv_write(&msg->req, (uv_stream_t *) &tcp, msg->buf.data(), (unsigned int) msg->buf.size(), ::cb_tcp_write);
+    uv_write(&msg->req, (uv_stream_t *) &m_tcp, msg->buf.data(), (unsigned int) msg->buf.size(), ::cb_tcp_write);
 
-    stats.unack_msgs++;
-    stats.unack_bytes += static_cast<std::uint32_t>(len);
+    m_stats.unack_msgs++;
+    m_stats.unack_bytes += static_cast<std::uint32_t>(len);
 }
 
-std::string nplex::connection_t::strerror() const
-{
-    if (error < 0)
-        return uv_strerror(error);
-
-    switch (error)
-    {
-        case ERR_CLOSED_BY_LOCAL: return "closed by local";
-        case ERR_CLOSED_BY_PEER: return "closed by peer";
-        case ERR_MSG_ERROR: return "invalid message";
-        case ERR_MSG_UNEXPECTED: return "unexpected message";
-        case ERR_MSG_SIZE: return "message too large";
-        case ERR_ALREADY_CONNECTED: return "already connected";
-        case ERR_KEEPALIVE: return "keepalive not received";
-        case ERR_AUTH: return "unauthorized";
-        default: return fmt::format("unknow error -{}-", error);
-    }
-}
+// ==========================================================
+// connection_t methods
+// ==========================================================

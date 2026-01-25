@@ -1,7 +1,7 @@
 // ========================================================
 // Nplex flatbuffers schema file.
 // @see https://github.com/google/flatbuffers
-// > flatc --cpp --filename-suffix "" --filename-ext hpp --cpp-std c++17 --scoped-enums --gen-object-api messages.fbs
+// > flatc --cpp --filename-suffix "" --filename-ext hpp --cpp-std c++17 --scoped-enums messages.fbs
 // ========================================================
 
 namespace nplex.msgs;
@@ -10,17 +10,15 @@ namespace nplex.msgs;
 // Enums
 
 enum LoginCode: byte {
-    UNKNOW,
     AUTHORIZED,
-    COMPAT_MISMATCH,
     INVALID_CREDENTIALS,
     TOO_MANY_CONNECTIONS,
     UNSUPPORTED_API_VERSION
 }
 
 enum SubmitCode : byte {
-    UNKNOW,
     ACCEPTED,
+    TRY_LATER,
     NO_MODIFICATIONS,
     ERROR_INVALID_REVISION,
     ERROR_INVALID_KEY,
@@ -31,11 +29,9 @@ enum SubmitCode : byte {
     REJECTED_ENSURE
 }
 
-enum LoadMode: byte
-{
-    UNKNOW,
-    SNAPSHOT_AT_FIXED_REV,
+enum LoadMode: byte {
     SNAPSHOT_AT_LAST_REV,
+    SNAPSHOT_AT_FIXED_REV,
     ONLY_UPDATES_FROM_REV
 }
 
@@ -44,14 +40,14 @@ enum LoadMode: byte
 
 table KeyValue
 {
-    key: string;                    // Key
-    value: [ubyte];                 // Value
+    key: string (required);         // Key
+    value: [ubyte] (required);      // Value
 }
 
 table Update
 {
     rev: uint64;                    // Commit revision
-    user: string;                   // Creator
+    user: string (required);        // Creator
     timestamp: uint64;              // Timestamp
     type: uint32;                   // Transaction type (user-defined value)
     upserts: [KeyValue];            // List of creates and updates
@@ -66,7 +62,7 @@ table Snapshot
 
 table Acl
 {
-    pattern: string;                // Pattern (glob)
+    pattern: string (required);     // Pattern (glob)
     mode: ubyte;                    // Mode (1=CREATE, 2=READ, 4=UPDATE, 8=DELETE)
 }
 
@@ -77,14 +73,14 @@ table LoginRequest
 {
     cid: uint64;                    // Correlation id (used to match responses to requests)
     api_version: uint32;            // API version
-    user: string;                   // User name
-    password: string;               // User password
+    user: string (required);        // User name
+    password: string (required);    // User password
 }
 
 table LoginResponse
 {
     cid: uint64;                    // Correlation id (loginRequest cid)
-    code: LoginCode = UNKNOW;       // Response code
+    code: LoginCode;                // Response code
     rev0: uint64;                   // Oldest revision available
     crev: uint64;                   // Current database revision
     can_force: bool;                // Can force transactions
@@ -108,7 +104,7 @@ table PingResponse
 table LoadRequest
 {
     cid: uint64;                    // Correlation id (used to match responses to requests)
-    mode: LoadMode = UNKNOW;        // Load mode
+    mode: LoadMode;                 // Load mode
     rev: uint64;                    // Requested revision
 }
 
@@ -120,11 +116,11 @@ table LoadResponse
     snapshot: Snapshot;             // Snapshot (if requested)
 }
 
-table UpdatePush
+table ChangesPush
 {
     cid: uint64;                    // Correlation id (loadRequest cid)
     crev: uint64;                   // Current database revision
-    update: Update;                 // Database update (if commit.rev = crev -> client synced)
+    updates: [Update];              // Database updates
 }
 
 table SubmitRequest
@@ -141,10 +137,9 @@ table SubmitRequest
 table SubmitResponse
 {
     cid: uint64;                    // Correlation id (submitRequest cid)
-    crev: uint64;                   // Current database revision
-    code: SubmitCode = UNKNOW;      // Response code
-    erev: uint64;                   // Expected commit revision (0 means only ensures)
-    error: string;                  // Error message (if any)
+    crev: uint64;                   // Server current revision
+    code: SubmitCode;               // Response code
+    erev: uint64;                   // Expected commit revision (0 if not accepted)
 }
 
 table KeepAlivePush
@@ -164,7 +159,7 @@ union MsgContent {
     LOAD_RESPONSE: LoadResponse,
     SUBMIT_REQUEST: SubmitRequest,
     SUBMIT_RESPONSE: SubmitResponse,
-    UPDATE_PUSH: UpdatePush,
+    CHANGES_PUSH: ChangesPush,
     KEEPALIVE_PUSH: KeepAlivePush
 }
 

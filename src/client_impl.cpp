@@ -1,6 +1,7 @@
 #include <cassert>
 #include <fmt/ranges.h>
 #include <fmt/format.h>
+#include "errors.hpp"
 #include "client_impl.hpp"
 
 /**
@@ -27,16 +28,14 @@
 // Internal (static) functions
 // ==========================================================
 
-static const std::string mode_to_string(uint8_t mode)
+static std::string mode_to_string(std::uint8_t mode)
 {
-    std::string str = "----";
-
-    if (mode & NPLEX_CREATE) str[0] = 'c';
-    if (mode & NPLEX_READ) str[1] = 'r';
-    if (mode & NPLEX_UPDATE) str[2] = 'u';
-    if (mode & NPLEX_DELETE) str[3] = 'd';
-
-    return str;
+    return std::string{
+        ((mode & NPLEX_CREATE) ? 'c' : '-'),
+        ((mode & NPLEX_READ)   ? 'r' : '-'),
+        ((mode & NPLEX_UPDATE) ? 'u' : '-'),
+        ((mode & NPLEX_DELETE) ? 'd' : '-')
+    };
 }
 
 template <>
@@ -187,14 +186,14 @@ void nplex::client_t::impl_t::connect()
     m_con = nullptr;
 
     for (auto &con : connections) {
-        assert(con->state == connection_t::state_e::CLOSED);
+        assert(con->is_closed());
         con->connect();
     }
 }
 
 void nplex::client_t::impl_t::on_connection_established(connection_t *con)
 {
-    LOG_DEBUG("{} - connection established", con->addr.str());
+    LOG_DEBUG("{} - connection established", con->addr().str());
 
     if (m_state != state_e::CONNECTING) {
         con->disconnect(ERR_CLOSED_BY_LOCAL);
@@ -217,13 +216,13 @@ void nplex::client_t::impl_t::on_connection_established(connection_t *con)
 
 void nplex::client_t::impl_t::on_connection_closed(connection_t *con)
 {
-    LOG_WARN("{} - {}", con->addr.str(), con->strerror());
+    LOG_WARN("{} - {}", con->addr().str(), nplex::strerror(con->error()));
 
     // Case: unable to connect
     if (con != m_con)
     {
         for (auto &server : connections) {
-            if (server->state != connection_t::state_e::CLOSED)
+            if (!server->is_closed())
                 // Already connected or there is an ongoing connection attempt
                 return;  
         }
@@ -236,7 +235,7 @@ void nplex::client_t::impl_t::on_connection_closed(connection_t *con)
             return;
     }
 
-    std::string addr = (m_con ? m_con->addr.str() : "");
+    std::string addr = (m_con ? m_con->addr().str() : "");
 
     if (timer_keepalive) {
         uv_close((uv_handle_t *) timer_keepalive, (uv_close_cb) free);
@@ -268,7 +267,7 @@ void nplex::client_t::impl_t::on_keepalive_timeout()
     }
 
     if (m_con) {
-        LOG_WARN("{} - connection lost", m_con->addr.str());
+        LOG_WARN("{} - connection lost", m_con->addr().str());
         m_con->disconnect(ERR_KEEPALIVE);
     }
 }
@@ -356,8 +355,8 @@ void nplex::client_t::impl_t::on_msg_received(connection_t *con, const msgs::Mes
             process_submit_resp(msg->content_as_SUBMIT_RESPONSE());
             break;
 
-        case msgs::MsgContent::UPDATE_PUSH:
-            process_update_push(msg->content_as_UPDATE_PUSH());
+        case msgs::MsgContent::CHANGES_PUSH:
+            process_changes_push(msg->content_as_CHANGES_PUSH());
             break;
 
         case msgs::MsgContent::KEEPALIVE_PUSH:
@@ -383,7 +382,7 @@ void nplex::client_t::impl_t::process_login_resp(connection_t *con, const nplex:
     assert(m_state == state_e::CONNECTING);
 
     if (resp->code() != msgs::LoginCode::AUTHORIZED) {
-        LOG_ERROR("Login failed on server {}", con->addr.str());
+        LOG_ERROR("Login failed on server {}", con->addr().str());
         con->disconnect(ERR_AUTH);
         return;
     }
@@ -426,7 +425,7 @@ void nplex::client_t::impl_t::process_login_resp(connection_t *con, const nplex:
         if (server.get() != m_con)
             server->disconnect(ERR_ALREADY_CONNECTED);
 
-    auto cmd = listener.on_connected(parent, m_con->addr.str(), resp->rev0(), resp->crev());
+    auto cmd = listener.on_connected(parent, m_con->addr().str(), resp->rev0(), resp->crev());
 
     msgs::LoadMode mode = msgs::LoadMode::SNAPSHOT_AT_LAST_REV;
 
@@ -466,8 +465,10 @@ void nplex::client_t::impl_t::process_load_resp(const nplex::msgs::LoadResponse 
 
     assert(resp->cid() == correlation);
 
-    if (!resp->accepted())
-        throw nplex_exception("Load rejected");
+    if (!resp->accepted()) {
+        m_con->disconnect(ERR_LOAD);
+        return;
+    }
 
     if (resp->snapshot())
         cache->load(resp->snapshot());
@@ -495,11 +496,27 @@ void nplex::client_t::impl_t::process_submit_resp(const nplex::msgs::SubmitRespo
     // update tx status
 }
 
-void nplex::client_t::impl_t::process_update_push(const nplex::msgs::UpdatePush *resp)
+void nplex::client_t::impl_t::process_changes_push(const nplex::msgs::ChangesPush *resp)
+{
+    auto updates = resp->updates();
+
+    if (updates)
+    {
+        for (auto upd : *updates)
+            process_update(upd);
+    }
+
+    if (cache->m_rev == resp->crev())
+        set_state(state_e::SYNCHRONIZED);
+
+    assert(m_state == state_e::SYNCHRONIZING || cache->m_rev == resp->crev());
+}
+
+void nplex::client_t::impl_t::process_update(const nplex::msgs::Update *upd)
 {
     std::lock_guard<decltype(cache->m_mutex)> lock(cache->m_mutex);
 
-    auto changes = cache->update(resp->update());
+    auto changes = cache->update(upd);
 
     for (auto it = transactions.begin(); it != transactions.end(); )
     {
@@ -535,11 +552,6 @@ void nplex::client_t::impl_t::process_update_push(const nplex::msgs::UpdatePush 
     assert(meta != cache->m_metas.rend());
 
     listener.on_update(parent, meta->second, changes);
-
-    if (cache->m_rev == resp->crev())
-        set_state(state_e::SYNCHRONIZED);
-
-    assert(m_state == state_e::SYNCHRONIZING || cache->m_rev == resp->crev());
 }
 
 void nplex::client_t::impl_t::process_keepalive_push(const nplex::msgs::KeepAlivePush *resp)

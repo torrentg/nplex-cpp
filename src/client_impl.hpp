@@ -78,16 +78,17 @@ class client_t::impl_t
     void abort(const std::string &msg);
     void set_state(client_t::state_e state);
 
-    void process_submit_cmd(const nplex::submit_cmd_t &cmd);
-    void process_close_cmd(const nplex::close_cmd_t &cmd);
-    void process_ping_cmd(const nplex::ping_cmd_t &cmd);
+    void process_submit_cmd(const submit_cmd_t &cmd);
+    void process_close_cmd(const close_cmd_t &cmd);
+    void process_ping_cmd(const ping_cmd_t &cmd);
 
-    void process_login_resp(connection_t *con, const nplex::msgs::LoginResponse *resp);
-    void process_load_resp(const nplex::msgs::LoadResponse *resp);
-    void process_submit_resp(const nplex::msgs::SubmitResponse *resp);
-    void process_update_push(const nplex::msgs::UpdatePush *resp);
-    void process_keepalive_push(const nplex::msgs::KeepAlivePush *resp);
-    void process_ping_resp(const nplex::msgs::PingResponse *resp);
+    void process_login_resp(connection_t *con, const msgs::LoginResponse *resp);
+    void process_load_resp(const msgs::LoadResponse *resp);
+    void process_submit_resp(const msgs::SubmitResponse *resp);
+    void process_changes_push(const msgs::ChangesPush *resp);
+    void process_keepalive_push(const msgs::KeepAlivePush *resp);
+    void process_ping_resp(const msgs::PingResponse *resp);
+    void process_update(const msgs::Update *upd);
 };
 
 } // namespace nplex

@@ -161,7 +161,10 @@ class my_listener_t : public nplex::listener_t
         num_failed_attempts = 0;
 
         if (last_rev == 0)
-            return {load_mode_e::SNAPSHOT_AT_LAST_REV, 0};
+            //return {load_mode_e::SNAPSHOT_AT_LAST_REV, 0};
+            return {load_mode_e::SNAPSHOT_AT_FIXED_REV, 10};
+            //return {load_mode_e::SNAPSHOT_AT_FIXED_REV, newest_rev - 1};
+            //return {load_mode_e::ONLY_UPDATES_FROM_REV, 12};
         else
             return {load_mode_e::ONLY_UPDATES_FROM_REV, last_rev};
     }

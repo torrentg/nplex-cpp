@@ -209,9 +209,9 @@ TEST_CASE("LoadResponse")
     }
 }
 
-TEST_CASE("UpdatePush")
+TEST_CASE("ChangesPush")
 {
-    UpdatePushT push = make_update_push(
+    ChangesPushT push = make_changes_push(
         3,          // cid
         2048,       // crev
         make_update(1056, "akay", 1234568000, 4,
@@ -226,40 +226,43 @@ TEST_CASE("UpdatePush")
     );
 
     auto buf = serialize(push);
-    auto *ptr = ::GetRoot<nplex::msgs::UpdatePush>(buf.data());
+    auto *ptr = ::GetRoot<nplex::msgs::ChangesPush>(buf.data());
 
     REQUIRE(ptr);
     CHECK(ptr->cid() == 3);
     CHECK(ptr->crev() == 2048);
 
-    REQUIRE(ptr->update());
-    CHECK(ptr->update()->rev() == push.update->rev);
-    CHECK(ptr->update()->user()->str() == push.update->user);
-    CHECK(ptr->update()->timestamp() == push.update->timestamp);
-    CHECK(ptr->update()->type() == push.update->type);
+    REQUIRE(ptr->updates());
+    CHECK(ptr->updates()->size() == 1);
 
-    REQUIRE(ptr->update()->upserts());
-    REQUIRE(ptr->update()->upserts()->size() == push.update->upserts.size());
+    auto update = ptr->updates()->Get(0);
+    CHECK(update->rev() == push.updates[0]->rev);
+    CHECK(update->user()->str() == push.updates[0]->user);
+    CHECK(update->timestamp() == push.updates[0]->timestamp);
+    CHECK(update->type() == push.updates[0]->type);
 
-    for (uoffset_t i = 0; i < ptr->update()->upserts()->size(); i++)
+    REQUIRE(update->upserts());
+    REQUIRE(update->upserts()->size() == push.updates[0]->upserts.size());
+
+    for (uoffset_t i = 0; i < update->upserts()->size(); i++)
     {
-        auto kv = ptr->update()->upserts()->Get(i);
+        auto kv = update->upserts()->Get(i);
 
-        CHECK(kv->key()->str() == push.update->upserts[i]->key);
-        CHECK(kv->value()->size() == push.update->upserts[i]->value.size());
+        CHECK(kv->key()->str() == push.updates[0]->upserts[i]->key);
+        CHECK(kv->value()->size() == push.updates[0]->upserts[i]->value.size());
 
         for (uoffset_t j = 0; j < kv->value()->size(); j++)
         {
-            CHECK(kv->value()->Get(j) == push.update->upserts[i]->value[j]);
+            CHECK(kv->value()->Get(j) == push.updates[0]->upserts[i]->value[j]);
         }
     }
 
-    REQUIRE(ptr->update()->deletes());
-    REQUIRE(ptr->update()->deletes()->size() == push.update->deletes.size());
+    REQUIRE(update->deletes());
+    REQUIRE(update->deletes()->size() == push.updates[0]->deletes.size());
 
-    for (uoffset_t i = 0; i < ptr->update()->deletes()->size(); i++)
+    for (uoffset_t i = 0; i < update->deletes()->size(); i++)
     {
-        CHECK(ptr->update()->deletes()->Get(i)->str() == push.update->deletes[i]);
+        CHECK(update->deletes()->Get(i)->str() == push.updates[0]->deletes[i]);
     }
 }
 
@@ -402,7 +405,6 @@ TEST_CASE("SubmitResponse")
         2048,       // crev
         msgs::SubmitCode::ACCEPTED,
         2049,       // erev
-        ""          // error
     };
 
     auto buf = serialize(resp);
@@ -413,7 +415,6 @@ TEST_CASE("SubmitResponse")
     CHECK(ptr->crev() == 2048);
     CHECK(ptr->code() == msgs::SubmitCode::ACCEPTED);
     CHECK(ptr->erev() == 2049);
-    CHECK(!ptr->error());
 }
 
 TEST_CASE("KeepAlivePush")

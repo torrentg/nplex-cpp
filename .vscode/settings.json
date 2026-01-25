@@ -88,22 +88,22 @@
   "C_Cpp.default.cStandard": "c17",
   "C_Cpp.default.includePath": [
     "${workspaceFolder}/deps",
-    "/usr/include/tirpc"
+    "${workspaceFolder}/include"
   ],
-  "c-cpp-flylint.language": "c",
+  "c-cpp-flylint.language": "c++",
   "c-cpp-flylint.standard": [
-    "c17"
+    "c++20"
   ],
   "c-cpp-flylint.includePaths": [
     "${workspaceFolder}/deps",
-    "/usr/include/tirpc"
+    "${workspaceFolder}/include"
   ],
   "c-cpp-flylint.clang.includePaths": [
     "${workspaceFolder}/deps",
-    "/usr/include/tirpc"
+    "${workspaceFolder}/include"
   ],
   "c-cpp-flylint.clang.standard": [
-    "c17"
+    "c++20"
   ],
   "c-cpp-flylint.excludeFromWorkspacePaths": [
     "${workspaceFolder}/deps"

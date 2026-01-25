@@ -133,8 +133,8 @@ nplex::tx_ptr nplex::client_t::create_tx(transaction_t::isolation_e isolation, b
         throw connection_failed(m_impl->error);
 
     size_t num_txs = m_impl->transactions.size();
-    if (num_txs >= m_impl->params.max_num_concurrent_tx)
-        throw nplex_exception("Too many concurrent transactions (max={})", m_impl->params.max_num_concurrent_tx);
+    if (num_txs >= m_impl->params.max_active_txs)
+        throw nplex_exception("Too many concurrent transactions (max={})", m_impl->params.max_active_txs);
 
     std::lock_guard<decltype(m_impl->cache->m_mutex)> lock_cache(m_impl->cache->m_mutex);
 

@@ -10,10 +10,10 @@ struct params_t
     std::vector<std::string> servers;           //!< List of servers (host:port).
     std::string user;                           //!< User name.
     std::string password;                       //!< User password.
-    std::uint32_t max_num_concurrent_tx = 0;    //!< Maximum number of concurrent transactions (0 = unlimited).
-    std::uint32_t max_msg_bytes = 0;            //!< Maximum message size (0 = unlimited).
-    std::uint32_t max_unack_msgs = 0;           //!< Maximum number of output infly messages (0 = unlimited).
-    std::uint32_t max_unack_bytes = 0;          //!< Maximum bytes of output infly messages (0 = unlimited).
+    std::uint32_t max_active_txs = UINT32_MAX;  //!< Maximum number of concurrent transactions (0 = unlimited).
+    std::uint32_t max_msg_bytes = UINT32_MAX;   //!< Maximum message size (0 = unlimited).
+    std::uint32_t max_unack_msgs = UINT32_MAX;  //!< Maximum number of output infly messages (0 = unlimited).
+    std::uint32_t max_unack_bytes = UINT32_MAX; //!< Maximum bytes of output infly messages (0 = unlimited).
     float timeout_factor = 2.5;                 //!< Timeout factor.
 
     // Default constructor.
