@@ -1,11 +1,18 @@
 #pragma once
 
 #include <uv.h>
+#include <memory>
 #include "addr.hpp"
+
+// Forward declaration
+namespace flatbuffers {
+    class DetachedBuffer;
+}
 
 namespace nplex {
 
 // Forward declarations
+struct params_t;
 class client_t;
 class connection_t;
 
@@ -19,17 +26,11 @@ class connection_t;
  */
 struct connection_s
 {
-    enum class state_e : std::uint8_t {
-        CLOSED,
-        CONNECTING,
-        CONNECTED
-    };
-
-    uv_tcp_t m_tcp;                                 // Libuv tcp handle (must be first)
+    uv_tcp_t m_tcp = {};                            // Libuv tcp handle (must be first)
     addr_t m_addr;                                  // Remote address (server address)
-    state_e m_state;                                // Connection state
     char m_input_buffer[UINT16_MAX] = {0};          // Input buffer used by read()
     std::string m_input_msg;                        // Current incoming message
+    bool m_is_connected = false;                    // Connection established
     int m_error = 0;                                // Disconnection cause
 
     struct {
@@ -55,7 +56,6 @@ struct connection_s
     bool is_closed() const;
 
     void connect();
-    void shutdown(int rc);
     void disconnect(int rc = 0);
     void send(flatbuffers::DetachedBuffer &&buf);
 
@@ -64,23 +64,31 @@ struct connection_s
 };
 
 /**
- * Internal class representing a connection to a server.
+ * Class representing a network connection.
  * 
- * client_impl is accessed via tcp.loop->data.
- */
-class connection_t : private connection_s
+ * This class knows nothing about bussiness logic.
+ * Deals with the event loop, messages, etc.
+ * 
+ * Main dutties are:
+ * - Send messages
+ * - Receive messages
+ * - Handle disconnections
+ * - Manage libuv resources
+ */class connection_t : private connection_s
 {
   public:
 
     const addr_t & addr() const { return m_addr; }
+    bool is_connected() const { return m_is_connected; }
     int error() const { return m_error; }
 
     using connection_s::connection_s;
     using connection_s::connect;
     using connection_s::is_closed;
     using connection_s::disconnect;
-    using connection_s::shutdown;
     using connection_s::send;
 };
+
+using connection_ptr = std::unique_ptr<connection_t>;
 
 } // namespace nplex

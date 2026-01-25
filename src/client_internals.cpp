@@ -2,6 +2,7 @@
 #include "nplex-cpp/exception.hpp"
 #include "transaction_impl.hpp"
 #include "client_internals.hpp"
+#include "utils.hpp"
 
 #define API_VERSION 10
 
@@ -145,14 +146,14 @@ const nplex::msgs::Message * nplex::parse_network_msg(const char *ptr, size_t le
     if (len <= 3 * sizeof(std::uint32_t))
         return nullptr;
 
-    if (len != ntohl(*((const std::uint32_t *) ptr)))
+    if (len != ntohl_ptr(ptr))
         return nullptr;
 
-    std::uint32_t metadata = ntohl(*((const std::uint32_t *) (ptr + sizeof(std::uint32_t))));
+    std::uint32_t metadata = ntohl_ptr(ptr + sizeof(std::uint32_t));
     // TODO: uncompress if (metadata & LZ4)
     UNUSED(metadata);
 
-    std::uint32_t checksum = ntohl(*((const std::uint32_t *) (ptr + len - sizeof(std::uint32_t))));
+    std::uint32_t checksum = ntohl_ptr(ptr + len - sizeof(std::uint32_t));
 
     if (checksum != CRC32::CRC32::calc(reinterpret_cast<const std::uint8_t *>(ptr), len - sizeof(std::uint32_t)))
         return nullptr;

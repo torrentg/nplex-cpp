@@ -130,6 +130,8 @@ target_sources(
     ${CMAKE_CURRENT_LIST_DIR}/src/messages.hpp
     ${CMAKE_CURRENT_LIST_DIR}/src/transaction_impl.hpp
     ${CMAKE_CURRENT_LIST_DIR}/src/transaction_impl.cpp
+    ${CMAKE_CURRENT_LIST_DIR}/src/utils.hpp
+    ${CMAKE_CURRENT_LIST_DIR}/src/utils.cpp
     PUBLIC
     ${CMAKE_CURRENT_LIST_DIR}/include/nplex-cpp/types.hpp
     ${CMAKE_CURRENT_LIST_DIR}/include/nplex-cpp/params.hpp
