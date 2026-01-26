@@ -49,13 +49,13 @@ namespace tests {
         return resp;
     }
 
-    inline nplex::msgs::ChangesPushT make_changes_push(std::size_t cid, std::size_t crev, const nplex::msgs::UpdateT &update)
+    inline nplex::msgs::UpdatesPushT make_updates_push(std::size_t cid, std::size_t crev, const nplex::msgs::UpdateT &update)
     {
         std::vector<std::unique_ptr<nplex::msgs::UpdateT>> updates;
 
         updates.push_back(std::make_unique<nplex::msgs::UpdateT>(update));
 
-        nplex::msgs::ChangesPushT push;
+        nplex::msgs::UpdatesPushT push;
         push.cid = cid;
         push.crev = crev;
         push.updates = std::move(updates);

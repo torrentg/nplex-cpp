@@ -116,9 +116,9 @@ table LoadResponse
     snapshot: Snapshot;             // Snapshot (if requested)
 }
 
-table ChangesPush
+table UpdatesPush
 {
-    cid: uint64;                    // Correlation id (loadRequest cid)
+    cid: uint64;                    // Correlation id (UpdatesRequest cid)
     crev: uint64;                   // Current database revision
     updates: [Update];              // Database updates
 }
@@ -159,7 +159,7 @@ union MsgContent {
     LOAD_RESPONSE: LoadResponse,
     SUBMIT_REQUEST: SubmitRequest,
     SUBMIT_RESPONSE: SubmitResponse,
-    CHANGES_PUSH: ChangesPush,
+    UPDATES_PUSH: UpdatesPush,
     KEEPALIVE_PUSH: KeepAlivePush
 }
 

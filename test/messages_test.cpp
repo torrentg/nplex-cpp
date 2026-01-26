@@ -209,9 +209,9 @@ TEST_CASE("LoadResponse")
     }
 }
 
-TEST_CASE("ChangesPush")
+TEST_CASE("UpdatesPush")
 {
-    ChangesPushT push = make_changes_push(
+    UpdatesPushT push = make_updates_push(
         3,          // cid
         2048,       // crev
         make_update(1056, "akay", 1234568000, 4,
@@ -226,7 +226,7 @@ TEST_CASE("ChangesPush")
     );
 
     auto buf = serialize(push);
-    auto *ptr = ::GetRoot<nplex::msgs::ChangesPush>(buf.data());
+    auto *ptr = ::GetRoot<nplex::msgs::UpdatesPush>(buf.data());
 
     REQUIRE(ptr);
     CHECK(ptr->cid() == 3);

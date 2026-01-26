@@ -86,7 +86,7 @@ class client_t::impl_t
     void process_login_resp(connection_t *con, const msgs::LoginResponse *resp);
     void process_load_resp(const msgs::LoadResponse *resp);
     void process_submit_resp(const msgs::SubmitResponse *resp);
-    void process_changes_push(const msgs::ChangesPush *resp);
+    void process_updates_push(const msgs::UpdatesPush *resp);
     void process_keepalive_push(const msgs::KeepAlivePush *resp);
     void process_ping_resp(const msgs::PingResponse *resp);
     void process_update(const msgs::Update *upd);

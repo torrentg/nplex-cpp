@@ -262,6 +262,12 @@ class client_t
     client_t(const params_t &params, listener_t &listener = default_listener);
     virtual ~client_t();
 
+    // Prevent copying and moving
+    client_t(const client_t&) = delete;
+    client_t& operator=(const client_t&) = delete;
+    client_t(client_t&&) = delete;
+    client_t& operator=(client_t&&) = delete;
+
     /**
      * Returns current client state.
      * 
@@ -294,11 +300,10 @@ class client_t
     /**
      * Submit a transaction to the server.
      * 
-     * On error, the transaction is rejected and the on_rejected() callback is called.
-     * Response will be notified via on_committed() or on_rejected().
+     * Response will be notified via on_tx_committed() or on_tx_rejected().
      * 
-     * @triggers on_committed()
-     * @triggers on_rejected()
+     * @triggers on_tx_committed()
+     * @triggers on_tx_rejected()
      * 
      * @param[in] tx Transaction to submit.
      * @param[in] force Force to accept values even if the transaction is dirty.

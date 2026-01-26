@@ -206,7 +206,7 @@ class my_listener_t : public nplex::listener_t
         auto tx = client.create_tx(nplex::transaction_t::isolation_e::READ_COMMITTED, true);
 
         // initializing bussiness objects with database content
-        tx->for_each("/sensors/*/*", [this](const gto::cstring &key, const nplex::value_t &value) {
+        tx->for_each("/sensors/*/*", [this](const nplex::key_t &key, const nplex::value_t &value) {
             update_sensors(key, value);
             return true;
         });

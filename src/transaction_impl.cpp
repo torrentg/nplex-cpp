@@ -166,7 +166,7 @@ std::size_t nplex::transaction_impl_t::remove(const char *pattern)
     if (m_read_only)
         throw nplex_exception("Transaction is read-only");
 
-    auto ret = for_each(pattern, [this](const gto::cstring &key, [[maybe_unused]] const value_t &value) {
+    auto ret = for_each(pattern, [this](const key_t &key, [[maybe_unused]] const value_t &value) {
         remove(key);
         return true;
     });

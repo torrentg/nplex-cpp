@@ -147,7 +147,7 @@ TEST_CASE("addr")
     CHECK(addr.family() == AF_UNSPEC);
 
     // valid hosts
-    for (auto entry : valid_hosts)
+    for (const auto &entry : valid_hosts)
     {
         string server = entry.host + ":12345";
 
@@ -164,7 +164,7 @@ TEST_CASE("addr")
     }
 
     // invalid hosts
-    for (auto entry : invalid_hosts)
+    for (const auto &entry : invalid_hosts)
     {
         string server = string(entry.host) + ":12345";
 

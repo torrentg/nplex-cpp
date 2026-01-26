@@ -132,7 +132,7 @@ nplex::client_t::impl_t::impl_t(const params_t &params_, listener_t &listener_, 
         throw nplex_exception("Error initializing the event loop (uv_async_init)");
 
     for (const auto &server : params.servers)
-        connections.push_back(connection_t::create(server, loop.get(), params));
+        connections.push_back(connection_t::create(addr_t{server}, loop.get(), params));
 }
 
 nplex::client_t::impl_t::~impl_t()
@@ -389,8 +389,8 @@ void nplex::client_t::impl_t::on_msg_received(connection_t *con, const msgs::Mes
             process_submit_resp(msg->content_as_SUBMIT_RESPONSE());
             break;
 
-        case msgs::MsgContent::CHANGES_PUSH:
-            process_changes_push(msg->content_as_CHANGES_PUSH());
+        case msgs::MsgContent::UPDATES_PUSH:
+            process_updates_push(msg->content_as_UPDATES_PUSH());
             break;
 
         case msgs::MsgContent::KEEPALIVE_PUSH:
@@ -530,7 +530,7 @@ void nplex::client_t::impl_t::process_submit_resp(const nplex::msgs::SubmitRespo
     // update tx status
 }
 
-void nplex::client_t::impl_t::process_changes_push(const nplex::msgs::ChangesPush *resp)
+void nplex::client_t::impl_t::process_updates_push(const nplex::msgs::UpdatesPush *resp)
 {
     auto updates = resp->updates();
 

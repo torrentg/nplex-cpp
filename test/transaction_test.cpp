@@ -324,7 +324,7 @@ TEST_CASE("transaction_for_each")
         std::size_t count = 0;
         bool success = true;
 
-        REQUIRE_NOTHROW(count = tx->for_each("*", [&keys, &pos, &success]([[maybe_unused]] const gto::cstring &key, [[maybe_unused]] const value_t &value) {
+        REQUIRE_NOTHROW(count = tx->for_each("*", [&keys, &pos, &success]([[maybe_unused]] const nplex::key_t &key, [[maybe_unused]] const value_t &value) {
             if (pos >= 6 || key != keys[pos++])
                 success = false;
             return true;
@@ -344,7 +344,7 @@ TEST_CASE("transaction_for_each")
         basic_step_1(tx);
 
         // removed key3 and added key10
-        REQUIRE_NOTHROW(count = tx->for_each("*", [&keys, &pos, &success]([[maybe_unused]] const gto::cstring &key, [[maybe_unused]] const value_t &value) {
+        REQUIRE_NOTHROW(count = tx->for_each("*", [&keys, &pos, &success]([[maybe_unused]] const nplex::key_t &key, [[maybe_unused]] const value_t &value) {
             if (pos >= 6 || key != keys[pos++])
                 success = false;
             return true;
@@ -364,7 +364,7 @@ TEST_CASE("transaction_for_each")
         basic_step_1(tx);
 
         // removed key3 and added key10
-        REQUIRE_NOTHROW(count = tx->for_each("key1*", [&keys, &pos, &success]([[maybe_unused]] const gto::cstring &key, [[maybe_unused]] const value_t &value) {
+        REQUIRE_NOTHROW(count = tx->for_each("key1*", [&keys, &pos, &success]([[maybe_unused]] const nplex::key_t &key, [[maybe_unused]] const value_t &value) {
             if (pos >= 2 || key != keys[pos++])
                 success = false;
             return true;
@@ -377,7 +377,7 @@ TEST_CASE("transaction_for_each")
     SUBCASE("iterate_exceptions")
     {
         tx->state(transaction_t::state_e::ABORTED);
-        CHECK_THROWS_AS(tx->for_each("key1", []([[maybe_unused]] const gto::cstring &key, [[maybe_unused]] const value_t &value) {
+        CHECK_THROWS_AS(tx->for_each("key1", []([[maybe_unused]] const nplex::key_t &key, [[maybe_unused]] const value_t &value) {
                 return true;
             }), nplex_exception);
 

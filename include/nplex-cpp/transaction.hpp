@@ -72,7 +72,7 @@ class transaction_t
         SERIALIZABLE                            //!< All read data will not change during the transaction.
     };
 
-    using callback_t = std::function<bool(const gto::cstring &key, const value_t &value)>;
+    using callback_t = std::function<bool(const key_t &key, const value_t &value)>;
 
     virtual ~transaction_t() = default;
     virtual isolation_e isolation() const = 0;
@@ -215,13 +215,13 @@ class transaction_t
      * @note Don't block the database for a long time, as this function locks the database.
      * 
      * @example: Simple iteration.
-     *  tx.for_each([](const gto::cstring &key, const value_t &value) {
+     *  tx.for_each([](const key_t &key, const value_t &value) {
      *      std::cout << key << " = " << value.data() << std::endl;
      *      return true;
      *  });
      * 
      * @example: Search for a value.
-     *  tx.for_each("/users/\*\/name", [&id](const gto::cstring &key, const value_t &value) {
+     *  tx.for_each("/users/\*\/name", [&id](const key_t &key, const value_t &value) {
      *      if (value.data().contains("mr_hacker")) {
      *          id = key;
      *          return false;
@@ -230,9 +230,9 @@ class transaction_t
      *  });
      * 
      * @example: Alter database content.
-     *  tx.for_each("/users/\*\/name", [&tx](const gto::cstring &key, const value_t &value) {
+     *  tx.for_each("/users/\*\/name", [&tx](const key_t &key, const value_t &value) {
      *      if (value.data().contains("mr_hacker"))
-     *          tx.delete(key);
+     *          tx.remove(key);
      *      return true;
      *  });
      * 
