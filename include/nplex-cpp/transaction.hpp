@@ -53,19 +53,6 @@ namespace nplex {
  */
 class transaction_t
 {
-  private:
-
-    // non-copyable class
-    transaction_t(const transaction_t&) = delete;
-    transaction_t& operator=(const transaction_t&) = delete;
-    // non-movable class
-    transaction_t(transaction_t&&) = delete;
-    transaction_t& operator=(transaction_t&&) = delete;
-
-  protected:
-
-    transaction_t() = default;
-
   public:
 
     enum class state_e : std::uint8_t {
@@ -260,6 +247,19 @@ class transaction_t
      */
     virtual std::size_t for_each(const callback_t &callback) { return for_each("**", callback); }
     virtual std::size_t for_each(const char *pattern, const callback_t &callback) = 0;
+
+  protected:
+
+    transaction_t() = default;
+
+  private:
+
+    // non-copyable class
+    transaction_t(const transaction_t&) = delete;
+    transaction_t& operator=(const transaction_t&) = delete;
+    // non-movable class
+    transaction_t(transaction_t&&) = delete;
+    transaction_t& operator=(transaction_t&&) = delete;
 };
 
 using tx_ptr = std::shared_ptr<transaction_t>;

@@ -6,20 +6,11 @@
 
 #define API_VERSION 10
 
-/**
- * Notes on this compilation unit:
- * 
- * When we use the libuv library we apply C conventions (instead of C++ ones):
- *   - When in Rome, do as the Romans do.
- *   - calloc/free are used instead of new/delete.
- *   - pointers to static functions.
- *   - C-style pointer casting.
- */
+using namespace nplex::msgs;
+using namespace flatbuffers;
 
-nplex::output_msg_t::output_msg_t(flatbuffers::DetachedBuffer &&content_)
+nplex::output_msg_t::output_msg_t(flatbuffers::DetachedBuffer &&msg) : content(std::move(msg))
 {
-    content = std::move(content_);
-
     len = (std::uint32_t)(content.size() + sizeof(len) + sizeof(metadata) + sizeof(checksum));
     len = htonl(len);
 
@@ -32,17 +23,14 @@ nplex::output_msg_t::output_msg_t(flatbuffers::DetachedBuffer &&content_)
     checksum = CRC32::CRC32::calc(reinterpret_cast<const std::uint8_t *>(content.data()), content.size(), checksum);
     checksum = htonl(checksum);
 
-    buf[0] = uv_buf_init((char *) &len, sizeof(len));
-    buf[1] = uv_buf_init((char *) &metadata, sizeof(metadata));
-    buf[2] = uv_buf_init((char *) content.data(), (unsigned int) content.size());
-    buf[3] = uv_buf_init((char *) &checksum, sizeof(checksum));
+    buf[0] = uv_buf_init(reinterpret_cast<char *>(&len), sizeof(len));
+    buf[1] = uv_buf_init(reinterpret_cast<char *>(&metadata), sizeof(metadata));
+    buf[2] = uv_buf_init(reinterpret_cast<char *>(content.data()), static_cast<unsigned int>(content.size()));
+    buf[3] = uv_buf_init(reinterpret_cast<char *>(&checksum), sizeof(checksum));
 }
 
 flatbuffers::DetachedBuffer nplex::create_login_msg(std::size_t cid, const std::string &user, const std::string &password)
 {
-    using namespace msgs;
-    using namespace flatbuffers;
-
     FlatBufferBuilder builder;
 
     auto msg = CreateMessage(builder, 
@@ -61,9 +49,6 @@ flatbuffers::DetachedBuffer nplex::create_login_msg(std::size_t cid, const std::
 
 flatbuffers::DetachedBuffer nplex::create_load_msg(std::size_t cid, msgs::LoadMode mode, rev_t rev)
 {
-    using namespace msgs;
-    using namespace flatbuffers;
-
     FlatBufferBuilder builder;
 
     auto msg = CreateMessage(builder, 
@@ -81,9 +66,6 @@ flatbuffers::DetachedBuffer nplex::create_load_msg(std::size_t cid, msgs::LoadMo
 
 flatbuffers::DetachedBuffer nplex::create_submit_msg(std::size_t cid, rev_t crev, bool force, const tx_impl_ptr &tx)
 {
-    using namespace msgs;
-    using namespace flatbuffers;
-
     FlatBufferBuilder builder;
     std::vector<Offset<KeyValue>> upserts;
     std::vector<Offset<String>> deletes;
@@ -139,10 +121,6 @@ flatbuffers::DetachedBuffer nplex::create_submit_msg(std::size_t cid, rev_t crev
 
 const nplex::msgs::Message * nplex::parse_network_msg(const char *ptr, size_t len)
 {
-    using namespace nplex;
-    using namespace nplex::msgs;
-    using namespace flatbuffers;
-
     if (len <= 3 * sizeof(std::uint32_t))
         return nullptr;
 
@@ -161,8 +139,10 @@ const nplex::msgs::Message * nplex::parse_network_msg(const char *ptr, size_t le
     ptr += 2 * sizeof(std::uint32_t);
     len -= 3 * sizeof(std::uint32_t);
 
-    auto verifier = flatbuffers::Verifier((const std::uint8_t *) ptr, len);
-    verifier.VerifyBuffer<nplex::msgs::Message>(nullptr);
+    auto verifier = flatbuffers::Verifier(reinterpret_cast<const std::uint8_t *>(ptr), len);
 
-    return flatbuffers::GetRoot<nplex::msgs::Message>(ptr);
+    if (!verifier.VerifyBuffer<Message>(nullptr))
+        return nullptr;
+
+    return flatbuffers::GetRoot<Message>(ptr);
 }

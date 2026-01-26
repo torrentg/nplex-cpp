@@ -1,7 +1,6 @@
 #include <cassert>
 #include <fmt/ranges.h>
 #include <fmt/format.h>
-#include "errors.hpp"
 #include "client_impl.hpp"
 
 /**
@@ -27,6 +26,26 @@
 // ==========================================================
 // Internal (static) functions
 // ==========================================================
+
+static std::string error2str(int error)
+{
+    if (error < 0)
+        return uv_strerror(error);
+
+    switch (error)
+    {
+        case ERR_CLOSED_BY_LOCAL: return "closed by local";
+        case ERR_CLOSED_BY_PEER: return "closed by peer";
+        case ERR_MSG_ERROR: return "invalid message";
+        case ERR_MSG_UNEXPECTED: return "unexpected message";
+        case ERR_MSG_SIZE: return "message too large";
+        case ERR_ALREADY_CONNECTED: return "already connected";
+        case ERR_KEEPALIVE: return "keepalive not received";
+        case ERR_AUTH: return "unauthorized";
+        case ERR_LOAD: return "load request rejected";
+        default: return fmt::format("unknow error -{}-", error);
+    }
+}
 
 static std::string mode_to_string(std::uint8_t mode)
 {
@@ -112,8 +131,8 @@ nplex::client_t::impl_t::impl_t(const params_t &params_, listener_t &listener_, 
     if (uv_async_init(loop.get(), async.get(), ::cb_process_async) != 0)
         throw nplex_exception("Error initializing the event loop (uv_async_init)");
 
-    for (auto &server : params.servers)
-        connections.push_back(std::make_unique<connection_t>(server, loop.get(), params));
+    for (const auto &server : params.servers)
+        connections.push_back(connection_t::create(server, loop.get(), params));
 }
 
 nplex::client_t::impl_t::~impl_t()
@@ -152,6 +171,17 @@ void nplex::client_t::impl_t::run() noexcept
     }
 }
 
+void nplex::client_t::impl_t::send(flatbuffers::DetachedBuffer &&buf)
+{
+    if (!m_con || m_state == state_e::CLOSED)
+        return;
+
+    auto type = flatbuffers::GetRoot<nplex::msgs::Message>(buf.data())->content_type();
+    LOG_DEBUG("Sent {} to {}", msgs::EnumNameMsgContent(type), m_con->addr().str());
+
+    m_con->send(std::move(buf));
+}
+
 void nplex::client_t::impl_t::abort(const std::string &msg)
 {
     error = msg;
@@ -185,10 +215,8 @@ void nplex::client_t::impl_t::connect()
     set_state(state_e::CONNECTING);
     m_con = nullptr;
 
-    for (auto &con : connections) {
-        assert(con->is_closed());
+    for (auto &con : connections)
         con->connect();
-    }
 }
 
 void nplex::client_t::impl_t::on_connection_established(connection_t *con)
@@ -205,6 +233,10 @@ void nplex::client_t::impl_t::on_connection_established(connection_t *con)
         return;
     }
 
+    LOG_DEBUG("Sent {} to {}", msgs::EnumNameMsgContent(msgs::MsgContent::LOGIN_REQUEST), con->addr().str());
+
+    // TODO: enable keepalive to avoid staled connections
+
     con->send(
         create_login_msg(
             ++correlation, 
@@ -216,7 +248,7 @@ void nplex::client_t::impl_t::on_connection_established(connection_t *con)
 
 void nplex::client_t::impl_t::on_connection_closed(connection_t *con)
 {
-    LOG_WARN("{} - {}", con->addr().str(), nplex::strerror(con->error()));
+    LOG_WARN("{} - {}", con->addr().str(), ::error2str(con->error()));
 
     // Case: unable to connect
     if (con != m_con)
@@ -333,6 +365,8 @@ void nplex::client_t::impl_t::on_msg_received(connection_t *con, const msgs::Mes
         return;
     }
 
+    LOG_DEBUG("Received {} from {}", msgs::EnumNameMsgContent(msg->content_type()), con->addr().str());
+
     if (msg->content_type() == msgs::MsgContent::LOGIN_RESPONSE) {
         process_login_resp(con, msg->content_as_LOGIN_RESPONSE());
         return;
@@ -447,7 +481,7 @@ void nplex::client_t::impl_t::process_login_resp(connection_t *con, const nplex:
             break;
     }
 
-    m_con->send(
+    send(
         create_load_msg(
             ++correlation, 
             mode, 

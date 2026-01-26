@@ -77,6 +77,7 @@ class client_t::impl_t
 
     void abort(const std::string &msg);
     void set_state(client_t::state_e state);
+    void send(flatbuffers::DetachedBuffer &&buf);
 
     void process_submit_cmd(const submit_cmd_t &cmd);
     void process_close_cmd(const close_cmd_t &cmd);
