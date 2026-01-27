@@ -1,4 +1,5 @@
 #include <doctest.h>
+#include "cppcrc.h"
 #include "client_internals.hpp"
 
 using namespace std;
@@ -28,6 +29,21 @@ namespace {
     }
 
 } // unnamed namespace
+
+TEST_CASE("checksum")
+{
+    const char data[] = "The quick brown fox jumps over the lazy dog";
+    const std::uint32_t expected_crc = 0x414FA339; // precomputed
+    std::uint32_t crc = 0;
+
+    crc = CRC32::CRC32::calc(reinterpret_cast<const std::uint8_t *>(data), sizeof(data) - 1);
+    CHECK(crc == expected_crc);
+
+    // incremental calculation
+    crc = CRC32::CRC32::calc(reinterpret_cast<const std::uint8_t *>(&data), 10);
+    crc = CRC32::CRC32::calc(reinterpret_cast<const std::uint8_t *>(&data) + 10, sizeof(data) - 1 - 10, crc);
+    CHECK(crc == expected_crc);
+}
 
 TEST_CASE("output_msg")
 {
