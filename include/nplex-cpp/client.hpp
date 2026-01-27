@@ -47,22 +47,14 @@ class listener_t
         ERROR                    //!< Error messages.
     };
 
-    enum class load_mode_e : std::uint8_t {
-        SNAPSHOT_AT_FIXED_REV,   //!< Requests snapshot at a fixed revision and subsequent commits.
-        SNAPSHOT_AT_LAST_REV,    //!< Requests snapshot at the last revision and subsequent commits.
-        ONLY_UPDATES_FROM_REV    //!< Requests only updates from a revision.
-    };
-
-    using load_cmd_t = std::pair<load_mode_e, rev_t>;
-
     listener_t(log_level_e level = log_level_e::INFO) : m_log_level{level} {}
     virtual ~listener_t() {}
 
     /**
      * Callback function that is called when the client successfully logs in to the server.
      * 
-     * This function handles the connection event and determines the initial load command
-     * to send to the server.
+     * This function handles the connection event and determines the revision used to
+     * populate the data.
      * 
      * This function is executed in the event loop thread. Do not block it.
      * If an exception is thrown, the client will terminate.
@@ -75,13 +67,15 @@ class listener_t
      * @param[in] min_rev Oldest revision available on the server.
      * @param[in] max_rev Newest revision available on the server.
      * 
-     * @return The load command to send to the server.
+     * @return The data revision (in range min_rev - max_rev), 0 to get the current dataset.
+     *         The revision of the current dataset can be greater than max_rev if someone
+     *         else committed new data between the login and this call.
      */
-    virtual load_cmd_t on_connected([[maybe_unused]] client_t &client, 
-                                    [[maybe_unused]] const std::string &server, 
-                                    [[maybe_unused]] rev_t min_rev, 
-                                    [[maybe_unused]] rev_t max_rev) {
-        return {load_mode_e::SNAPSHOT_AT_LAST_REV, 0};
+    virtual rev_t on_connected([[maybe_unused]] client_t &client, 
+                               [[maybe_unused]] const std::string &server, 
+                               [[maybe_unused]] rev_t min_rev, 
+                               [[maybe_unused]] rev_t max_rev) {
+        return 0;
     }
 
     /**

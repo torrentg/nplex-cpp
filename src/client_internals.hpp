@@ -46,7 +46,7 @@ inline std::size_t get_msg_length(const flatbuffers::DetachedBuffer &buf) noexce
 
 struct submit_cmd_t {
     tx_impl_ptr tx;
-    bool force;
+    bool force = false;
 };
 
 struct close_cmd_t {};
@@ -58,7 +58,8 @@ struct ping_cmd_t {
 using command_t = std::variant<submit_cmd_t, close_cmd_t, ping_cmd_t>;
 
 flatbuffers::DetachedBuffer create_login_msg(std::size_t cid, const std::string &user, const std::string &password);
-flatbuffers::DetachedBuffer create_load_msg(std::size_t cid, msgs::LoadMode mode, rev_t rev);
+flatbuffers::DetachedBuffer create_snapshot_msg(std::size_t cid, rev_t rev);
+flatbuffers::DetachedBuffer create_updates_msg(std::size_t cid, rev_t rev);
 flatbuffers::DetachedBuffer create_submit_msg(std::size_t cid, rev_t crev, bool force, const tx_impl_ptr &tx);
 
 const nplex::msgs::Message * parse_network_msg(const char *ptr, size_t len);

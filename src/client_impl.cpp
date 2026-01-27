@@ -42,7 +42,7 @@ static std::string error2str(int error)
         case ERR_ALREADY_CONNECTED: return "already connected";
         case ERR_KEEPALIVE: return "keepalive not received";
         case ERR_AUTH: return "unauthorized";
-        case ERR_LOAD: return "load request rejected";
+        case ERR_LOAD: return "snapshot request rejected";
         default: return fmt::format("unknow error -{}-", error);
     }
 }
@@ -58,12 +58,16 @@ static std::string mode_to_string(std::uint8_t mode)
 }
 
 template <>
-struct fmt::formatter<nplex::acl_t> {
-  constexpr auto parse (format_parse_context& ctx) { return ctx.begin(); }
-  template <typename Context>
-  constexpr auto format (nplex::acl_t const& obj, Context& ctx) const {
-      return format_to(ctx.out(), "{}:{}", ::mode_to_string(obj.mode), obj.pattern);
-  }
+struct fmt::formatter<nplex::acl_t>
+{
+    constexpr auto parse (format_parse_context& ctx) { 
+        return ctx.begin();
+    }
+
+    template <typename Context>
+    constexpr auto format (nplex::acl_t const& obj, Context& ctx) const {
+        return format_to(ctx.out(), "{}:{}", ::mode_to_string(obj.mode), obj.pattern);
+    }
 };
 
 static void cb_process_async(uv_async_t *handle)
@@ -100,7 +104,7 @@ static void cb_timer_connect_timeout(uv_timer_t *timer)
 {
     auto *impl = (nplex::client_t::impl_t *) timer->loop->data;
     uv_timer_stop(timer);
-    uv_close((uv_handle_t *) timer, (uv_close_cb) free);
+    uv_close(reinterpret_cast<uv_handle_t *>(timer), (uv_close_cb) free);
     impl->connect();
 }
 
@@ -270,7 +274,7 @@ void nplex::client_t::impl_t::on_connection_closed(connection_t *con)
     std::string addr = (m_con ? m_con->addr().str() : "");
 
     if (timer_keepalive) {
-        uv_close((uv_handle_t *) timer_keepalive, (uv_close_cb) free);
+        uv_close(reinterpret_cast<uv_handle_t *>(timer_keepalive), (uv_close_cb) free);
         timer_keepalive = nullptr;
     }
 
@@ -294,7 +298,7 @@ void nplex::client_t::impl_t::on_connection_closed(connection_t *con)
 void nplex::client_t::impl_t::on_keepalive_timeout()
 {
     if (timer_keepalive) {
-        uv_close((uv_handle_t *) timer_keepalive, (uv_close_cb) free);
+        uv_close(reinterpret_cast<uv_handle_t *>(timer_keepalive), (uv_close_cb) free);
         timer_keepalive = nullptr;
     }
 
@@ -381,18 +385,24 @@ void nplex::client_t::impl_t::on_msg_received(connection_t *con, const msgs::Mes
 
     switch (msg->content_type())
     {
-        case msgs::MsgContent::LOAD_RESPONSE:
-            process_load_resp(msg->content_as_LOAD_RESPONSE());
-            break;
-
         case msgs::MsgContent::SUBMIT_RESPONSE:
             process_submit_resp(msg->content_as_SUBMIT_RESPONSE());
             break;
 
+        case msgs::MsgContent::SNAPSHOT_RESPONSE:
+            process_snapshot_resp(msg->content_as_SNAPSHOT_RESPONSE());
+            break;
+
+        case msgs::MsgContent::UPDATES_RESPONSE:
+            process_updates_resp(msg->content_as_UPDATES_RESPONSE());
+            break;
+
+        [[likely]]
         case msgs::MsgContent::UPDATES_PUSH:
             process_updates_push(msg->content_as_UPDATES_PUSH());
             break;
 
+        [[likely]]
         case msgs::MsgContent::KEEPALIVE_PUSH:
             process_keepalive_push(msg->content_as_KEEPALIVE_PUSH());
             break;
@@ -454,43 +464,21 @@ void nplex::client_t::impl_t::process_login_resp(connection_t *con, const nplex:
         LOG_INFO("keepalive = {}ms, connection-lost = {}ms", resp->keepalive(), timeout);
     }
 
-
     for (auto &server : connections)
         if (server.get() != m_con)
             server->disconnect(ERR_ALREADY_CONNECTED);
 
-    auto cmd = listener.on_connected(parent, m_con->addr().str(), resp->rev0(), resp->crev());
-
-    msgs::LoadMode mode = msgs::LoadMode::SNAPSHOT_AT_LAST_REV;
-
-    switch (cmd.first)
-    {
-        case listener_t::load_mode_e::SNAPSHOT_AT_FIXED_REV:
-            mode = msgs::LoadMode::SNAPSHOT_AT_FIXED_REV;
-            break;
-
-        case listener_t::load_mode_e::SNAPSHOT_AT_LAST_REV:
-            mode = msgs::LoadMode::SNAPSHOT_AT_LAST_REV;
-            break;
-
-        case listener_t::load_mode_e::ONLY_UPDATES_FROM_REV:
-            mode = msgs::LoadMode::ONLY_UPDATES_FROM_REV;
-            break;
-
-        default:
-            break;
-    }
+    auto srev = listener.on_connected(parent, m_con->addr().str(), resp->rev0(), resp->crev());
 
     send(
-        create_load_msg(
+        create_snapshot_msg(
             ++correlation, 
-            mode, 
-            cmd.second
+            srev
         )
     );
 }
 
-void nplex::client_t::impl_t::process_load_resp(const nplex::msgs::LoadResponse *resp)
+void nplex::client_t::impl_t::process_snapshot_resp(const nplex::msgs::SnapshotResponse *resp)
 {
     if (m_state != state_e::SYNCHRONIZING) {
         m_con->disconnect(ERR_MSG_UNEXPECTED);
@@ -509,8 +497,27 @@ void nplex::client_t::impl_t::process_load_resp(const nplex::msgs::LoadResponse 
 
     listener.on_snapshot(parent);
 
-    if (cache->m_rev == resp->crev())
-        set_state(state_e::SYNCHRONIZED);
+    send(
+        create_updates_msg(
+            ++correlation, 
+            cache->m_rev
+        )
+    );
+}
+
+void nplex::client_t::impl_t::process_updates_resp(const nplex::msgs::UpdatesResponse *resp)
+{
+    if (m_state != state_e::SYNCHRONIZING) {
+        m_con->disconnect(ERR_MSG_UNEXPECTED);
+        return;
+    }
+
+    assert(resp->cid() == correlation);
+
+    if (!resp->accepted()) {
+        m_con->disconnect(ERR_LOAD);
+        return;
+    }
 }
 
 void nplex::client_t::impl_t::process_submit_resp(const nplex::msgs::SubmitResponse *resp)

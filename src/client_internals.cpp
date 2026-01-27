@@ -47,15 +47,30 @@ flatbuffers::DetachedBuffer nplex::create_login_msg(std::size_t cid, const std::
     return builder.Release();
 }
 
-flatbuffers::DetachedBuffer nplex::create_load_msg(std::size_t cid, msgs::LoadMode mode, rev_t rev)
+flatbuffers::DetachedBuffer nplex::create_snapshot_msg(std::size_t cid, rev_t rev)
 {
     FlatBufferBuilder builder;
 
     auto msg = CreateMessage(builder, 
-        MsgContent::LOAD_REQUEST,
-        CreateLoadRequest(builder, 
+        MsgContent::SNAPSHOT_REQUEST,
+        CreateSnapshotRequest(builder, 
             cid, 
-            mode,
+            rev
+        ).Union()
+    );
+
+    builder.Finish(msg);
+    return builder.Release();
+}
+
+flatbuffers::DetachedBuffer nplex::create_updates_msg(std::size_t cid, rev_t rev)
+{
+    FlatBufferBuilder builder;
+
+    auto msg = CreateMessage(builder, 
+        MsgContent::UPDATES_REQUEST,
+        CreateUpdatesRequest(builder, 
+            cid, 
             rev
         ).Union()
     );

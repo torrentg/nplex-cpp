@@ -48,13 +48,21 @@ struct PingResponse;
 struct PingResponseBuilder;
 struct PingResponseT;
 
-struct LoadRequest;
-struct LoadRequestBuilder;
-struct LoadRequestT;
+struct SnapshotRequest;
+struct SnapshotRequestBuilder;
+struct SnapshotRequestT;
 
-struct LoadResponse;
-struct LoadResponseBuilder;
-struct LoadResponseT;
+struct SnapshotResponse;
+struct SnapshotResponseBuilder;
+struct SnapshotResponseT;
+
+struct UpdatesRequest;
+struct UpdatesRequestBuilder;
+struct UpdatesRequestT;
+
+struct UpdatesResponse;
+struct UpdatesResponseBuilder;
+struct UpdatesResponseT;
 
 struct UpdatesPush;
 struct UpdatesPushBuilder;
@@ -166,66 +174,37 @@ inline const char *EnumNameSubmitCode(SubmitCode e) {
   return EnumNamesSubmitCode()[index];
 }
 
-enum class LoadMode : int8_t {
-  SNAPSHOT_AT_LAST_REV = 0,
-  SNAPSHOT_AT_FIXED_REV = 1,
-  ONLY_UPDATES_FROM_REV = 2,
-  MIN = SNAPSHOT_AT_LAST_REV,
-  MAX = ONLY_UPDATES_FROM_REV
-};
-
-inline const LoadMode (&EnumValuesLoadMode())[3] {
-  static const LoadMode values[] = {
-    LoadMode::SNAPSHOT_AT_LAST_REV,
-    LoadMode::SNAPSHOT_AT_FIXED_REV,
-    LoadMode::ONLY_UPDATES_FROM_REV
-  };
-  return values;
-}
-
-inline const char * const *EnumNamesLoadMode() {
-  static const char * const names[4] = {
-    "SNAPSHOT_AT_LAST_REV",
-    "SNAPSHOT_AT_FIXED_REV",
-    "ONLY_UPDATES_FROM_REV",
-    nullptr
-  };
-  return names;
-}
-
-inline const char *EnumNameLoadMode(LoadMode e) {
-  if (::flatbuffers::IsOutRange(e, LoadMode::SNAPSHOT_AT_LAST_REV, LoadMode::ONLY_UPDATES_FROM_REV)) return "";
-  const size_t index = static_cast<size_t>(e);
-  return EnumNamesLoadMode()[index];
-}
-
 enum class MsgContent : uint8_t {
   NONE = 0,
   PING_REQUEST = 1,
   PING_RESPONSE = 2,
   LOGIN_REQUEST = 3,
   LOGIN_RESPONSE = 4,
-  LOAD_REQUEST = 5,
-  LOAD_RESPONSE = 6,
+  SNAPSHOT_REQUEST = 5,
+  SNAPSHOT_RESPONSE = 6,
   SUBMIT_REQUEST = 7,
   SUBMIT_RESPONSE = 8,
-  UPDATES_PUSH = 9,
-  KEEPALIVE_PUSH = 10,
+  UPDATES_REQUEST = 9,
+  UPDATES_RESPONSE = 10,
+  UPDATES_PUSH = 11,
+  KEEPALIVE_PUSH = 12,
   MIN = NONE,
   MAX = KEEPALIVE_PUSH
 };
 
-inline const MsgContent (&EnumValuesMsgContent())[11] {
+inline const MsgContent (&EnumValuesMsgContent())[13] {
   static const MsgContent values[] = {
     MsgContent::NONE,
     MsgContent::PING_REQUEST,
     MsgContent::PING_RESPONSE,
     MsgContent::LOGIN_REQUEST,
     MsgContent::LOGIN_RESPONSE,
-    MsgContent::LOAD_REQUEST,
-    MsgContent::LOAD_RESPONSE,
+    MsgContent::SNAPSHOT_REQUEST,
+    MsgContent::SNAPSHOT_RESPONSE,
     MsgContent::SUBMIT_REQUEST,
     MsgContent::SUBMIT_RESPONSE,
+    MsgContent::UPDATES_REQUEST,
+    MsgContent::UPDATES_RESPONSE,
     MsgContent::UPDATES_PUSH,
     MsgContent::KEEPALIVE_PUSH
   };
@@ -233,16 +212,18 @@ inline const MsgContent (&EnumValuesMsgContent())[11] {
 }
 
 inline const char * const *EnumNamesMsgContent() {
-  static const char * const names[12] = {
+  static const char * const names[14] = {
     "NONE",
     "PING_REQUEST",
     "PING_RESPONSE",
     "LOGIN_REQUEST",
     "LOGIN_RESPONSE",
-    "LOAD_REQUEST",
-    "LOAD_RESPONSE",
+    "SNAPSHOT_REQUEST",
+    "SNAPSHOT_RESPONSE",
     "SUBMIT_REQUEST",
     "SUBMIT_RESPONSE",
+    "UPDATES_REQUEST",
+    "UPDATES_RESPONSE",
     "UPDATES_PUSH",
     "KEEPALIVE_PUSH",
     nullptr
@@ -276,12 +257,12 @@ template<> struct MsgContentTraits<nplex::msgs::LoginResponse> {
   static const MsgContent enum_value = MsgContent::LOGIN_RESPONSE;
 };
 
-template<> struct MsgContentTraits<nplex::msgs::LoadRequest> {
-  static const MsgContent enum_value = MsgContent::LOAD_REQUEST;
+template<> struct MsgContentTraits<nplex::msgs::SnapshotRequest> {
+  static const MsgContent enum_value = MsgContent::SNAPSHOT_REQUEST;
 };
 
-template<> struct MsgContentTraits<nplex::msgs::LoadResponse> {
-  static const MsgContent enum_value = MsgContent::LOAD_RESPONSE;
+template<> struct MsgContentTraits<nplex::msgs::SnapshotResponse> {
+  static const MsgContent enum_value = MsgContent::SNAPSHOT_RESPONSE;
 };
 
 template<> struct MsgContentTraits<nplex::msgs::SubmitRequest> {
@@ -290,6 +271,14 @@ template<> struct MsgContentTraits<nplex::msgs::SubmitRequest> {
 
 template<> struct MsgContentTraits<nplex::msgs::SubmitResponse> {
   static const MsgContent enum_value = MsgContent::SUBMIT_RESPONSE;
+};
+
+template<> struct MsgContentTraits<nplex::msgs::UpdatesRequest> {
+  static const MsgContent enum_value = MsgContent::UPDATES_REQUEST;
+};
+
+template<> struct MsgContentTraits<nplex::msgs::UpdatesResponse> {
+  static const MsgContent enum_value = MsgContent::UPDATES_RESPONSE;
 };
 
 template<> struct MsgContentTraits<nplex::msgs::UpdatesPush> {
@@ -320,12 +309,12 @@ template<> struct MsgContentUnionTraits<nplex::msgs::LoginResponseT> {
   static const MsgContent enum_value = MsgContent::LOGIN_RESPONSE;
 };
 
-template<> struct MsgContentUnionTraits<nplex::msgs::LoadRequestT> {
-  static const MsgContent enum_value = MsgContent::LOAD_REQUEST;
+template<> struct MsgContentUnionTraits<nplex::msgs::SnapshotRequestT> {
+  static const MsgContent enum_value = MsgContent::SNAPSHOT_REQUEST;
 };
 
-template<> struct MsgContentUnionTraits<nplex::msgs::LoadResponseT> {
-  static const MsgContent enum_value = MsgContent::LOAD_RESPONSE;
+template<> struct MsgContentUnionTraits<nplex::msgs::SnapshotResponseT> {
+  static const MsgContent enum_value = MsgContent::SNAPSHOT_RESPONSE;
 };
 
 template<> struct MsgContentUnionTraits<nplex::msgs::SubmitRequestT> {
@@ -334,6 +323,14 @@ template<> struct MsgContentUnionTraits<nplex::msgs::SubmitRequestT> {
 
 template<> struct MsgContentUnionTraits<nplex::msgs::SubmitResponseT> {
   static const MsgContent enum_value = MsgContent::SUBMIT_RESPONSE;
+};
+
+template<> struct MsgContentUnionTraits<nplex::msgs::UpdatesRequestT> {
+  static const MsgContent enum_value = MsgContent::UPDATES_REQUEST;
+};
+
+template<> struct MsgContentUnionTraits<nplex::msgs::UpdatesResponseT> {
+  static const MsgContent enum_value = MsgContent::UPDATES_RESPONSE;
 };
 
 template<> struct MsgContentUnionTraits<nplex::msgs::UpdatesPushT> {
@@ -406,21 +403,21 @@ struct MsgContentUnion {
     return type == MsgContent::LOGIN_RESPONSE ?
       reinterpret_cast<const nplex::msgs::LoginResponseT *>(value) : nullptr;
   }
-  nplex::msgs::LoadRequestT *AsLOAD_REQUEST() {
-    return type == MsgContent::LOAD_REQUEST ?
-      reinterpret_cast<nplex::msgs::LoadRequestT *>(value) : nullptr;
+  nplex::msgs::SnapshotRequestT *AsSNAPSHOT_REQUEST() {
+    return type == MsgContent::SNAPSHOT_REQUEST ?
+      reinterpret_cast<nplex::msgs::SnapshotRequestT *>(value) : nullptr;
   }
-  const nplex::msgs::LoadRequestT *AsLOAD_REQUEST() const {
-    return type == MsgContent::LOAD_REQUEST ?
-      reinterpret_cast<const nplex::msgs::LoadRequestT *>(value) : nullptr;
+  const nplex::msgs::SnapshotRequestT *AsSNAPSHOT_REQUEST() const {
+    return type == MsgContent::SNAPSHOT_REQUEST ?
+      reinterpret_cast<const nplex::msgs::SnapshotRequestT *>(value) : nullptr;
   }
-  nplex::msgs::LoadResponseT *AsLOAD_RESPONSE() {
-    return type == MsgContent::LOAD_RESPONSE ?
-      reinterpret_cast<nplex::msgs::LoadResponseT *>(value) : nullptr;
+  nplex::msgs::SnapshotResponseT *AsSNAPSHOT_RESPONSE() {
+    return type == MsgContent::SNAPSHOT_RESPONSE ?
+      reinterpret_cast<nplex::msgs::SnapshotResponseT *>(value) : nullptr;
   }
-  const nplex::msgs::LoadResponseT *AsLOAD_RESPONSE() const {
-    return type == MsgContent::LOAD_RESPONSE ?
-      reinterpret_cast<const nplex::msgs::LoadResponseT *>(value) : nullptr;
+  const nplex::msgs::SnapshotResponseT *AsSNAPSHOT_RESPONSE() const {
+    return type == MsgContent::SNAPSHOT_RESPONSE ?
+      reinterpret_cast<const nplex::msgs::SnapshotResponseT *>(value) : nullptr;
   }
   nplex::msgs::SubmitRequestT *AsSUBMIT_REQUEST() {
     return type == MsgContent::SUBMIT_REQUEST ?
@@ -437,6 +434,22 @@ struct MsgContentUnion {
   const nplex::msgs::SubmitResponseT *AsSUBMIT_RESPONSE() const {
     return type == MsgContent::SUBMIT_RESPONSE ?
       reinterpret_cast<const nplex::msgs::SubmitResponseT *>(value) : nullptr;
+  }
+  nplex::msgs::UpdatesRequestT *AsUPDATES_REQUEST() {
+    return type == MsgContent::UPDATES_REQUEST ?
+      reinterpret_cast<nplex::msgs::UpdatesRequestT *>(value) : nullptr;
+  }
+  const nplex::msgs::UpdatesRequestT *AsUPDATES_REQUEST() const {
+    return type == MsgContent::UPDATES_REQUEST ?
+      reinterpret_cast<const nplex::msgs::UpdatesRequestT *>(value) : nullptr;
+  }
+  nplex::msgs::UpdatesResponseT *AsUPDATES_RESPONSE() {
+    return type == MsgContent::UPDATES_RESPONSE ?
+      reinterpret_cast<nplex::msgs::UpdatesResponseT *>(value) : nullptr;
+  }
+  const nplex::msgs::UpdatesResponseT *AsUPDATES_RESPONSE() const {
+    return type == MsgContent::UPDATES_RESPONSE ?
+      reinterpret_cast<const nplex::msgs::UpdatesResponseT *>(value) : nullptr;
   }
   nplex::msgs::UpdatesPushT *AsUPDATES_PUSH() {
     return type == MsgContent::UPDATES_PUSH ?
@@ -1293,27 +1306,22 @@ inline ::flatbuffers::Offset<PingResponse> CreatePingResponseDirect(
 
 ::flatbuffers::Offset<PingResponse> CreatePingResponse(::flatbuffers::FlatBufferBuilder &_fbb, const PingResponseT *_o, const ::flatbuffers::rehasher_function_t *_rehasher = nullptr);
 
-struct LoadRequestT : public ::flatbuffers::NativeTable {
-  typedef LoadRequest TableType;
+struct SnapshotRequestT : public ::flatbuffers::NativeTable {
+  typedef SnapshotRequest TableType;
   uint64_t cid = 0;
-  nplex::msgs::LoadMode mode = nplex::msgs::LoadMode::SNAPSHOT_AT_LAST_REV;
   uint64_t rev = 0;
 };
 
-struct LoadRequest FLATBUFFERS_FINAL_CLASS : private ::flatbuffers::Table {
-  typedef LoadRequestT NativeTableType;
-  typedef LoadRequestBuilder Builder;
+struct SnapshotRequest FLATBUFFERS_FINAL_CLASS : private ::flatbuffers::Table {
+  typedef SnapshotRequestT NativeTableType;
+  typedef SnapshotRequestBuilder Builder;
   struct Traits;
   enum FlatBuffersVTableOffset FLATBUFFERS_VTABLE_UNDERLYING_TYPE {
     VT_CID = 4,
-    VT_MODE = 6,
-    VT_REV = 8
+    VT_REV = 6
   };
   uint64_t cid() const {
     return GetField<uint64_t>(VT_CID, 0);
-  }
-  nplex::msgs::LoadMode mode() const {
-    return static_cast<nplex::msgs::LoadMode>(GetField<int8_t>(VT_MODE, 0));
   }
   uint64_t rev() const {
     return GetField<uint64_t>(VT_REV, 0);
@@ -1321,85 +1329,84 @@ struct LoadRequest FLATBUFFERS_FINAL_CLASS : private ::flatbuffers::Table {
   bool Verify(::flatbuffers::Verifier &verifier) const {
     return VerifyTableStart(verifier) &&
            VerifyField<uint64_t>(verifier, VT_CID, 8) &&
-           VerifyField<int8_t>(verifier, VT_MODE, 1) &&
            VerifyField<uint64_t>(verifier, VT_REV, 8) &&
            verifier.EndTable();
   }
-  LoadRequestT *UnPack(const ::flatbuffers::resolver_function_t *_resolver = nullptr) const;
-  void UnPackTo(LoadRequestT *_o, const ::flatbuffers::resolver_function_t *_resolver = nullptr) const;
-  static ::flatbuffers::Offset<LoadRequest> Pack(::flatbuffers::FlatBufferBuilder &_fbb, const LoadRequestT* _o, const ::flatbuffers::rehasher_function_t *_rehasher = nullptr);
+  SnapshotRequestT *UnPack(const ::flatbuffers::resolver_function_t *_resolver = nullptr) const;
+  void UnPackTo(SnapshotRequestT *_o, const ::flatbuffers::resolver_function_t *_resolver = nullptr) const;
+  static ::flatbuffers::Offset<SnapshotRequest> Pack(::flatbuffers::FlatBufferBuilder &_fbb, const SnapshotRequestT* _o, const ::flatbuffers::rehasher_function_t *_rehasher = nullptr);
 };
 
-struct LoadRequestBuilder {
-  typedef LoadRequest Table;
+struct SnapshotRequestBuilder {
+  typedef SnapshotRequest Table;
   ::flatbuffers::FlatBufferBuilder &fbb_;
   ::flatbuffers::uoffset_t start_;
   void add_cid(uint64_t cid) {
-    fbb_.AddElement<uint64_t>(LoadRequest::VT_CID, cid, 0);
-  }
-  void add_mode(nplex::msgs::LoadMode mode) {
-    fbb_.AddElement<int8_t>(LoadRequest::VT_MODE, static_cast<int8_t>(mode), 0);
+    fbb_.AddElement<uint64_t>(SnapshotRequest::VT_CID, cid, 0);
   }
   void add_rev(uint64_t rev) {
-    fbb_.AddElement<uint64_t>(LoadRequest::VT_REV, rev, 0);
+    fbb_.AddElement<uint64_t>(SnapshotRequest::VT_REV, rev, 0);
   }
-  explicit LoadRequestBuilder(::flatbuffers::FlatBufferBuilder &_fbb)
+  explicit SnapshotRequestBuilder(::flatbuffers::FlatBufferBuilder &_fbb)
         : fbb_(_fbb) {
     start_ = fbb_.StartTable();
   }
-  ::flatbuffers::Offset<LoadRequest> Finish() {
+  ::flatbuffers::Offset<SnapshotRequest> Finish() {
     const auto end = fbb_.EndTable(start_);
-    auto o = ::flatbuffers::Offset<LoadRequest>(end);
+    auto o = ::flatbuffers::Offset<SnapshotRequest>(end);
     return o;
   }
 };
 
-inline ::flatbuffers::Offset<LoadRequest> CreateLoadRequest(
+inline ::flatbuffers::Offset<SnapshotRequest> CreateSnapshotRequest(
     ::flatbuffers::FlatBufferBuilder &_fbb,
     uint64_t cid = 0,
-    nplex::msgs::LoadMode mode = nplex::msgs::LoadMode::SNAPSHOT_AT_LAST_REV,
     uint64_t rev = 0) {
-  LoadRequestBuilder builder_(_fbb);
+  SnapshotRequestBuilder builder_(_fbb);
   builder_.add_rev(rev);
   builder_.add_cid(cid);
-  builder_.add_mode(mode);
   return builder_.Finish();
 }
 
-struct LoadRequest::Traits {
-  using type = LoadRequest;
-  static auto constexpr Create = CreateLoadRequest;
+struct SnapshotRequest::Traits {
+  using type = SnapshotRequest;
+  static auto constexpr Create = CreateSnapshotRequest;
 };
 
-::flatbuffers::Offset<LoadRequest> CreateLoadRequest(::flatbuffers::FlatBufferBuilder &_fbb, const LoadRequestT *_o, const ::flatbuffers::rehasher_function_t *_rehasher = nullptr);
+::flatbuffers::Offset<SnapshotRequest> CreateSnapshotRequest(::flatbuffers::FlatBufferBuilder &_fbb, const SnapshotRequestT *_o, const ::flatbuffers::rehasher_function_t *_rehasher = nullptr);
 
-struct LoadResponseT : public ::flatbuffers::NativeTable {
-  typedef LoadResponse TableType;
+struct SnapshotResponseT : public ::flatbuffers::NativeTable {
+  typedef SnapshotResponse TableType;
   uint64_t cid = 0;
   uint64_t crev = 0;
+  uint64_t rev0 = 0;
   bool accepted = false;
   std::unique_ptr<nplex::msgs::SnapshotT> snapshot{};
-  LoadResponseT() = default;
-  LoadResponseT(const LoadResponseT &o);
-  LoadResponseT(LoadResponseT&&) FLATBUFFERS_NOEXCEPT = default;
-  LoadResponseT &operator=(LoadResponseT o) FLATBUFFERS_NOEXCEPT;
+  SnapshotResponseT() = default;
+  SnapshotResponseT(const SnapshotResponseT &o);
+  SnapshotResponseT(SnapshotResponseT&&) FLATBUFFERS_NOEXCEPT = default;
+  SnapshotResponseT &operator=(SnapshotResponseT o) FLATBUFFERS_NOEXCEPT;
 };
 
-struct LoadResponse FLATBUFFERS_FINAL_CLASS : private ::flatbuffers::Table {
-  typedef LoadResponseT NativeTableType;
-  typedef LoadResponseBuilder Builder;
+struct SnapshotResponse FLATBUFFERS_FINAL_CLASS : private ::flatbuffers::Table {
+  typedef SnapshotResponseT NativeTableType;
+  typedef SnapshotResponseBuilder Builder;
   struct Traits;
   enum FlatBuffersVTableOffset FLATBUFFERS_VTABLE_UNDERLYING_TYPE {
     VT_CID = 4,
     VT_CREV = 6,
-    VT_ACCEPTED = 8,
-    VT_SNAPSHOT = 10
+    VT_REV0 = 8,
+    VT_ACCEPTED = 10,
+    VT_SNAPSHOT = 12
   };
   uint64_t cid() const {
     return GetField<uint64_t>(VT_CID, 0);
   }
   uint64_t crev() const {
     return GetField<uint64_t>(VT_CREV, 0);
+  }
+  uint64_t rev0() const {
+    return GetField<uint64_t>(VT_REV0, 0);
   }
   bool accepted() const {
     return GetField<uint8_t>(VT_ACCEPTED, 0) != 0;
@@ -1411,50 +1418,56 @@ struct LoadResponse FLATBUFFERS_FINAL_CLASS : private ::flatbuffers::Table {
     return VerifyTableStart(verifier) &&
            VerifyField<uint64_t>(verifier, VT_CID, 8) &&
            VerifyField<uint64_t>(verifier, VT_CREV, 8) &&
+           VerifyField<uint64_t>(verifier, VT_REV0, 8) &&
            VerifyField<uint8_t>(verifier, VT_ACCEPTED, 1) &&
            VerifyOffset(verifier, VT_SNAPSHOT) &&
            verifier.VerifyTable(snapshot()) &&
            verifier.EndTable();
   }
-  LoadResponseT *UnPack(const ::flatbuffers::resolver_function_t *_resolver = nullptr) const;
-  void UnPackTo(LoadResponseT *_o, const ::flatbuffers::resolver_function_t *_resolver = nullptr) const;
-  static ::flatbuffers::Offset<LoadResponse> Pack(::flatbuffers::FlatBufferBuilder &_fbb, const LoadResponseT* _o, const ::flatbuffers::rehasher_function_t *_rehasher = nullptr);
+  SnapshotResponseT *UnPack(const ::flatbuffers::resolver_function_t *_resolver = nullptr) const;
+  void UnPackTo(SnapshotResponseT *_o, const ::flatbuffers::resolver_function_t *_resolver = nullptr) const;
+  static ::flatbuffers::Offset<SnapshotResponse> Pack(::flatbuffers::FlatBufferBuilder &_fbb, const SnapshotResponseT* _o, const ::flatbuffers::rehasher_function_t *_rehasher = nullptr);
 };
 
-struct LoadResponseBuilder {
-  typedef LoadResponse Table;
+struct SnapshotResponseBuilder {
+  typedef SnapshotResponse Table;
   ::flatbuffers::FlatBufferBuilder &fbb_;
   ::flatbuffers::uoffset_t start_;
   void add_cid(uint64_t cid) {
-    fbb_.AddElement<uint64_t>(LoadResponse::VT_CID, cid, 0);
+    fbb_.AddElement<uint64_t>(SnapshotResponse::VT_CID, cid, 0);
   }
   void add_crev(uint64_t crev) {
-    fbb_.AddElement<uint64_t>(LoadResponse::VT_CREV, crev, 0);
+    fbb_.AddElement<uint64_t>(SnapshotResponse::VT_CREV, crev, 0);
+  }
+  void add_rev0(uint64_t rev0) {
+    fbb_.AddElement<uint64_t>(SnapshotResponse::VT_REV0, rev0, 0);
   }
   void add_accepted(bool accepted) {
-    fbb_.AddElement<uint8_t>(LoadResponse::VT_ACCEPTED, static_cast<uint8_t>(accepted), 0);
+    fbb_.AddElement<uint8_t>(SnapshotResponse::VT_ACCEPTED, static_cast<uint8_t>(accepted), 0);
   }
   void add_snapshot(::flatbuffers::Offset<nplex::msgs::Snapshot> snapshot) {
-    fbb_.AddOffset(LoadResponse::VT_SNAPSHOT, snapshot);
+    fbb_.AddOffset(SnapshotResponse::VT_SNAPSHOT, snapshot);
   }
-  explicit LoadResponseBuilder(::flatbuffers::FlatBufferBuilder &_fbb)
+  explicit SnapshotResponseBuilder(::flatbuffers::FlatBufferBuilder &_fbb)
         : fbb_(_fbb) {
     start_ = fbb_.StartTable();
   }
-  ::flatbuffers::Offset<LoadResponse> Finish() {
+  ::flatbuffers::Offset<SnapshotResponse> Finish() {
     const auto end = fbb_.EndTable(start_);
-    auto o = ::flatbuffers::Offset<LoadResponse>(end);
+    auto o = ::flatbuffers::Offset<SnapshotResponse>(end);
     return o;
   }
 };
 
-inline ::flatbuffers::Offset<LoadResponse> CreateLoadResponse(
+inline ::flatbuffers::Offset<SnapshotResponse> CreateSnapshotResponse(
     ::flatbuffers::FlatBufferBuilder &_fbb,
     uint64_t cid = 0,
     uint64_t crev = 0,
+    uint64_t rev0 = 0,
     bool accepted = false,
     ::flatbuffers::Offset<nplex::msgs::Snapshot> snapshot = 0) {
-  LoadResponseBuilder builder_(_fbb);
+  SnapshotResponseBuilder builder_(_fbb);
+  builder_.add_rev0(rev0);
   builder_.add_crev(crev);
   builder_.add_cid(cid);
   builder_.add_snapshot(snapshot);
@@ -1462,12 +1475,172 @@ inline ::flatbuffers::Offset<LoadResponse> CreateLoadResponse(
   return builder_.Finish();
 }
 
-struct LoadResponse::Traits {
-  using type = LoadResponse;
-  static auto constexpr Create = CreateLoadResponse;
+struct SnapshotResponse::Traits {
+  using type = SnapshotResponse;
+  static auto constexpr Create = CreateSnapshotResponse;
 };
 
-::flatbuffers::Offset<LoadResponse> CreateLoadResponse(::flatbuffers::FlatBufferBuilder &_fbb, const LoadResponseT *_o, const ::flatbuffers::rehasher_function_t *_rehasher = nullptr);
+::flatbuffers::Offset<SnapshotResponse> CreateSnapshotResponse(::flatbuffers::FlatBufferBuilder &_fbb, const SnapshotResponseT *_o, const ::flatbuffers::rehasher_function_t *_rehasher = nullptr);
+
+struct UpdatesRequestT : public ::flatbuffers::NativeTable {
+  typedef UpdatesRequest TableType;
+  uint64_t cid = 0;
+  uint64_t rev = 0;
+};
+
+struct UpdatesRequest FLATBUFFERS_FINAL_CLASS : private ::flatbuffers::Table {
+  typedef UpdatesRequestT NativeTableType;
+  typedef UpdatesRequestBuilder Builder;
+  struct Traits;
+  enum FlatBuffersVTableOffset FLATBUFFERS_VTABLE_UNDERLYING_TYPE {
+    VT_CID = 4,
+    VT_REV = 6
+  };
+  uint64_t cid() const {
+    return GetField<uint64_t>(VT_CID, 0);
+  }
+  uint64_t rev() const {
+    return GetField<uint64_t>(VT_REV, 0);
+  }
+  bool Verify(::flatbuffers::Verifier &verifier) const {
+    return VerifyTableStart(verifier) &&
+           VerifyField<uint64_t>(verifier, VT_CID, 8) &&
+           VerifyField<uint64_t>(verifier, VT_REV, 8) &&
+           verifier.EndTable();
+  }
+  UpdatesRequestT *UnPack(const ::flatbuffers::resolver_function_t *_resolver = nullptr) const;
+  void UnPackTo(UpdatesRequestT *_o, const ::flatbuffers::resolver_function_t *_resolver = nullptr) const;
+  static ::flatbuffers::Offset<UpdatesRequest> Pack(::flatbuffers::FlatBufferBuilder &_fbb, const UpdatesRequestT* _o, const ::flatbuffers::rehasher_function_t *_rehasher = nullptr);
+};
+
+struct UpdatesRequestBuilder {
+  typedef UpdatesRequest Table;
+  ::flatbuffers::FlatBufferBuilder &fbb_;
+  ::flatbuffers::uoffset_t start_;
+  void add_cid(uint64_t cid) {
+    fbb_.AddElement<uint64_t>(UpdatesRequest::VT_CID, cid, 0);
+  }
+  void add_rev(uint64_t rev) {
+    fbb_.AddElement<uint64_t>(UpdatesRequest::VT_REV, rev, 0);
+  }
+  explicit UpdatesRequestBuilder(::flatbuffers::FlatBufferBuilder &_fbb)
+        : fbb_(_fbb) {
+    start_ = fbb_.StartTable();
+  }
+  ::flatbuffers::Offset<UpdatesRequest> Finish() {
+    const auto end = fbb_.EndTable(start_);
+    auto o = ::flatbuffers::Offset<UpdatesRequest>(end);
+    return o;
+  }
+};
+
+inline ::flatbuffers::Offset<UpdatesRequest> CreateUpdatesRequest(
+    ::flatbuffers::FlatBufferBuilder &_fbb,
+    uint64_t cid = 0,
+    uint64_t rev = 0) {
+  UpdatesRequestBuilder builder_(_fbb);
+  builder_.add_rev(rev);
+  builder_.add_cid(cid);
+  return builder_.Finish();
+}
+
+struct UpdatesRequest::Traits {
+  using type = UpdatesRequest;
+  static auto constexpr Create = CreateUpdatesRequest;
+};
+
+::flatbuffers::Offset<UpdatesRequest> CreateUpdatesRequest(::flatbuffers::FlatBufferBuilder &_fbb, const UpdatesRequestT *_o, const ::flatbuffers::rehasher_function_t *_rehasher = nullptr);
+
+struct UpdatesResponseT : public ::flatbuffers::NativeTable {
+  typedef UpdatesResponse TableType;
+  uint64_t cid = 0;
+  uint64_t crev = 0;
+  uint64_t rev0 = 0;
+  bool accepted = false;
+};
+
+struct UpdatesResponse FLATBUFFERS_FINAL_CLASS : private ::flatbuffers::Table {
+  typedef UpdatesResponseT NativeTableType;
+  typedef UpdatesResponseBuilder Builder;
+  struct Traits;
+  enum FlatBuffersVTableOffset FLATBUFFERS_VTABLE_UNDERLYING_TYPE {
+    VT_CID = 4,
+    VT_CREV = 6,
+    VT_REV0 = 8,
+    VT_ACCEPTED = 10
+  };
+  uint64_t cid() const {
+    return GetField<uint64_t>(VT_CID, 0);
+  }
+  uint64_t crev() const {
+    return GetField<uint64_t>(VT_CREV, 0);
+  }
+  uint64_t rev0() const {
+    return GetField<uint64_t>(VT_REV0, 0);
+  }
+  bool accepted() const {
+    return GetField<uint8_t>(VT_ACCEPTED, 0) != 0;
+  }
+  bool Verify(::flatbuffers::Verifier &verifier) const {
+    return VerifyTableStart(verifier) &&
+           VerifyField<uint64_t>(verifier, VT_CID, 8) &&
+           VerifyField<uint64_t>(verifier, VT_CREV, 8) &&
+           VerifyField<uint64_t>(verifier, VT_REV0, 8) &&
+           VerifyField<uint8_t>(verifier, VT_ACCEPTED, 1) &&
+           verifier.EndTable();
+  }
+  UpdatesResponseT *UnPack(const ::flatbuffers::resolver_function_t *_resolver = nullptr) const;
+  void UnPackTo(UpdatesResponseT *_o, const ::flatbuffers::resolver_function_t *_resolver = nullptr) const;
+  static ::flatbuffers::Offset<UpdatesResponse> Pack(::flatbuffers::FlatBufferBuilder &_fbb, const UpdatesResponseT* _o, const ::flatbuffers::rehasher_function_t *_rehasher = nullptr);
+};
+
+struct UpdatesResponseBuilder {
+  typedef UpdatesResponse Table;
+  ::flatbuffers::FlatBufferBuilder &fbb_;
+  ::flatbuffers::uoffset_t start_;
+  void add_cid(uint64_t cid) {
+    fbb_.AddElement<uint64_t>(UpdatesResponse::VT_CID, cid, 0);
+  }
+  void add_crev(uint64_t crev) {
+    fbb_.AddElement<uint64_t>(UpdatesResponse::VT_CREV, crev, 0);
+  }
+  void add_rev0(uint64_t rev0) {
+    fbb_.AddElement<uint64_t>(UpdatesResponse::VT_REV0, rev0, 0);
+  }
+  void add_accepted(bool accepted) {
+    fbb_.AddElement<uint8_t>(UpdatesResponse::VT_ACCEPTED, static_cast<uint8_t>(accepted), 0);
+  }
+  explicit UpdatesResponseBuilder(::flatbuffers::FlatBufferBuilder &_fbb)
+        : fbb_(_fbb) {
+    start_ = fbb_.StartTable();
+  }
+  ::flatbuffers::Offset<UpdatesResponse> Finish() {
+    const auto end = fbb_.EndTable(start_);
+    auto o = ::flatbuffers::Offset<UpdatesResponse>(end);
+    return o;
+  }
+};
+
+inline ::flatbuffers::Offset<UpdatesResponse> CreateUpdatesResponse(
+    ::flatbuffers::FlatBufferBuilder &_fbb,
+    uint64_t cid = 0,
+    uint64_t crev = 0,
+    uint64_t rev0 = 0,
+    bool accepted = false) {
+  UpdatesResponseBuilder builder_(_fbb);
+  builder_.add_rev0(rev0);
+  builder_.add_crev(crev);
+  builder_.add_cid(cid);
+  builder_.add_accepted(accepted);
+  return builder_.Finish();
+}
+
+struct UpdatesResponse::Traits {
+  using type = UpdatesResponse;
+  static auto constexpr Create = CreateUpdatesResponse;
+};
+
+::flatbuffers::Offset<UpdatesResponse> CreateUpdatesResponse(::flatbuffers::FlatBufferBuilder &_fbb, const UpdatesResponseT *_o, const ::flatbuffers::rehasher_function_t *_rehasher = nullptr);
 
 struct UpdatesPushT : public ::flatbuffers::NativeTable {
   typedef UpdatesPush TableType;
@@ -1906,17 +2079,23 @@ struct Message FLATBUFFERS_FINAL_CLASS : private ::flatbuffers::Table {
   const nplex::msgs::LoginResponse *content_as_LOGIN_RESPONSE() const {
     return content_type() == nplex::msgs::MsgContent::LOGIN_RESPONSE ? static_cast<const nplex::msgs::LoginResponse *>(content()) : nullptr;
   }
-  const nplex::msgs::LoadRequest *content_as_LOAD_REQUEST() const {
-    return content_type() == nplex::msgs::MsgContent::LOAD_REQUEST ? static_cast<const nplex::msgs::LoadRequest *>(content()) : nullptr;
+  const nplex::msgs::SnapshotRequest *content_as_SNAPSHOT_REQUEST() const {
+    return content_type() == nplex::msgs::MsgContent::SNAPSHOT_REQUEST ? static_cast<const nplex::msgs::SnapshotRequest *>(content()) : nullptr;
   }
-  const nplex::msgs::LoadResponse *content_as_LOAD_RESPONSE() const {
-    return content_type() == nplex::msgs::MsgContent::LOAD_RESPONSE ? static_cast<const nplex::msgs::LoadResponse *>(content()) : nullptr;
+  const nplex::msgs::SnapshotResponse *content_as_SNAPSHOT_RESPONSE() const {
+    return content_type() == nplex::msgs::MsgContent::SNAPSHOT_RESPONSE ? static_cast<const nplex::msgs::SnapshotResponse *>(content()) : nullptr;
   }
   const nplex::msgs::SubmitRequest *content_as_SUBMIT_REQUEST() const {
     return content_type() == nplex::msgs::MsgContent::SUBMIT_REQUEST ? static_cast<const nplex::msgs::SubmitRequest *>(content()) : nullptr;
   }
   const nplex::msgs::SubmitResponse *content_as_SUBMIT_RESPONSE() const {
     return content_type() == nplex::msgs::MsgContent::SUBMIT_RESPONSE ? static_cast<const nplex::msgs::SubmitResponse *>(content()) : nullptr;
+  }
+  const nplex::msgs::UpdatesRequest *content_as_UPDATES_REQUEST() const {
+    return content_type() == nplex::msgs::MsgContent::UPDATES_REQUEST ? static_cast<const nplex::msgs::UpdatesRequest *>(content()) : nullptr;
+  }
+  const nplex::msgs::UpdatesResponse *content_as_UPDATES_RESPONSE() const {
+    return content_type() == nplex::msgs::MsgContent::UPDATES_RESPONSE ? static_cast<const nplex::msgs::UpdatesResponse *>(content()) : nullptr;
   }
   const nplex::msgs::UpdatesPush *content_as_UPDATES_PUSH() const {
     return content_type() == nplex::msgs::MsgContent::UPDATES_PUSH ? static_cast<const nplex::msgs::UpdatesPush *>(content()) : nullptr;
@@ -1952,12 +2131,12 @@ template<> inline const nplex::msgs::LoginResponse *Message::content_as<nplex::m
   return content_as_LOGIN_RESPONSE();
 }
 
-template<> inline const nplex::msgs::LoadRequest *Message::content_as<nplex::msgs::LoadRequest>() const {
-  return content_as_LOAD_REQUEST();
+template<> inline const nplex::msgs::SnapshotRequest *Message::content_as<nplex::msgs::SnapshotRequest>() const {
+  return content_as_SNAPSHOT_REQUEST();
 }
 
-template<> inline const nplex::msgs::LoadResponse *Message::content_as<nplex::msgs::LoadResponse>() const {
-  return content_as_LOAD_RESPONSE();
+template<> inline const nplex::msgs::SnapshotResponse *Message::content_as<nplex::msgs::SnapshotResponse>() const {
+  return content_as_SNAPSHOT_RESPONSE();
 }
 
 template<> inline const nplex::msgs::SubmitRequest *Message::content_as<nplex::msgs::SubmitRequest>() const {
@@ -1966,6 +2145,14 @@ template<> inline const nplex::msgs::SubmitRequest *Message::content_as<nplex::m
 
 template<> inline const nplex::msgs::SubmitResponse *Message::content_as<nplex::msgs::SubmitResponse>() const {
   return content_as_SUBMIT_RESPONSE();
+}
+
+template<> inline const nplex::msgs::UpdatesRequest *Message::content_as<nplex::msgs::UpdatesRequest>() const {
+  return content_as_UPDATES_REQUEST();
+}
+
+template<> inline const nplex::msgs::UpdatesResponse *Message::content_as<nplex::msgs::UpdatesResponse>() const {
+  return content_as_UPDATES_RESPONSE();
 }
 
 template<> inline const nplex::msgs::UpdatesPush *Message::content_as<nplex::msgs::UpdatesPush>() const {
@@ -2336,86 +2523,152 @@ inline ::flatbuffers::Offset<PingResponse> CreatePingResponse(::flatbuffers::Fla
       _payload);
 }
 
-inline LoadRequestT *LoadRequest::UnPack(const ::flatbuffers::resolver_function_t *_resolver) const {
-  auto _o = std::make_unique<LoadRequestT>();
+inline SnapshotRequestT *SnapshotRequest::UnPack(const ::flatbuffers::resolver_function_t *_resolver) const {
+  auto _o = std::make_unique<SnapshotRequestT>();
   UnPackTo(_o.get(), _resolver);
   return _o.release();
 }
 
-inline void LoadRequest::UnPackTo(LoadRequestT *_o, const ::flatbuffers::resolver_function_t *_resolver) const {
+inline void SnapshotRequest::UnPackTo(SnapshotRequestT *_o, const ::flatbuffers::resolver_function_t *_resolver) const {
   (void)_o;
   (void)_resolver;
   { auto _e = cid(); _o->cid = _e; }
-  { auto _e = mode(); _o->mode = _e; }
   { auto _e = rev(); _o->rev = _e; }
 }
 
-inline ::flatbuffers::Offset<LoadRequest> LoadRequest::Pack(::flatbuffers::FlatBufferBuilder &_fbb, const LoadRequestT* _o, const ::flatbuffers::rehasher_function_t *_rehasher) {
-  return CreateLoadRequest(_fbb, _o, _rehasher);
+inline ::flatbuffers::Offset<SnapshotRequest> SnapshotRequest::Pack(::flatbuffers::FlatBufferBuilder &_fbb, const SnapshotRequestT* _o, const ::flatbuffers::rehasher_function_t *_rehasher) {
+  return CreateSnapshotRequest(_fbb, _o, _rehasher);
 }
 
-inline ::flatbuffers::Offset<LoadRequest> CreateLoadRequest(::flatbuffers::FlatBufferBuilder &_fbb, const LoadRequestT *_o, const ::flatbuffers::rehasher_function_t *_rehasher) {
+inline ::flatbuffers::Offset<SnapshotRequest> CreateSnapshotRequest(::flatbuffers::FlatBufferBuilder &_fbb, const SnapshotRequestT *_o, const ::flatbuffers::rehasher_function_t *_rehasher) {
   (void)_rehasher;
   (void)_o;
-  struct _VectorArgs { ::flatbuffers::FlatBufferBuilder *__fbb; const LoadRequestT* __o; const ::flatbuffers::rehasher_function_t *__rehasher; } _va = { &_fbb, _o, _rehasher}; (void)_va;
+  struct _VectorArgs { ::flatbuffers::FlatBufferBuilder *__fbb; const SnapshotRequestT* __o; const ::flatbuffers::rehasher_function_t *__rehasher; } _va = { &_fbb, _o, _rehasher}; (void)_va;
   auto _cid = _o->cid;
-  auto _mode = _o->mode;
   auto _rev = _o->rev;
-  return nplex::msgs::CreateLoadRequest(
+  return nplex::msgs::CreateSnapshotRequest(
       _fbb,
       _cid,
-      _mode,
       _rev);
 }
 
-inline LoadResponseT::LoadResponseT(const LoadResponseT &o)
+inline SnapshotResponseT::SnapshotResponseT(const SnapshotResponseT &o)
       : cid(o.cid),
         crev(o.crev),
+        rev0(o.rev0),
         accepted(o.accepted),
         snapshot((o.snapshot) ? new nplex::msgs::SnapshotT(*o.snapshot) : nullptr) {
 }
 
-inline LoadResponseT &LoadResponseT::operator=(LoadResponseT o) FLATBUFFERS_NOEXCEPT {
+inline SnapshotResponseT &SnapshotResponseT::operator=(SnapshotResponseT o) FLATBUFFERS_NOEXCEPT {
   std::swap(cid, o.cid);
   std::swap(crev, o.crev);
+  std::swap(rev0, o.rev0);
   std::swap(accepted, o.accepted);
   std::swap(snapshot, o.snapshot);
   return *this;
 }
 
-inline LoadResponseT *LoadResponse::UnPack(const ::flatbuffers::resolver_function_t *_resolver) const {
-  auto _o = std::make_unique<LoadResponseT>();
+inline SnapshotResponseT *SnapshotResponse::UnPack(const ::flatbuffers::resolver_function_t *_resolver) const {
+  auto _o = std::make_unique<SnapshotResponseT>();
   UnPackTo(_o.get(), _resolver);
   return _o.release();
 }
 
-inline void LoadResponse::UnPackTo(LoadResponseT *_o, const ::flatbuffers::resolver_function_t *_resolver) const {
+inline void SnapshotResponse::UnPackTo(SnapshotResponseT *_o, const ::flatbuffers::resolver_function_t *_resolver) const {
   (void)_o;
   (void)_resolver;
   { auto _e = cid(); _o->cid = _e; }
   { auto _e = crev(); _o->crev = _e; }
+  { auto _e = rev0(); _o->rev0 = _e; }
   { auto _e = accepted(); _o->accepted = _e; }
   { auto _e = snapshot(); if (_e) { if(_o->snapshot) { _e->UnPackTo(_o->snapshot.get(), _resolver); } else { _o->snapshot = std::unique_ptr<nplex::msgs::SnapshotT>(_e->UnPack(_resolver)); } } else if (_o->snapshot) { _o->snapshot.reset(); } }
 }
 
-inline ::flatbuffers::Offset<LoadResponse> LoadResponse::Pack(::flatbuffers::FlatBufferBuilder &_fbb, const LoadResponseT* _o, const ::flatbuffers::rehasher_function_t *_rehasher) {
-  return CreateLoadResponse(_fbb, _o, _rehasher);
+inline ::flatbuffers::Offset<SnapshotResponse> SnapshotResponse::Pack(::flatbuffers::FlatBufferBuilder &_fbb, const SnapshotResponseT* _o, const ::flatbuffers::rehasher_function_t *_rehasher) {
+  return CreateSnapshotResponse(_fbb, _o, _rehasher);
 }
 
-inline ::flatbuffers::Offset<LoadResponse> CreateLoadResponse(::flatbuffers::FlatBufferBuilder &_fbb, const LoadResponseT *_o, const ::flatbuffers::rehasher_function_t *_rehasher) {
+inline ::flatbuffers::Offset<SnapshotResponse> CreateSnapshotResponse(::flatbuffers::FlatBufferBuilder &_fbb, const SnapshotResponseT *_o, const ::flatbuffers::rehasher_function_t *_rehasher) {
   (void)_rehasher;
   (void)_o;
-  struct _VectorArgs { ::flatbuffers::FlatBufferBuilder *__fbb; const LoadResponseT* __o; const ::flatbuffers::rehasher_function_t *__rehasher; } _va = { &_fbb, _o, _rehasher}; (void)_va;
+  struct _VectorArgs { ::flatbuffers::FlatBufferBuilder *__fbb; const SnapshotResponseT* __o; const ::flatbuffers::rehasher_function_t *__rehasher; } _va = { &_fbb, _o, _rehasher}; (void)_va;
   auto _cid = _o->cid;
   auto _crev = _o->crev;
+  auto _rev0 = _o->rev0;
   auto _accepted = _o->accepted;
   auto _snapshot = _o->snapshot ? CreateSnapshot(_fbb, _o->snapshot.get(), _rehasher) : 0;
-  return nplex::msgs::CreateLoadResponse(
+  return nplex::msgs::CreateSnapshotResponse(
       _fbb,
       _cid,
       _crev,
+      _rev0,
       _accepted,
       _snapshot);
+}
+
+inline UpdatesRequestT *UpdatesRequest::UnPack(const ::flatbuffers::resolver_function_t *_resolver) const {
+  auto _o = std::make_unique<UpdatesRequestT>();
+  UnPackTo(_o.get(), _resolver);
+  return _o.release();
+}
+
+inline void UpdatesRequest::UnPackTo(UpdatesRequestT *_o, const ::flatbuffers::resolver_function_t *_resolver) const {
+  (void)_o;
+  (void)_resolver;
+  { auto _e = cid(); _o->cid = _e; }
+  { auto _e = rev(); _o->rev = _e; }
+}
+
+inline ::flatbuffers::Offset<UpdatesRequest> UpdatesRequest::Pack(::flatbuffers::FlatBufferBuilder &_fbb, const UpdatesRequestT* _o, const ::flatbuffers::rehasher_function_t *_rehasher) {
+  return CreateUpdatesRequest(_fbb, _o, _rehasher);
+}
+
+inline ::flatbuffers::Offset<UpdatesRequest> CreateUpdatesRequest(::flatbuffers::FlatBufferBuilder &_fbb, const UpdatesRequestT *_o, const ::flatbuffers::rehasher_function_t *_rehasher) {
+  (void)_rehasher;
+  (void)_o;
+  struct _VectorArgs { ::flatbuffers::FlatBufferBuilder *__fbb; const UpdatesRequestT* __o; const ::flatbuffers::rehasher_function_t *__rehasher; } _va = { &_fbb, _o, _rehasher}; (void)_va;
+  auto _cid = _o->cid;
+  auto _rev = _o->rev;
+  return nplex::msgs::CreateUpdatesRequest(
+      _fbb,
+      _cid,
+      _rev);
+}
+
+inline UpdatesResponseT *UpdatesResponse::UnPack(const ::flatbuffers::resolver_function_t *_resolver) const {
+  auto _o = std::make_unique<UpdatesResponseT>();
+  UnPackTo(_o.get(), _resolver);
+  return _o.release();
+}
+
+inline void UpdatesResponse::UnPackTo(UpdatesResponseT *_o, const ::flatbuffers::resolver_function_t *_resolver) const {
+  (void)_o;
+  (void)_resolver;
+  { auto _e = cid(); _o->cid = _e; }
+  { auto _e = crev(); _o->crev = _e; }
+  { auto _e = rev0(); _o->rev0 = _e; }
+  { auto _e = accepted(); _o->accepted = _e; }
+}
+
+inline ::flatbuffers::Offset<UpdatesResponse> UpdatesResponse::Pack(::flatbuffers::FlatBufferBuilder &_fbb, const UpdatesResponseT* _o, const ::flatbuffers::rehasher_function_t *_rehasher) {
+  return CreateUpdatesResponse(_fbb, _o, _rehasher);
+}
+
+inline ::flatbuffers::Offset<UpdatesResponse> CreateUpdatesResponse(::flatbuffers::FlatBufferBuilder &_fbb, const UpdatesResponseT *_o, const ::flatbuffers::rehasher_function_t *_rehasher) {
+  (void)_rehasher;
+  (void)_o;
+  struct _VectorArgs { ::flatbuffers::FlatBufferBuilder *__fbb; const UpdatesResponseT* __o; const ::flatbuffers::rehasher_function_t *__rehasher; } _va = { &_fbb, _o, _rehasher}; (void)_va;
+  auto _cid = _o->cid;
+  auto _crev = _o->crev;
+  auto _rev0 = _o->rev0;
+  auto _accepted = _o->accepted;
+  return nplex::msgs::CreateUpdatesResponse(
+      _fbb,
+      _cid,
+      _crev,
+      _rev0,
+      _accepted);
 }
 
 inline UpdatesPushT::UpdatesPushT(const UpdatesPushT &o)
@@ -2641,12 +2894,12 @@ inline bool VerifyMsgContent(::flatbuffers::Verifier &verifier, const void *obj,
       auto ptr = reinterpret_cast<const nplex::msgs::LoginResponse *>(obj);
       return verifier.VerifyTable(ptr);
     }
-    case MsgContent::LOAD_REQUEST: {
-      auto ptr = reinterpret_cast<const nplex::msgs::LoadRequest *>(obj);
+    case MsgContent::SNAPSHOT_REQUEST: {
+      auto ptr = reinterpret_cast<const nplex::msgs::SnapshotRequest *>(obj);
       return verifier.VerifyTable(ptr);
     }
-    case MsgContent::LOAD_RESPONSE: {
-      auto ptr = reinterpret_cast<const nplex::msgs::LoadResponse *>(obj);
+    case MsgContent::SNAPSHOT_RESPONSE: {
+      auto ptr = reinterpret_cast<const nplex::msgs::SnapshotResponse *>(obj);
       return verifier.VerifyTable(ptr);
     }
     case MsgContent::SUBMIT_REQUEST: {
@@ -2655,6 +2908,14 @@ inline bool VerifyMsgContent(::flatbuffers::Verifier &verifier, const void *obj,
     }
     case MsgContent::SUBMIT_RESPONSE: {
       auto ptr = reinterpret_cast<const nplex::msgs::SubmitResponse *>(obj);
+      return verifier.VerifyTable(ptr);
+    }
+    case MsgContent::UPDATES_REQUEST: {
+      auto ptr = reinterpret_cast<const nplex::msgs::UpdatesRequest *>(obj);
+      return verifier.VerifyTable(ptr);
+    }
+    case MsgContent::UPDATES_RESPONSE: {
+      auto ptr = reinterpret_cast<const nplex::msgs::UpdatesResponse *>(obj);
       return verifier.VerifyTable(ptr);
     }
     case MsgContent::UPDATES_PUSH: {
@@ -2700,12 +2961,12 @@ inline void *MsgContentUnion::UnPack(const void *obj, MsgContent type, const ::f
       auto ptr = reinterpret_cast<const nplex::msgs::LoginResponse *>(obj);
       return ptr->UnPack(resolver);
     }
-    case MsgContent::LOAD_REQUEST: {
-      auto ptr = reinterpret_cast<const nplex::msgs::LoadRequest *>(obj);
+    case MsgContent::SNAPSHOT_REQUEST: {
+      auto ptr = reinterpret_cast<const nplex::msgs::SnapshotRequest *>(obj);
       return ptr->UnPack(resolver);
     }
-    case MsgContent::LOAD_RESPONSE: {
-      auto ptr = reinterpret_cast<const nplex::msgs::LoadResponse *>(obj);
+    case MsgContent::SNAPSHOT_RESPONSE: {
+      auto ptr = reinterpret_cast<const nplex::msgs::SnapshotResponse *>(obj);
       return ptr->UnPack(resolver);
     }
     case MsgContent::SUBMIT_REQUEST: {
@@ -2714,6 +2975,14 @@ inline void *MsgContentUnion::UnPack(const void *obj, MsgContent type, const ::f
     }
     case MsgContent::SUBMIT_RESPONSE: {
       auto ptr = reinterpret_cast<const nplex::msgs::SubmitResponse *>(obj);
+      return ptr->UnPack(resolver);
+    }
+    case MsgContent::UPDATES_REQUEST: {
+      auto ptr = reinterpret_cast<const nplex::msgs::UpdatesRequest *>(obj);
+      return ptr->UnPack(resolver);
+    }
+    case MsgContent::UPDATES_RESPONSE: {
+      auto ptr = reinterpret_cast<const nplex::msgs::UpdatesResponse *>(obj);
       return ptr->UnPack(resolver);
     }
     case MsgContent::UPDATES_PUSH: {
@@ -2747,13 +3016,13 @@ inline ::flatbuffers::Offset<void> MsgContentUnion::Pack(::flatbuffers::FlatBuff
       auto ptr = reinterpret_cast<const nplex::msgs::LoginResponseT *>(value);
       return CreateLoginResponse(_fbb, ptr, _rehasher).Union();
     }
-    case MsgContent::LOAD_REQUEST: {
-      auto ptr = reinterpret_cast<const nplex::msgs::LoadRequestT *>(value);
-      return CreateLoadRequest(_fbb, ptr, _rehasher).Union();
+    case MsgContent::SNAPSHOT_REQUEST: {
+      auto ptr = reinterpret_cast<const nplex::msgs::SnapshotRequestT *>(value);
+      return CreateSnapshotRequest(_fbb, ptr, _rehasher).Union();
     }
-    case MsgContent::LOAD_RESPONSE: {
-      auto ptr = reinterpret_cast<const nplex::msgs::LoadResponseT *>(value);
-      return CreateLoadResponse(_fbb, ptr, _rehasher).Union();
+    case MsgContent::SNAPSHOT_RESPONSE: {
+      auto ptr = reinterpret_cast<const nplex::msgs::SnapshotResponseT *>(value);
+      return CreateSnapshotResponse(_fbb, ptr, _rehasher).Union();
     }
     case MsgContent::SUBMIT_REQUEST: {
       auto ptr = reinterpret_cast<const nplex::msgs::SubmitRequestT *>(value);
@@ -2762,6 +3031,14 @@ inline ::flatbuffers::Offset<void> MsgContentUnion::Pack(::flatbuffers::FlatBuff
     case MsgContent::SUBMIT_RESPONSE: {
       auto ptr = reinterpret_cast<const nplex::msgs::SubmitResponseT *>(value);
       return CreateSubmitResponse(_fbb, ptr, _rehasher).Union();
+    }
+    case MsgContent::UPDATES_REQUEST: {
+      auto ptr = reinterpret_cast<const nplex::msgs::UpdatesRequestT *>(value);
+      return CreateUpdatesRequest(_fbb, ptr, _rehasher).Union();
+    }
+    case MsgContent::UPDATES_RESPONSE: {
+      auto ptr = reinterpret_cast<const nplex::msgs::UpdatesResponseT *>(value);
+      return CreateUpdatesResponse(_fbb, ptr, _rehasher).Union();
     }
     case MsgContent::UPDATES_PUSH: {
       auto ptr = reinterpret_cast<const nplex::msgs::UpdatesPushT *>(value);
@@ -2793,12 +3070,12 @@ inline MsgContentUnion::MsgContentUnion(const MsgContentUnion &u) : type(u.type)
       value = new nplex::msgs::LoginResponseT(*reinterpret_cast<nplex::msgs::LoginResponseT *>(u.value));
       break;
     }
-    case MsgContent::LOAD_REQUEST: {
-      value = new nplex::msgs::LoadRequestT(*reinterpret_cast<nplex::msgs::LoadRequestT *>(u.value));
+    case MsgContent::SNAPSHOT_REQUEST: {
+      value = new nplex::msgs::SnapshotRequestT(*reinterpret_cast<nplex::msgs::SnapshotRequestT *>(u.value));
       break;
     }
-    case MsgContent::LOAD_RESPONSE: {
-      value = new nplex::msgs::LoadResponseT(*reinterpret_cast<nplex::msgs::LoadResponseT *>(u.value));
+    case MsgContent::SNAPSHOT_RESPONSE: {
+      value = new nplex::msgs::SnapshotResponseT(*reinterpret_cast<nplex::msgs::SnapshotResponseT *>(u.value));
       break;
     }
     case MsgContent::SUBMIT_REQUEST: {
@@ -2807,6 +3084,14 @@ inline MsgContentUnion::MsgContentUnion(const MsgContentUnion &u) : type(u.type)
     }
     case MsgContent::SUBMIT_RESPONSE: {
       value = new nplex::msgs::SubmitResponseT(*reinterpret_cast<nplex::msgs::SubmitResponseT *>(u.value));
+      break;
+    }
+    case MsgContent::UPDATES_REQUEST: {
+      value = new nplex::msgs::UpdatesRequestT(*reinterpret_cast<nplex::msgs::UpdatesRequestT *>(u.value));
+      break;
+    }
+    case MsgContent::UPDATES_RESPONSE: {
+      value = new nplex::msgs::UpdatesResponseT(*reinterpret_cast<nplex::msgs::UpdatesResponseT *>(u.value));
       break;
     }
     case MsgContent::UPDATES_PUSH: {
@@ -2844,13 +3129,13 @@ inline void MsgContentUnion::Reset() {
       delete ptr;
       break;
     }
-    case MsgContent::LOAD_REQUEST: {
-      auto ptr = reinterpret_cast<nplex::msgs::LoadRequestT *>(value);
+    case MsgContent::SNAPSHOT_REQUEST: {
+      auto ptr = reinterpret_cast<nplex::msgs::SnapshotRequestT *>(value);
       delete ptr;
       break;
     }
-    case MsgContent::LOAD_RESPONSE: {
-      auto ptr = reinterpret_cast<nplex::msgs::LoadResponseT *>(value);
+    case MsgContent::SNAPSHOT_RESPONSE: {
+      auto ptr = reinterpret_cast<nplex::msgs::SnapshotResponseT *>(value);
       delete ptr;
       break;
     }
@@ -2861,6 +3146,16 @@ inline void MsgContentUnion::Reset() {
     }
     case MsgContent::SUBMIT_RESPONSE: {
       auto ptr = reinterpret_cast<nplex::msgs::SubmitResponseT *>(value);
+      delete ptr;
+      break;
+    }
+    case MsgContent::UPDATES_REQUEST: {
+      auto ptr = reinterpret_cast<nplex::msgs::UpdatesRequestT *>(value);
+      delete ptr;
+      break;
+    }
+    case MsgContent::UPDATES_RESPONSE: {
+      auto ptr = reinterpret_cast<nplex::msgs::UpdatesResponseT *>(value);
       delete ptr;
       break;
     }

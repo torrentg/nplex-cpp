@@ -84,7 +84,8 @@ class client_t::impl_t
     void process_ping_cmd(const ping_cmd_t &cmd);
 
     void process_login_resp(connection_t *con, const msgs::LoginResponse *resp);
-    void process_load_resp(const msgs::LoadResponse *resp);
+    void process_snapshot_resp(const msgs::SnapshotResponse *resp);
+    void process_updates_resp(const msgs::UpdatesResponse *resp);
     void process_submit_resp(const msgs::SubmitResponse *resp);
     void process_updates_push(const msgs::UpdatesPush *resp);
     void process_keepalive_push(const msgs::KeepAlivePush *resp);

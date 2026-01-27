@@ -154,19 +154,13 @@ class my_listener_t : public nplex::listener_t
 
   protected:
 
-    load_cmd_t on_connected([[maybe_unused]] nplex::client_t &client, const std::string &server, nplex::rev_t oldest_rev, nplex::rev_t newest_rev) override
+    nplex::rev_t on_connected([[maybe_unused]] nplex::client_t &client, const std::string &server, nplex::rev_t oldest_rev, nplex::rev_t newest_rev) override
     {
         fmt::print("Nplex client connected to server {}, available revs = [{}, {}]\n", server, oldest_rev, newest_rev);
 
         num_failed_attempts = 0;
 
-        if (last_rev == 0)
-            //return {load_mode_e::SNAPSHOT_AT_LAST_REV, 0};
-            return {load_mode_e::SNAPSHOT_AT_FIXED_REV, 10};
-            //return {load_mode_e::SNAPSHOT_AT_FIXED_REV, newest_rev - 1};
-            //return {load_mode_e::ONLY_UPDATES_FROM_REV, 12};
-        else
-            return {load_mode_e::ONLY_UPDATES_FROM_REV, last_rev};
+        return 52420; //last_rev;
     }
 
     std::int32_t on_connection_lost([[maybe_unused]] nplex::client_t &client, const std::string &server) override

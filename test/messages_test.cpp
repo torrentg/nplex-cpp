@@ -122,29 +122,28 @@ TEST_CASE("PingResponse")
     CHECK(ptr->payload()->str() == "payload");
 }   
 
-TEST_CASE("LoadRequest")
+TEST_CASE("SnapshotRequest")
 {
-    LoadRequestT req = {
+    SnapshotRequestT req = {
         {},         // Native table
         3,          // cid
-        LoadMode::SNAPSHOT_AT_FIXED_REV,
         1024        // rev
     };
 
     auto buf = serialize(req);
-    auto *ptr = ::GetRoot<nplex::msgs::LoadRequest>(buf.data());
+    auto *ptr = ::GetRoot<nplex::msgs::SnapshotRequest>(buf.data());
 
     REQUIRE(ptr);
     CHECK(ptr->cid() == 3);
-    CHECK(ptr->mode() == LoadMode::SNAPSHOT_AT_FIXED_REV);
     CHECK(ptr->rev() == 1024);
 }
 
-TEST_CASE("LoadResponse")
+TEST_CASE("SnapshotResponse")
 {
-    LoadResponseT resp = make_load_response(
+    SnapshotResponseT resp = make_snapshot_resp(
         3,          // cid
         2048,       // crev
+        24,         // rev0
         true,       // accepted
         make_snapshot(
             1024,
@@ -168,11 +167,12 @@ TEST_CASE("LoadResponse")
     );
 
     auto buf = serialize(resp);
-    auto *ptr = ::GetRoot<nplex::msgs::LoadResponse>(buf.data());
+    auto *ptr = ::GetRoot<nplex::msgs::SnapshotResponse>(buf.data());
 
     REQUIRE(ptr);
     CHECK(ptr->cid() == 3);
     CHECK(ptr->crev() == 2048);
+    CHECK(ptr->rev0() == 24);
     CHECK(ptr->accepted() == true);
 
     REQUIRE(ptr->snapshot());
@@ -207,6 +207,42 @@ TEST_CASE("LoadResponse")
 
         CHECK(!tx->deletes());
     }
+}
+
+TEST_CASE("UpdatesRequest")
+{
+    UpdatesRequestT req = {
+        {},         // Native table
+        4,          // cid
+        1500        // rev
+    };
+
+    auto buf = serialize(req);
+    auto *ptr = ::GetRoot<nplex::msgs::UpdatesRequest>(buf.data());
+
+    REQUIRE(ptr);
+    CHECK(ptr->cid() == 4);
+    CHECK(ptr->rev() == 1500);
+}
+
+TEST_CASE("UpdatesResponse")
+{
+    UpdatesResponseT resp = {
+        {},         // Native table
+        4,          // cid
+        2048,       // crev
+        24,         // rev0
+        true        // accepted
+    };
+
+    auto buf = serialize(resp);
+    auto *ptr = ::GetRoot<nplex::msgs::UpdatesResponse>(buf.data());
+
+    REQUIRE(ptr);
+    CHECK(ptr->cid() == 4);
+    CHECK(ptr->crev() == 2048);
+    CHECK(ptr->rev0() == 24);
+    CHECK(ptr->accepted() == true);
 }
 
 TEST_CASE("UpdatesPush")

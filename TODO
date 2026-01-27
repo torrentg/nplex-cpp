@@ -10,6 +10,7 @@
 * client_t constructor waits until synchronized
 * check user permissions in transaction
 * error on con+login+load+sync -> counts=1 (currently cascade of logins)
+* move ERR_xxx codes to errors.hpp, or common.hpp or similar
 
 ## Useful commands
 
