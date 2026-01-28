@@ -58,7 +58,7 @@ TEST_CASE("LoginRequest")
 TEST_CASE("LoginResponse")
 {
     LoginResponseT resp;
-    
+
     resp.cid = 1;
     resp.code = LoginCode::AUTHORIZED;
     resp.rev0 = 456;
@@ -120,7 +120,7 @@ TEST_CASE("PingResponse")
     CHECK(ptr->cid() == 2);
     CHECK(ptr->crev() == 2048);
     CHECK(ptr->payload()->str() == "payload");
-}   
+}
 
 TEST_CASE("SnapshotRequest")
 {

@@ -216,23 +216,23 @@ class my_listener_t : public nplex::listener_t
 
     void on_update([[maybe_unused]] nplex::client_t &client, const nplex::meta_ptr &meta, const std::vector<nplex::change_t> &changes) override
     {
-        fmt::print("Received update at rev {}\n", meta->rev);
+        //fmt::print("Received update at rev {}\n", meta->rev);
 
         for (const auto &change : changes)
         {
             switch (change.action)
             {
                 case nplex::change_t::action_e::CREATE:
-                    fmt::print("CREATE: key={}, value={}\n", change.key, change.value->data());
+                    //fmt::print("CREATE: key={}, value={}\n", change.key, change.value->data());
                     update_sensors(change.key, *change.value);
                     break;
                 case nplex::change_t::action_e::UPDATE:
-                    fmt::print("UPDATE: key={}, new_value={}, prev_value={}\n", change.key, change.value->data(), change.old_value->data());
+                    //fmt::print("UPDATE: key={}, new_value={}, prev_value={}\n", change.key, change.value->data(), change.old_value->data());
                     update_sensors(change.key, *change.value);
                     // if increment > theshold -> create alarm
                     break;
                 case nplex::change_t::action_e::DELETE:
-                    fmt::print("DELETE: key={}\n", change.key);
+                    //fmt::print("DELETE: key={}\n", change.key);
                     remove_sensor(change.key);
                     break;
             }

@@ -35,7 +35,6 @@ struct connection_impl_t : public connection_t
     };
 
     uv_tcp_t m_tcp = {};                            // Libuv tcp handle (must be first)
-    uv_loop_t *m_loop = nullptr;                    // Event loop pointer (stored separately)
     addr_t m_addr;                                  // Remote address (server address)
     char m_input_buffer[UINT16_MAX] = {0};          // Input buffer used by read()
     std::string m_input_msg;                        // Current incoming message
@@ -69,7 +68,7 @@ struct connection_impl_t : public connection_t
     virtual void disconnect(int rc = 0) override;
     virtual void send(flatbuffers::DetachedBuffer &&buf) override;
 
-    client_t::impl_t * client() const { return reinterpret_cast<client_t::impl_t *>(m_loop->data); }
+    client_t::impl_t * client() const { return reinterpret_cast<client_t::impl_t *>(m_tcp.loop->data); }
 };
 
 } // namespace nplex
@@ -119,7 +118,7 @@ static struct sockaddr_storage get_sockaddr(uv_loop_t *loop, const nplex::addr_t
 
             // request address info made synchronously (at this point no other tasks are done)
             std::string port = std::to_string(addr.port());
-            if ((rc = uv_getaddrinfo(loop, &req, NULL, addr.host().c_str(), port.c_str(), &hints)) != 0) {
+            if ((rc = uv_getaddrinfo(loop, &req, nullptr, addr.host().c_str(), port.c_str(), &hints)) != 0) {
                 if (req.addrinfo) uv_freeaddrinfo(req.addrinfo);
                 throw nplex_exception(uv_strerror(rc));
             }
@@ -160,7 +159,7 @@ static void cb_tcp_read(uv_stream_t *stream, ssize_t nread, const uv_buf_t *buf)
     if (nread == 0)
         return;
 
-    if (nread == UV_EOF || buf->base == NULL) {
+    if (nread == UV_EOF || buf->base == nullptr) {
         obj->disconnect(ERR_CLOSED_BY_PEER);
         return;
     }
@@ -265,7 +264,6 @@ nplex::connection_impl_t::connection_impl_t(const addr_t &addr, uv_loop_t *loop,
     m_params.max_unack_msgs = (params.max_unack_msgs == 0 ? UINT32_MAX : params.max_unack_msgs);
     m_params.max_unack_bytes = (params.max_unack_bytes == 0 ? UINT32_MAX : params.max_unack_bytes);
 
-    m_loop = loop;
     m_tcp.loop = loop;
     m_tcp.data = this;
 }
@@ -312,7 +310,8 @@ void nplex::connection_impl_t::disconnect(int rc)
     if (!m_error)
         m_error = rc;
 
-    uv_close(get_handle(&m_tcp), ::cb_tcp_close);
+    if (!uv_is_closing(get_handle(&m_tcp)))
+        uv_close(get_handle(&m_tcp), ::cb_tcp_close);
 }
 
 void nplex::connection_impl_t::send(flatbuffers::DetachedBuffer &&buf)

@@ -111,7 +111,7 @@ class listener_t
      * After this function is called, the client is no longer valid.
      * 
      * This method can block if required (write to disk, etc).
-     *  
+     * 
      * @param[in] client Nplex instance.
      */
     virtual void on_closed([[maybe_unused]] client_t &client) {}
@@ -227,7 +227,7 @@ class client_t
         CONNECTING,                             //!< Connecting to the server.
         SYNCHRONIZING,                          //!< Initializing the cache (load or crev != update.rev).
         SYNCHRONIZED,                           //!< Client is synced with the server.
-        DISCONNECTED,                           //!< Client is disconnected.
+        DISCONNECTED,                           //!< Client is disconnected (trying to reconnect).
         CLOSED                                  //!< Client is closed.
     };
 
@@ -329,6 +329,8 @@ class client_t
      *         false otherwise (tx-not-found, invalid-state).
      */
     bool discard_tx(const tx_ptr &tx);
+
+    // TODO: create ping() method.
 
     /**
      * Sends a delayed command to disconnect the client.

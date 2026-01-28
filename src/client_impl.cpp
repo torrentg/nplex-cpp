@@ -3,26 +3,6 @@
 #include <fmt/format.h>
 #include "client_impl.hpp"
 
-/**
- * Notes on this compilation unit:
- * 
- * When we use the libuv library we apply C conventions (instead of C++ ones):
- *   - When in Rome, do as the Romans do.
- *   - calloc/free are used instead of new/delete.
- *   - pointers to static functions.
- *   - C-style pointer casting.
- */
-
-#define LOG(severity, ...) \
-    do { \
-        if (static_cast<int>(listener.log_level()) <= static_cast<int>(severity)) \
-            listener.log(parent, severity, fmt::format(__VA_ARGS__)); \
-    } while(0)
-#define LOG_DEBUG(...)  LOG(listener_t::log_level_e::DEBUG, __VA_ARGS__)
-#define LOG_INFO(...)   LOG(listener_t::log_level_e::INFO , __VA_ARGS__)
-#define LOG_WARN(...)   LOG(listener_t::log_level_e::WARN , __VA_ARGS__)
-#define LOG_ERROR(...)  LOG(listener_t::log_level_e::ERROR, __VA_ARGS__)
-
 // ==========================================================
 // Internal (static) functions
 // ==========================================================
@@ -34,16 +14,17 @@ static std::string error2str(int error)
 
     switch (error)
     {
-        case ERR_CLOSED_BY_LOCAL: return "closed by local";
-        case ERR_CLOSED_BY_PEER: return "closed by peer";
-        case ERR_MSG_ERROR: return "invalid message";
-        case ERR_MSG_UNEXPECTED: return "unexpected message";
-        case ERR_MSG_SIZE: return "message too large";
+        case ERR_CLOSED_BY_LOCAL:   return "closed by local";
+        case ERR_CLOSED_BY_PEER:    return "closed by peer";
+        case ERR_MSG_ERROR:         return "invalid message";
+        case ERR_MSG_UNEXPECTED:    return "unexpected message";
+        case ERR_MSG_SIZE:          return "message too large";
         case ERR_ALREADY_CONNECTED: return "already connected";
-        case ERR_KEEPALIVE: return "keepalive not received";
-        case ERR_AUTH: return "unauthorized";
-        case ERR_LOAD: return "snapshot request rejected";
-        default: return fmt::format("unknow error -{}-", error);
+        case ERR_CON_LOST:          return "connection lost";
+        case ERR_AUTH:              return "unauthorized";
+        case ERR_LOAD:              return "snapshot request rejected";
+        case ERR_SIGNAL:            return "signal received";
+        default:                    return fmt::format("unknown error -{}-", error);
     }
 }
 
@@ -70,12 +51,6 @@ struct fmt::formatter<nplex::acl_t>
     }
 };
 
-static void cb_process_async(uv_async_t *handle)
-{
-    auto *impl = (nplex::client_t::impl_t *) handle->loop->data;
-    impl->process_commands();
-}
-
 static void cb_close_handle(uv_handle_t *handle, void *arg)
 {
     UNUSED(arg);
@@ -87,56 +62,94 @@ static void cb_close_handle(uv_handle_t *handle, void *arg)
     {
         case UV_TCP:
         case UV_ASYNC:
-            uv_close(handle, NULL);
+        case UV_TIMER:
+        case UV_SIGNAL:
+            uv_close(handle, nullptr);
             break;
         default:
-            uv_close(handle, (uv_close_cb) free);
+            fmt::print("Warning: unhandled uv handle type {}\n", uv_handle_type_name(handle->type));
+            uv_close(handle, nullptr);
     }
 }
 
-static void cb_timer_keepalive_timeout(uv_timer_t *timer)
+static void cb_process_async(uv_async_t *handle)
 {
-    auto *impl = (nplex::client_t::impl_t *) timer->loop->data;
-    impl->on_keepalive_timeout();
+    auto impl = static_cast<nplex::client_t::impl_t *>(handle->loop->data);
+    impl->process_commands();
 }
 
-static void cb_timer_connect_timeout(uv_timer_t *timer)
+static void cb_timer_connection_lost(uv_timer_t *timer)
 {
-    auto *impl = (nplex::client_t::impl_t *) timer->loop->data;
+    auto impl = static_cast<nplex::client_t::impl_t *>(timer->loop->data);
+    impl->on_connection_lost();
+}
+
+static void cb_timer_reconnect(uv_timer_t *timer)
+{
+    auto impl = static_cast<nplex::client_t::impl_t *>(timer->loop->data);
     uv_timer_stop(timer);
-    uv_close(reinterpret_cast<uv_handle_t *>(timer), (uv_close_cb) free);
     impl->connect();
+}
+
+static void cb_signal_sigint(uv_signal_t *handle, int signum)
+{
+    auto impl = static_cast<nplex::client_t::impl_t *>(handle->loop->data);
+    uv_signal_stop(handle);
+    impl->abort(fmt::format("Signal {} received, stopping event loop", signum));
 }
 
 // ==========================================================
 // client_t::impl_t methods
 // ==========================================================
 
-nplex::client_t::impl_t::impl_t(const params_t &params_, listener_t &listener_, client_t &parent_) : 
-    parent(parent_),
-    m_state{state_e::DISCONNECTED},
-    listener(listener_),
-    params(params_)
+nplex::client_t::impl_t::impl_t(const params_t &params, listener_t &listener, client_t &parent) : 
+    m_parent(parent),
+    m_listener(listener),
+    m_params(params),
+    m_state{state_e::DISCONNECTED}
 {
-    if (params.servers.empty())
-        throw invalid_config("Invalid params: no servers");
+    int rc = 0;
+
+    if (m_params.servers.empty())
+        throw invalid_config("no servers");
 
     cache = std::make_shared<cache_t>();
 
-    loop = std::make_unique<uv_loop_t>();
+    // initialize the event loop
+    m_loop = std::make_unique<uv_loop_t>();
+    if ((rc = uv_loop_init(m_loop.get())) != 0)
+        throw nplex_exception(uv_strerror(rc));
+    m_loop->data = this;
 
-    if (uv_loop_init(loop.get()) != 0)
-        throw nplex_exception("Error initializing the event loop (uv_loop_init)");
+    // initialize the connection-lost timer
+    m_timer_con_lost = std::make_unique<uv_timer_t>();
+    if ((rc = uv_timer_init(m_loop.get(), m_timer_con_lost.get())) != 0)
+        throw nplex_exception(uv_strerror(rc));
+    m_timer_con_lost->data = this;
 
-    loop->data = this;
+    // initialize the reconnect timer
+    m_timer_reconnect = std::make_unique<uv_timer_t>();
+    if ((rc = uv_timer_init(m_loop.get(), m_timer_reconnect.get())) != 0)
+        throw nplex_exception(uv_strerror(rc));
+    m_timer_reconnect->data = this;
 
+    // install the async handler
     async = std::make_unique<uv_async_t>();
+    if ((rc = uv_async_init(m_loop.get(), async.get(), ::cb_process_async)) != 0)
+        throw nplex_exception(uv_strerror(rc));
+    async->data = this;
 
-    if (uv_async_init(loop.get(), async.get(), ::cb_process_async) != 0)
-        throw nplex_exception("Error initializing the event loop (uv_async_init)");
+    // install the SIGINT (Ctrl-C) handler
+    m_signal_sigint = std::make_unique<uv_signal_t>();
+    if ((rc = uv_signal_init(m_loop.get(), m_signal_sigint.get())) != 0)
+        throw nplex_exception(uv_strerror(rc));
+    m_signal_sigint->data = this;
+    if ((rc = uv_signal_start(m_signal_sigint.get(), ::cb_signal_sigint, SIGINT)) != 0)
+        throw nplex_exception(uv_strerror(rc));
 
-    for (const auto &server : params.servers)
-        connections.push_back(connection_t::create(addr_t{server}, loop.get(), params));
+    // create connections
+    for (const auto &server : m_params.servers)
+        m_connections.push_back(connection_t::create(addr_t{server}, m_loop.get(), m_params));
 }
 
 nplex::client_t::impl_t::~impl_t()
@@ -150,29 +163,41 @@ void nplex::client_t::impl_t::run() noexcept
 
     try
     {
-        LOG_DEBUG("Event loop started");
+        log_debug("Event loop started");
         connect();
-        uv_run(loop.get(), UV_RUN_DEFAULT);
+        uv_run(m_loop.get(), UV_RUN_DEFAULT);
     }
     catch (const std::exception &e) {
-        LOG_ERROR("{}", e.what());
-        error = e.what();
+        log_error("{}", e.what());
+        m_error = std::current_exception();
     }
 
     try
     {
-        uv_walk(loop.get(), ::cb_close_handle, NULL);
-        while (uv_run(loop.get(), UV_RUN_NOWAIT));
-        uv_loop_close(loop.get());
-        LOG_DEBUG("Event loop terminated");
+        uv_walk(m_loop.get(), ::cb_close_handle, nullptr);
+        while (uv_run(m_loop.get(), UV_RUN_NOWAIT));
+        uv_loop_close(m_loop.get());
 
         set_state(state_e::CLOSED);
-        listener.on_closed(parent);
+        log_debug("Event loop terminated");
+        m_listener.on_closed(m_parent);
     }
     catch (const std::exception &e) {
-        LOG_ERROR("{}", e.what());
-        error = e.what();
+        log_error("{}", e.what());
+        m_error = std::current_exception();
     }
+}
+
+void nplex::client_t::impl_t::wait_for_startup()
+{
+    std::unique_lock<std::mutex> lock(m_mutex);
+    m_cv.wait(lock, [this]{
+        auto s = m_state.load();
+        return (s != client_t::state_e::DISCONNECTED && s != client_t::state_e::CONNECTING);
+    });
+
+    if (m_state == state_e::CLOSED && m_error)
+        std::rethrow_exception(m_error);
 }
 
 void nplex::client_t::impl_t::send(flatbuffers::DetachedBuffer &&buf)
@@ -181,17 +206,20 @@ void nplex::client_t::impl_t::send(flatbuffers::DetachedBuffer &&buf)
         return;
 
     auto type = flatbuffers::GetRoot<nplex::msgs::Message>(buf.data())->content_type();
-    LOG_DEBUG("Sent {} to {}", msgs::EnumNameMsgContent(type), m_con->addr().str());
+    log_debug("Sent {} to {}", msgs::EnumNameMsgContent(type), m_con->addr().str());
 
     m_con->send(std::move(buf));
 }
 
 void nplex::client_t::impl_t::abort(const std::string &msg)
 {
-    error = msg;
+    m_error = std::make_exception_ptr(nplex_exception(msg));
+    m_con = nullptr;
+    for (auto &con : m_connections)
+        con->disconnect(ERR_SIGNAL);
     set_state(state_e::CLOSED);
-    LOG_ERROR("{}", msg);
-    uv_stop(loop.get());
+    log_error("{}", msg);
+    uv_stop(m_loop.get());
 }
 
 void nplex::client_t::impl_t::set_state(state_e state)
@@ -205,10 +233,11 @@ void nplex::client_t::impl_t::report_server_activity()
     if (!m_con || m_state == state_e::CLOSED || m_state == state_e::DISCONNECTED)
         return;
 
-    auto handle = reinterpret_cast<uv_handle_t*>(timer_keepalive);
-
-    if (handle && uv_is_active(handle) && !uv_is_closing(handle))
-        uv_timer_again(timer_keepalive);
+    auto handle = reinterpret_cast<uv_handle_t*>(m_timer_con_lost.get());
+    if (handle && !uv_is_closing(handle) && uv_is_active(handle)) {
+        uv_timer_again(m_timer_con_lost.get());
+        log_debug("Resetting connection-lost timer");
+    }
 }
 
 void nplex::client_t::impl_t::connect()
@@ -219,13 +248,13 @@ void nplex::client_t::impl_t::connect()
     set_state(state_e::CONNECTING);
     m_con = nullptr;
 
-    for (auto &con : connections)
+    for (auto &con : m_connections)
         con->connect();
 }
 
 void nplex::client_t::impl_t::on_connection_established(connection_t *con)
 {
-    LOG_DEBUG("{} - connection established", con->addr().str());
+    log_debug("{} - connection established", con->addr().str());
 
     if (m_state != state_e::CONNECTING) {
         con->disconnect(ERR_CLOSED_BY_LOCAL);
@@ -237,75 +266,70 @@ void nplex::client_t::impl_t::on_connection_established(connection_t *con)
         return;
     }
 
-    LOG_DEBUG("Sent {} to {}", msgs::EnumNameMsgContent(msgs::MsgContent::LOGIN_REQUEST), con->addr().str());
+    log_debug("Sent {} to {}", msgs::EnumNameMsgContent(msgs::MsgContent::LOGIN_REQUEST), con->addr().str());
 
     // TODO: enable keepalive to avoid staled connections
 
     con->send(
         create_login_msg(
-            ++correlation, 
-            params.user, 
-            params.password
+            ++m_correlation, 
+            m_params.user, 
+            m_params.password
         )
     );
 }
 
 void nplex::client_t::impl_t::on_connection_closed(connection_t *con)
 {
-    LOG_WARN("{} - {}", con->addr().str(), ::error2str(con->error()));
+    log_warn("{} - {}", con->addr().str(), ::error2str(con->error()));
 
     // Case: unable to connect
     if (con != m_con)
     {
-        for (auto &server : connections) {
+        for (auto &server : m_connections) {
             if (!server->is_closed())
                 // Already connected or there is an ongoing connection attempt
-                return;  
+                return;
         }
 
         // All servers failed to connect
-
         abort("Unable to connect to the Nplex cluster");
 
-        if (num_logins == 0)
+        if (m_num_logins == 0)
             return;
     }
 
     std::string addr = (m_con ? m_con->addr().str() : "");
+    uv_handle_t *handle = nullptr;
 
-    if (timer_keepalive) {
-        uv_close(reinterpret_cast<uv_handle_t *>(timer_keepalive), (uv_close_cb) free);
-        timer_keepalive = nullptr;
-    }
+    handle = reinterpret_cast<uv_handle_t *>(m_timer_con_lost.get());
+    if (handle && !uv_is_closing(handle) && uv_is_active(handle))
+        uv_timer_stop(m_timer_con_lost.get());
 
     m_con = nullptr;
     set_state(state_e::DISCONNECTED);
 
-    auto wait_time = listener.on_connection_lost(parent, addr);
+    auto wait_time = m_listener.on_connection_lost(m_parent, addr);
 
     if (wait_time < 0) {
-        abort("Connection lost");
+        abort("Unable to connect");
         return;
     }
 
     // schedule reconnection
-    uv_timer_t *reconnect_timer = (uv_timer_t *) malloc(sizeof(uv_timer_t));
-    uv_timer_init(loop.get(), reconnect_timer);
-    reconnect_timer->data = this;
-    uv_timer_start(reconnect_timer, ::cb_timer_connect_timeout, (uint64_t) wait_time, 0);
+    handle = reinterpret_cast<uv_handle_t *>(m_timer_reconnect.get());
+    if (handle && !uv_is_closing(handle))
+        uv_timer_start(m_timer_reconnect.get(), ::cb_timer_reconnect, (uint64_t) wait_time, 0);
 }
 
-void nplex::client_t::impl_t::on_keepalive_timeout()
+void nplex::client_t::impl_t::on_connection_lost()
 {
-    if (timer_keepalive) {
-        uv_close(reinterpret_cast<uv_handle_t *>(timer_keepalive), (uv_close_cb) free);
-        timer_keepalive = nullptr;
-    }
+    uv_handle_t *handle = reinterpret_cast<uv_handle_t *>(m_timer_con_lost.get());
+    if (handle && !uv_is_closing(handle) && uv_is_active(handle))
+        uv_timer_stop(m_timer_con_lost.get());
 
-    if (m_con) {
-        LOG_WARN("{} - connection lost", m_con->addr().str());
-        m_con->disconnect(ERR_KEEPALIVE);
-    }
+    if (m_con)
+        m_con->disconnect(ERR_CON_LOST);
 }
 
 void nplex::client_t::impl_t::process_commands()
@@ -343,7 +367,7 @@ void nplex::client_t::impl_t::process_close_cmd(const nplex::close_cmd_t &cmd)
     if (m_state == state_e::CLOSED)
         return;
 
-    uv_stop(loop.get());
+    uv_stop(m_loop.get());
 }
 
 void nplex::client_t::impl_t::process_ping_cmd(const nplex::ping_cmd_t &cmd)
@@ -369,7 +393,7 @@ void nplex::client_t::impl_t::on_msg_received(connection_t *con, const msgs::Mes
         return;
     }
 
-    LOG_DEBUG("Received {} from {}", msgs::EnumNameMsgContent(msg->content_type()), con->addr().str());
+    log_debug("Received {} from {}", msgs::EnumNameMsgContent(msg->content_type()), con->addr().str());
 
     if (msg->content_type() == msgs::MsgContent::LOGIN_RESPONSE) {
         process_login_resp(con, msg->content_as_LOGIN_RESPONSE());
@@ -426,53 +450,47 @@ void nplex::client_t::impl_t::process_login_resp(connection_t *con, const nplex:
     assert(m_state == state_e::CONNECTING);
 
     if (resp->code() != msgs::LoginCode::AUTHORIZED) {
-        LOG_ERROR("Login failed on server {}", con->addr().str());
+        log_error("Login failed on server {}", con->addr().str());
         con->disconnect(ERR_AUTH);
         return;
     }
 
     m_con = con;
-    num_logins++;
+    m_num_logins++;
     set_state(state_e::SYNCHRONIZING);
-    can_force = resp->can_force();
-    permissions.clear();
+    m_can_force = resp->can_force();
+    m_permissions.clear();
 
     if (resp->permissions())
     {
         for (flatbuffers::uoffset_t i = 0; i < resp->permissions()->size(); i++) {
             auto acl = resp->permissions()->Get(i);
-            permissions.push_back({acl->mode(), acl->pattern()->str()});
+            m_permissions.push_back({acl->mode(), acl->pattern()->str()});
         }
     }
 
-    if (permissions.empty()) {
+    if (m_permissions.empty()) {
         con->disconnect(ERR_AUTH);
         return;
     }
 
-    LOG_INFO("can-force = {}, permissions = [{}]", can_force, fmt::join(permissions, ", "));
+    log_info("can-force = {}, m_permissions = [{}]", m_can_force, fmt::join(m_permissions, ", "));
 
-    if (resp->keepalive())
-    {
-        auto timeout = static_cast<uint64_t>(resp->keepalive() * static_cast<double>(params.timeout_factor));
-
-        timer_keepalive = (uv_timer_t *) malloc(sizeof(uv_timer_t));
-        uv_timer_init(loop.get(), timer_keepalive);
-    
-        uv_timer_start(timer_keepalive, ::cb_timer_keepalive_timeout, timeout, timeout);
-
-        LOG_INFO("keepalive = {}ms, connection-lost = {}ms", resp->keepalive(), timeout);
+    if (resp->keepalive()) {
+        auto timeout = static_cast<uint64_t>(resp->keepalive() * static_cast<double>(m_params.timeout_factor));
+        uv_timer_start(m_timer_con_lost.get(), ::cb_timer_connection_lost, timeout, timeout);
+        log_debug("keepalive = {}ms, connection-lost = {}ms", resp->keepalive(), timeout);
     }
 
-    for (auto &server : connections)
+    for (auto &server : m_connections)
         if (server.get() != m_con)
             server->disconnect(ERR_ALREADY_CONNECTED);
 
-    auto srev = listener.on_connected(parent, m_con->addr().str(), resp->rev0(), resp->crev());
+    auto srev = m_listener.on_connected(m_parent, m_con->addr().str(), resp->rev0(), resp->crev());
 
     send(
         create_snapshot_msg(
-            ++correlation, 
+            ++m_correlation, 
             srev
         )
     );
@@ -485,7 +503,7 @@ void nplex::client_t::impl_t::process_snapshot_resp(const nplex::msgs::SnapshotR
         return;
     }
 
-    assert(resp->cid() == correlation);
+    assert(resp->cid() == m_correlation);
 
     if (!resp->accepted()) {
         m_con->disconnect(ERR_LOAD);
@@ -495,11 +513,11 @@ void nplex::client_t::impl_t::process_snapshot_resp(const nplex::msgs::SnapshotR
     if (resp->snapshot())
         cache->load(resp->snapshot());
 
-    listener.on_snapshot(parent);
+    m_listener.on_snapshot(m_parent);
 
     send(
         create_updates_msg(
-            ++correlation, 
+            ++m_correlation, 
             cache->m_rev
         )
     );
@@ -512,7 +530,7 @@ void nplex::client_t::impl_t::process_updates_resp(const nplex::msgs::UpdatesRes
         return;
     }
 
-    assert(resp->cid() == correlation);
+    assert(resp->cid() == m_correlation);
 
     if (!resp->accepted()) {
         m_con->disconnect(ERR_LOAD);
@@ -529,7 +547,7 @@ void nplex::client_t::impl_t::process_submit_resp(const nplex::msgs::SubmitRespo
     if (resp->code() != msgs::SubmitCode::ACCEPTED)
     {
         // TODO: process error
-        error = "Submit was rejected";
+        //error = "Submit was rejected";
         //parent.on_reject(tx);
         return;
     }
@@ -592,7 +610,7 @@ void nplex::client_t::impl_t::process_update(const nplex::msgs::Update *upd)
     auto meta = cache->m_metas.rbegin();
     assert(meta != cache->m_metas.rend());
 
-    listener.on_update(parent, meta->second, changes);
+    m_listener.on_update(m_parent, meta->second, changes);
 }
 
 void nplex::client_t::impl_t::process_keepalive_push(const nplex::msgs::KeepAlivePush *resp)

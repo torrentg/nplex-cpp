@@ -25,12 +25,12 @@ namespace nplex {
  *     - Pros: Minimal overhead; high performance.
  *     - Cons: Leads to non-repeatable reads and phantoms.
  *     - Note: Invalidated if any new transaction alters the c-ud.
- *  
+ * 
  *   repeatable-reads: Read data will not change during the transaction (value = 1st read).
  *     - Pros: Prevents non-repeatable reads.
  *     - Cons: Does not prevent phantoms.
  *     - Note: Invalidated if any new transaction alters the crud keys.
- *  
+ * 
  *   serializable: All read data will not change during the transaction (value = tx creation).
  *     - Pros: Prevents non-repeatable reads, and phantoms.
  *     - Cons: Higher overhead.

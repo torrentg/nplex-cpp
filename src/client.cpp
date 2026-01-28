@@ -3,16 +3,6 @@
 #include "addr.hpp"
 #include "client_impl.hpp"
 
-#define LOG(severity, ...) \
-    do { \
-        if (static_cast<int>(m_impl->listener.log_level()) <= static_cast<int>(severity)) \
-            m_impl->listener.log(*this, severity, fmt::format(__VA_ARGS__)); \
-    } while(0)
-#define LOG_DEBUG(...)  LOG(listener_t::log_level_e::DEBUG, __VA_ARGS__)
-#define LOG_INFO(...)   LOG(listener_t::log_level_e::INFO , __VA_ARGS__)
-#define LOG_WARN(...)   LOG(listener_t::log_level_e::WARN , __VA_ARGS__)
-#define LOG_ERROR(...)  LOG(listener_t::log_level_e::ERROR, __VA_ARGS__)
-
 // ==========================================================
 // Internal (static) functions
 // ==========================================================
@@ -70,23 +60,21 @@ nplex::client_t::client_t(const params_t &params, listener_t &listener)
             m_impl->run();
         }
         catch(const std::exception &e) {
-            LOG_ERROR("{}", e.what());
+            m_impl->log_error("{}", e.what());
         }
         catch(...) {
-            LOG_ERROR("Unknown error in the event loop");
+            m_impl->log_error("Unknown exception in the event loop");
         }
     });
 
-    // Wait until connection or failure
-    std::unique_lock lock(m_impl->m_mutex);
-    m_impl->m_cv.wait(lock, [this]{ 
-        return (m_impl->m_state != state_e::DISCONNECTED && m_impl->m_state != state_e::CONNECTING);
-    });
+    m_impl->wait_for_startup();
 
-    // If connection to cluster failed -> exception
-    if (m_impl->m_state == state_e::CLOSED) {
+    try {
+        m_impl->wait_for_startup();
+    }
+    catch(...) {
         close();
-        throw connection_failed(m_impl->error);
+        throw;
     }
 }
 
@@ -109,7 +97,7 @@ void nplex::client_t::close()
 {
     std::lock_guard<decltype(m_mutex)> lock(m_mutex);
 
-    if (m_impl->state() != state_e::CLOSED)
+    if (!m_impl->is_closed())
     {
         m_impl->commands.clear();
         m_impl->commands.push(close_cmd_t{});
@@ -129,19 +117,19 @@ nplex::tx_ptr nplex::client_t::create_tx(transaction_t::isolation_e isolation, b
 {
     std::lock_guard<decltype(m_mutex)> lock_impl(m_mutex);
 
-    if (m_impl->state() == state_e::CLOSED)
-        throw connection_failed(m_impl->error);
+    if (m_impl->is_closed())
+        throw nplex_exception("Client is closed");
 
     size_t num_txs = m_impl->transactions.size();
-    if (num_txs >= m_impl->params.max_active_txs)
-        throw nplex_exception("Too many concurrent transactions (max={})", m_impl->params.max_active_txs);
+    if (num_txs >= m_impl->params().max_active_txs)
+        throw nplex_exception("Too many concurrent transactions (max={})", m_impl->params().max_active_txs);
 
     std::lock_guard<decltype(m_impl->cache->m_mutex)> lock_cache(m_impl->cache->m_mutex);
 
     auto tx = std::make_shared<transaction_impl_t>(m_impl->cache, isolation, read_only);
     m_impl->transactions.insert(tx);
 
-    LOG_DEBUG("Transaction created, isolation={}, read_only={}", ::to_str(isolation), read_only);
+    m_impl->log_debug("Transaction created, isolation={}, read_only={}", ::to_str(isolation), read_only);
 
     return tx;
 }
@@ -156,8 +144,8 @@ bool nplex::client_t::submit_tx(const tx_ptr &tx, bool force)
 
     std::lock_guard<decltype(m_mutex)> lock(m_mutex);
 
-    if (m_impl->state() == state_e::CLOSED)
-        throw connection_failed(m_impl->error);
+    if (m_impl->is_closed())
+        throw nplex_exception("Client is closed");
 
     if (m_impl->state() != state_e::SYNCHRONIZED)
         throw nplex_exception("Client not synced");
