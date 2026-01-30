@@ -270,7 +270,7 @@ nplex::connection_impl_t::connection_impl_t(const addr_t &addr, uv_loop_t *loop,
 
 nplex::connection_impl_t::~connection_impl_t()
 {
-    assert(is_closed());
+    assert(this->connection_impl_t::is_closed());
 }
 
 void nplex::connection_impl_t::connect()
