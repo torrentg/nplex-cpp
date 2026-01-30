@@ -17,16 +17,6 @@
 
 namespace nplex {
 
-struct shared_ptr_less_t
-{
-    using is_transparent = std::true_type;
-
-    template<typename T1, typename T2>
-    bool operator()(const std::shared_ptr<T1> &lhs, const std::shared_ptr<T2> &rhs) const { 
-        return (static_cast<void*>(lhs.get()) < static_cast<void *>(rhs.get()));
-    }
-};
-
 struct output_msg_t
 {
     uv_write_t req;
@@ -43,19 +33,6 @@ struct output_msg_t
 inline std::size_t get_msg_length(const flatbuffers::DetachedBuffer &buf) noexcept {
     return buf.size() + 3 * sizeof(std::uint32_t);
 }
-
-struct submit_cmd_t {
-    tx_impl_ptr tx;
-    bool force = false;
-};
-
-struct close_cmd_t {};
-
-struct ping_cmd_t {
-    std::string payload;
-};
-
-using command_t = std::variant<submit_cmd_t, close_cmd_t, ping_cmd_t>;
 
 flatbuffers::DetachedBuffer create_login_msg(std::size_t cid, const std::string &user, const std::string &password);
 flatbuffers::DetachedBuffer create_snapshot_msg(std::size_t cid, rev_t rev);

@@ -51,57 +51,52 @@ class listener_t
     virtual ~listener_t() {}
 
     /**
-     * Callback function that is called when the client successfully logs in to the server.
-     * 
-     * This function handles the connection event and determines the revision used to
-     * populate the data.
+     * Callback function that is called when the client successfully log-in into a server.
      * 
      * This function is executed in the event loop thread. Do not block it.
      * If an exception is thrown, the client will terminate.
-     * 
-     * @triggers on_snapshot() If snapshot was requested.
-     * @triggers on_update() On every new commit.
      * 
      * @param[in] client Nplex instance.
      * @param[in] server Server identifier (host:port).
-     * @param[in] min_rev Oldest revision available on the server.
-     * @param[in] max_rev Newest revision available on the server.
-     * 
-     * @return The data revision (in range min_rev - max_rev), 0 to get the current dataset.
-     *         The revision of the current dataset can be greater than max_rev if someone
-     *         else committed new data between the login and this call.
      */
-    virtual rev_t on_connected([[maybe_unused]] client_t &client, 
-                               [[maybe_unused]] const std::string &server, 
-                               [[maybe_unused]] rev_t min_rev, 
-                               [[maybe_unused]] rev_t max_rev) {
-        return 0;
-    }
+    virtual void on_connection_success([[maybe_unused]] client_t &client, 
+                                       [[maybe_unused]] const std::string &server) {}
 
     /**
-     * Callback function that is invoked when connection attempt fails or when an established 
-     * connection is lost.
+     * Callback function that is invoked when an established connection to server is lost.
      * 
-     * This function is responsible for handling the disconnection event and determining
-     * the reconnection strategy. It returns the number of milliseconds to wait before
-     * attempting a reconnection. If the return value is negative terminates the client.
+     * It returns true to try to reconnect, or false to close the nplex client.
      * 
      * This function is executed in the event loop thread. Do not block it.
      * If an exception is thrown, the client will terminate.
-     * 
-     * @triggers on_connected() If reconnection attempt success.
-     * @triggers on_connection_lost() If reconnection attempt fails.
-     * @triggers on_closed() If the client is closed (negative value).
      * 
      * @param[in] client Nplex instance.
      * @param[in] server Server identifier (host:port). 
      *                   Can be empty if there is no previous connection (ex: failed retry).
      * 
-     * @return The number of milliseconds to wait before trying a reconnection, 
-     *         a negative value close nplex.
+     * @return true = try to reconnect,
+     *         false = do not reconnect and close nplex. 
      */
-    virtual std::int32_t on_connection_lost([[maybe_unused]] client_t &client, 
-                                            [[maybe_unused]] const std::string &server) {
+    virtual bool on_connection_lost([[maybe_unused]] client_t &client, 
+                                    [[maybe_unused]] const std::string &server) {
+        return true;
+    }
+
+    /**
+     * Callback function that is invoked when nplex is not able to connect to any server.
+     * 
+     * It returns the number of milliseconds to wait before attempting a reconnection. 
+     * If the return value is negative terminates the client.
+     * 
+     * This function is executed in the event loop thread. Do not block it.
+     * If an exception is thrown, the client will terminate.
+     * 
+     * @param[in] client Nplex instance.
+     * 
+     * @return Number of milliseconds to wait before attempting a reconnection.
+     *         If negative, terminates the client.
+     */
+    virtual std::int32_t on_connection_failed([[maybe_unused]] client_t &client) {
         return -1;
     }
 
@@ -119,8 +114,9 @@ class listener_t
     /**
      * Callback function that is called when a snapshot is received from the server.
      * 
-     * When this method is called, the client is in the SYNCHRONIZING state and the 
-     * local database was just reseted to the snapshot content.
+     * When this method is called, the client is in the CONNECTED state and the 
+     * local database was just reseted to the snapshot content. The user can now 
+     * read the database content using a transaction.
      * 
      * This function is executed in the event loop thread. Do not block it.
      * If an exception is thrown, the client will terminate.
@@ -223,14 +219,6 @@ class client_t
 
     class impl_t;
 
-    enum class state_e : std::uint8_t {
-        CONNECTING,                             //!< Connecting to the server.
-        SYNCHRONIZING,                          //!< Initializing the cache (load or crev != update.rev).
-        SYNCHRONIZED,                           //!< Client is synced with the server.
-        DISCONNECTED,                           //!< Client is disconnected (trying to reconnect).
-        CLOSED                                  //!< Client is closed.
-    };
-
     /**
      * Client constructor.
      * 
@@ -248,12 +236,13 @@ class client_t
      * @triggers on_error() If an error occurs (ex: authentication error).
      * 
      * @param[in] params Connection parameters.
+     * @param[in] rev Initial snapshot revision (0 = none, MAX = most-recent, other = fixed-rev).
      * @param[in] listener Listener to handle client events.
      * 
      * @exception nplex::invalid_config Invalid param (no-servers, no-user, no-password, etc).
      * @exception nplex::connection_failed Unable to connect to nplex cluster.
      */
-    client_t(const params_t &params, listener_t &listener = default_listener);
+    client_t(const params_t &params, rev_t rev = std::numeric_limits<rev_t>::max(), listener_t &listener = default_listener);
     virtual ~client_t();
 
     // Prevent copying and moving
@@ -263,17 +252,10 @@ class client_t
     client_t& operator=(client_t&&) = delete;
 
     /**
-     * Returns current client state.
-     * 
-     * @return Current state.
+     * Constant methods.
      */
-    state_e state() const;
-
-    /**
-     * Returns the local database revision.
-     * 
-     * @return Data revision.
-     */
+    bool is_closed() const;
+    bool is_connected() const;
     rev_t rev() const;
 
     /**

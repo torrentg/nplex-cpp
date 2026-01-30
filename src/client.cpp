@@ -32,7 +32,7 @@ static void check_params(const nplex::params_t &params)
 
 static const char * to_str(nplex::transaction_t::isolation_e isolation)
 {
-    switch(isolation)
+    switch (isolation)
     {
         case nplex::transaction_t::isolation_e::READ_COMMITTED: return "READ_COMMITTED";
         case nplex::transaction_t::isolation_e::REPEATABLE_READ: return "REPEATABLE_READ";
@@ -48,11 +48,11 @@ static const char * to_str(nplex::transaction_t::isolation_e isolation)
 // default listener initialization
 nplex::listener_t nplex::client_t::default_listener{};
 
-nplex::client_t::client_t(const params_t &params, listener_t &listener)
+nplex::client_t::client_t(const params_t &params, rev_t rev, listener_t &listener)
 {
     check_params(params);
 
-    m_impl = std::make_unique<impl_t>(params, listener, *this);
+    m_impl = std::make_unique<impl_t>(params, rev, listener, *this);
 
     // Starts the event loop
     thread_loop = std::thread([this]() {
@@ -66,8 +66,6 @@ nplex::client_t::client_t(const params_t &params, listener_t &listener)
             m_impl->log_error("Unknown exception in the event loop");
         }
     });
-
-    m_impl->wait_for_startup();
 
     try {
         m_impl->wait_for_startup();
@@ -83,9 +81,14 @@ nplex::client_t::~client_t()
     close();
 }
 
-nplex::client_t::state_e nplex::client_t::state() const
+bool nplex::client_t::is_closed() const
 { 
-    return m_impl->state();
+    return m_impl->is_closed();
+}
+
+bool nplex::client_t::is_connected() const
+{
+    return m_impl->is_connected();
 }
 
 nplex::rev_t nplex::client_t::rev() const
@@ -95,15 +98,7 @@ nplex::rev_t nplex::client_t::rev() const
 
 void nplex::client_t::close()
 {
-    std::lock_guard<decltype(m_mutex)> lock(m_mutex);
-
-    if (!m_impl->is_closed())
-    {
-        m_impl->commands.clear();
-        m_impl->commands.push(close_cmd_t{});
-        uv_async_send(m_impl->async.get());
-    }
-
+    m_impl->push_command(close_cmd_t{});
     join();
 }
 
@@ -144,11 +139,8 @@ bool nplex::client_t::submit_tx(const tx_ptr &tx, bool force)
 
     std::lock_guard<decltype(m_mutex)> lock(m_mutex);
 
-    if (m_impl->is_closed())
-        throw nplex_exception("Client is closed");
-
-    if (m_impl->state() != state_e::SYNCHRONIZED)
-        throw nplex_exception("Client not synced");
+    if (!m_impl->is_connected())
+        throw nplex_exception("Client is not connected");
 
     //TODO: caution, m_impl->transactions is not thread-safe
 
@@ -158,8 +150,7 @@ bool nplex::client_t::submit_tx(const tx_ptr &tx, bool force)
 
     // TODO: check if there are actions to submit (not-only-reads)
 
-    if (m_impl->commands.push(submit_cmd_t{dynamic_pointer_cast<transaction_impl_t>(tx), force}) == 1)
-        uv_async_send(m_impl->async.get());
+    m_impl->push_command(submit_cmd_t{dynamic_pointer_cast<transaction_impl_t>(tx), force});
 
     // TODO: solve visibility error
     //tx->state(transaction_t::state_e::SUBMITTING);

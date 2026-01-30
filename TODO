@@ -4,7 +4,6 @@
 * Only a public header -> nplex-cpp.hpp
 * allow ssl connections (see project tlsuv)
 * README: explain nplex purpose
-* Move mqueue class definition to client_internals ?
 * Review client_impl_t members access (currently public)
 * submit_tx_fut returns a future (attached to tx.promise)
 * client_t constructor waits until synchronized
@@ -12,7 +11,7 @@
 * error on con+login+load+sync -> counts=1 (currently cascade of logins)
 * move ERR_xxx codes to errors.hpp, or common.hpp or similar
 * Rename cache to store
-* Client states: startup/connected/reconnecting/closed
+* Split client_t into client_sync_t / client_async_t (o client_interactive_t / client_reactive_t)
 
 ## Useful commands
 

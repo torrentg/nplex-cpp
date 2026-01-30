@@ -154,36 +154,29 @@ class my_listener_t : public nplex::listener_t
 
   protected:
 
-    nplex::rev_t on_connected([[maybe_unused]] nplex::client_t &client, const std::string &server, nplex::rev_t oldest_rev, nplex::rev_t newest_rev) override
+    void on_connection_success([[maybe_unused]] nplex::client_t &client, const std::string &server) override
     {
-        fmt::print("Nplex client connected to server {}, available revs = [{}, {}]\n", server, oldest_rev, newest_rev);
-
-        num_failed_attempts = 0;
-
-        return 52420; //last_rev;
+        fmt::print("Nplex client connected to server {}\n", server);
     }
 
-    std::int32_t on_connection_lost([[maybe_unused]] nplex::client_t &client, const std::string &server) override
+    bool on_connection_lost([[maybe_unused]] nplex::client_t &client, const std::string &server) override
     {
-        // Case: failed to connect to cluster
-        if (server.empty())
-        {
-            fmt::print(stderr, "Error: unable to connect to nplex cluster\n");
+        fmt::print("Connection lost to {}\n", server);
+        return true;
+    }
 
-            if (++num_failed_attempts >= max_failed_attempts) {
-                fmt::print(stderr, "Error: closing nplex client after {} reconnection attempts\n", max_failed_attempts);
-                return -1;
-            }
-
-            fmt::print("Next connection attempt in {} ms\n", millis_between_attempts);
-            return millis_between_attempts;
+    std::int32_t on_connection_failed([[maybe_unused]] nplex::client_t &client) override
+    {
+        num_failed_attempts++;
+        if (num_failed_attempts > max_failed_attempts) {
+            fmt::print("Maximum number of failed connection attempts reached ({}). Closing client.\n", max_failed_attempts);
+            return -1;
         }
 
-        // Case: current connection was lost
-        fmt::print("Connection lost to {}\n", server);
+        fmt::print("Connection failed. Retrying in {} milliseconds (attempt {}/{})\n", 
+            millis_between_attempts, num_failed_attempts, max_failed_attempts);
 
-        // try to reconnect immediately
-        return 0;
+        return millis_between_attempts;
     }
 
     void on_closed([[maybe_unused]] nplex::client_t &client) override
@@ -272,7 +265,7 @@ class my_listener_t : public nplex::listener_t
     }
 };
 
-int main(int argc, char *argv[])
+int main([[maybe_unused]] int argc, [[maybe_unused]] char *argv[])
 {
     std::string servers = "localhost:14022, localhost:8081";
     std::string user = "admin";
@@ -280,7 +273,7 @@ int main(int argc, char *argv[])
 
     try {
         my_listener_t listener{nplex::listener_t::log_level_e::DEBUG};
-        nplex::client_t nplex{{servers, user, passwd}, listener};
+        nplex::client_t nplex{{servers, user, passwd}, 100, listener};
         nplex.join();
     }
     catch(const std::exception &e) {

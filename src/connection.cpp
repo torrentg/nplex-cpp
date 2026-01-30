@@ -96,7 +96,7 @@ static struct sockaddr_storage get_sockaddr(uv_loop_t *loop, const nplex::addr_t
     int rc = 0;
     struct sockaddr_storage ret = {};
 
-    switch(addr.family())
+    switch (addr.family())
     {
         case AF_INET:
             if ((rc = uv_ip4_addr(addr.host().c_str(), addr.port(), reinterpret_cast<struct sockaddr_in*>(&ret))) != 0)
