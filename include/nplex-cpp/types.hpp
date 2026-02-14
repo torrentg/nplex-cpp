@@ -32,7 +32,7 @@ struct meta_t
     gto::cstring user;              //!< Transaction creator.
     millis_t timestamp;             //!< Timestamp at transaction creation.
     std::uint32_t type;             //!< Transaction type (user-defined).
-    std::uint32_t nrefs;            //!< Number of references in the cache (internal use).
+    std::uint32_t nrefs;            //!< Number of references in the store (internal use).
 };
 
 using meta_ptr = std::shared_ptr<meta_t>;
@@ -41,7 +41,7 @@ using meta_ptr = std::shared_ptr<meta_t>;
 class value_t
 {
     static const gto::cstring EMPTY;
-    friend struct cache_t;
+    friend struct store_t;
 
   private:
     gto::cstring m_data;

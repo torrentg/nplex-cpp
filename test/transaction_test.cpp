@@ -3,7 +3,7 @@
 #include "nplex-cpp/exception.hpp"
 #include "nplex-cpp/transaction.hpp"
 #include "transaction_impl.hpp"
-#include "cache.hpp"
+#include "store.hpp"
 
 using namespace std;
 using namespace nplex;
@@ -13,19 +13,19 @@ using namespace flatbuffers;
 
 namespace {
 
-auto update_cache(cache_ptr &cache, const msgs::UpdateT &upd)
+auto update_store(store_ptr &store, const msgs::UpdateT &upd)
 {
     std::vector<change_t> changes;
     auto detached_buf = serialize(upd);
     auto update_ptr = ::GetRoot<nplex::msgs::Update>(detached_buf.data());
 
-    REQUIRE_NOTHROW(changes = cache->update(update_ptr));
+    REQUIRE_NOTHROW(changes = store->update(update_ptr));
 
     return changes;
 }
 
 /**
- * Creates a basic cache initialized with some values.
+ * Creates a basic store initialized with some values.
  * 
  * // value first digit represents the key number, 
  * // second digit represents the last transaction that modified.
@@ -51,14 +51,14 @@ auto update_cache(cache_ptr &cache, const msgs::UpdateT &upd)
  *      ljohnson
  * }
  * 
- * @param[in] rev The cache revision.
+ * @param[in] rev The store revision.
  * 
- * @return Initialized cache.
+ * @return Initialized store.
  */
-cache_ptr make_basic_cache()
+store_ptr make_basic_store()
 {
     flatbuffers::DetachedBuffer buf;
-    cache_ptr cache = std::make_shared<cache_t>();
+    store_ptr store = std::make_shared<store_t>();
     const msgs::Update *ptr = nullptr;
 
     auto transaction1 = make_update(1, "jdoe", 1234567890, 15,
@@ -76,8 +76,8 @@ cache_ptr make_basic_cache()
     buf = serialize(transaction1);
     ptr = flatbuffers::GetRoot<nplex::msgs::Update>(buf.data());
 
-    REQUIRE_NOTHROW(cache->update(ptr));
-    CHECK(cache->m_rev == 1);
+    REQUIRE_NOTHROW(store->update(ptr));
+    CHECK(store->m_rev == 1);
 
     auto transaction2 = make_update(2, "ljohnson", 1234567895, 7,
         {
@@ -92,10 +92,10 @@ cache_ptr make_basic_cache()
     buf = serialize(transaction2);
     ptr = flatbuffers::GetRoot<nplex::msgs::Update>(buf.data());
 
-    REQUIRE_NOTHROW(cache->update(ptr));
-    CHECK(cache->m_rev == 2);
+    REQUIRE_NOTHROW(store->update(ptr));
+    CHECK(store->m_rev == 2);
 
-    return cache;
+    return store;
 }
 
 void basic_step_1(tx_impl_ptr &tx)
@@ -142,19 +142,19 @@ void basic_step_1(tx_impl_ptr &tx)
 
 TEST_CASE("transaction_test")
 {
-    cache_ptr cache = make_basic_cache();
+    store_ptr store = make_basic_store();
 
     SUBCASE("read_committed_basic")
     {
-        auto tx = std::make_shared<transaction_impl_t>(cache, transaction_t::isolation_e::READ_COMMITTED);
+        auto tx = std::make_shared<transaction_impl_t>(store, transaction_t::isolation_e::READ_COMMITTED);
 
         CHECK(tx->isolation() == transaction_t::isolation_e::READ_COMMITTED);
 
         // no updates yet
         basic_step_1(tx);
 
-        // updating cache + tx
-        auto changes = update_cache(cache, 
+        // updating store + tx
+        auto changes = update_store(store, 
             make_update(3, "jdoe", 1234567890, 15, {
                     { .key = "key1", .value = {13}},
                     { .key = "key2", .value = {23}},    // cause dirty
@@ -199,14 +199,14 @@ TEST_CASE("transaction_test")
 
     SUBCASE("repeatable_read_basic")
     {
-        auto tx = std::make_shared<transaction_impl_t>(cache, transaction_t::isolation_e::REPEATABLE_READ);
+        auto tx = std::make_shared<transaction_impl_t>(store, transaction_t::isolation_e::REPEATABLE_READ);
 
         CHECK(tx->isolation() == transaction_t::isolation_e::REPEATABLE_READ);
 
         basic_step_1(tx);
 
-        // updating cache + tx
-        auto changes = update_cache(cache, 
+        // updating store + tx
+        auto changes = update_store(store, 
             make_update(3, "jdoe", 1234567890, 15, {
                     { .key = "key1", .value = {13}},
                     { .key = "key2", .value = {23}},    // cause dirty
@@ -251,14 +251,14 @@ TEST_CASE("transaction_test")
 
     SUBCASE("serializable_basic")
     {
-        auto tx = std::make_shared<transaction_impl_t>(cache, transaction_t::isolation_e::SERIALIZABLE);
+        auto tx = std::make_shared<transaction_impl_t>(store, transaction_t::isolation_e::SERIALIZABLE);
 
         CHECK(tx->isolation() == transaction_t::isolation_e::SERIALIZABLE);
 
         basic_step_1(tx);
 
-        // updating cache + tx
-        auto changes = update_cache(cache, 
+        // updating store + tx
+        auto changes = update_store(store, 
             make_update(3, "jdoe", 1234567890, 15, {
                     { .key = "key1", .value = {13}},
                     { .key = "key2", .value = {23}},    // cause dirty
@@ -303,7 +303,7 @@ TEST_CASE("transaction_test")
 
     SUBCASE("read_upsert_remove_exceptions")
     {
-        auto tx = std::make_shared<transaction_impl_t>(cache, transaction_t::isolation_e::SERIALIZABLE, true);
+        auto tx = std::make_shared<transaction_impl_t>(store, transaction_t::isolation_e::SERIALIZABLE, true);
 
         CHECK_THROWS_AS(tx->upsert("key1", "abc"), nplex_exception); // read-only exception
         CHECK_THROWS_AS(tx->remove("key1"), nplex_exception); // read-only exception
@@ -314,10 +314,10 @@ TEST_CASE("transaction_test")
 
 TEST_CASE("transaction_for_each")
 {
-    cache_ptr cache = make_basic_cache();
-    auto tx = std::make_shared<transaction_impl_t>(cache, transaction_t::isolation_e::READ_COMMITTED);
+    store_ptr store = make_basic_store();
+    auto tx = std::make_shared<transaction_impl_t>(store, transaction_t::isolation_e::READ_COMMITTED);
 
-    SUBCASE("iterate_all_only_cache")
+    SUBCASE("iterate_all_only_store")
     {
         const char *keys[] = { "key1", "key2", "key3", "key4", "key7", "key8" };
         std::size_t pos = 0;
@@ -334,7 +334,7 @@ TEST_CASE("transaction_for_each")
         CHECK(success);
     }
 
-    SUBCASE("iterate_all_tx_and_cache")
+    SUBCASE("iterate_all_tx_and_store")
     {
         const char *keys[] = { "key1", "key10", "key2", "key4", "key7", "key8" };
         std::size_t pos = 0;
@@ -354,7 +354,7 @@ TEST_CASE("transaction_for_each")
         CHECK(success);
     }
 
-    SUBCASE("iterate_some_tx_and_cache")
+    SUBCASE("iterate_some_tx_and_store")
     {
         const char *keys[] = { "key1", "key10" };
         std::size_t pos = 0;
@@ -388,9 +388,9 @@ TEST_CASE("transaction_for_each")
 
 TEST_CASE("transaction_ensure")
 {
-    cache_ptr cache = make_basic_cache();
+    store_ptr store = make_basic_store();
     std::vector<nplex::change_t> changes;
-    auto tx = std::make_shared<transaction_impl_t>(cache, transaction_t::isolation_e::READ_COMMITTED);
+    auto tx = std::make_shared<transaction_impl_t>(store, transaction_t::isolation_e::READ_COMMITTED);
 
     SUBCASE("ensure_all")
     {
@@ -399,7 +399,7 @@ TEST_CASE("transaction_ensure")
 
         // updating key1
         tx->dirty(false);
-        changes = update_cache(cache, 
+        changes = update_store(store, 
             make_update(3, "jdoe", 1234567890, 15, {
                     { .key = "key1", .value = {13}}
                 },
@@ -411,7 +411,7 @@ TEST_CASE("transaction_ensure")
 
         // adding new key
         tx->dirty(false);
-        changes = update_cache(cache, 
+        changes = update_store(store, 
             make_update(4, "jdoe", 1234567890, 15, {
                     { .key = "key99", .value = {13}}
                 },
@@ -423,7 +423,7 @@ TEST_CASE("transaction_ensure")
 
         // deleting key2
         tx->dirty(false);
-        changes = update_cache(cache, 
+        changes = update_store(store, 
             make_update(5, "jdoe", 1234567890, 15, 
                 {},
                 { "key2" }
@@ -440,7 +440,7 @@ TEST_CASE("transaction_ensure")
 
         // updating key1
         tx->dirty(false);
-        changes = update_cache(cache, 
+        changes = update_store(store, 
             make_update(3, "jdoe", 1234567890, 15, {
                     { .key = "key1", .value = {13}}
                 },
@@ -449,7 +449,7 @@ TEST_CASE("transaction_ensure")
 
         // adding key11
         tx->dirty(false);
-        changes = update_cache(cache, 
+        changes = update_store(store, 
             make_update(4, "jdoe", 1234567890, 15, {
                     { .key = "key11", .value = {13}}
                 },
@@ -461,7 +461,7 @@ TEST_CASE("transaction_ensure")
 
         // deleting key11
         tx->dirty(false);
-        changes = update_cache(cache, 
+        changes = update_store(store, 
             make_update(5, "jdoe", 1234567890, 15, {
                     { .key = "key11", .value = {15}}
                 },

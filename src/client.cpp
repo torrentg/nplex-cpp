@@ -93,7 +93,7 @@ bool nplex::client_t::is_connected() const
 
 nplex::rev_t nplex::client_t::rev() const
 {
-    return m_impl->cache->m_rev;
+    return m_impl->store->m_rev;
 }
 
 void nplex::client_t::close()
@@ -119,9 +119,9 @@ nplex::tx_ptr nplex::client_t::create_tx(transaction_t::isolation_e isolation, b
     if (num_txs >= m_impl->params().max_active_txs)
         throw nplex_exception("Too many concurrent transactions (max={})", m_impl->params().max_active_txs);
 
-    std::lock_guard<decltype(m_impl->cache->m_mutex)> lock_cache(m_impl->cache->m_mutex);
+    std::lock_guard<decltype(m_impl->store->m_mutex)> lock_store(m_impl->store->m_mutex);
 
-    auto tx = std::make_shared<transaction_impl_t>(m_impl->cache, isolation, read_only);
+    auto tx = std::make_shared<transaction_impl_t>(m_impl->store, isolation, read_only);
     m_impl->transactions.insert(tx);
 
     m_impl->log_debug("Transaction created, isolation={}, read_only={}", ::to_str(isolation), read_only);

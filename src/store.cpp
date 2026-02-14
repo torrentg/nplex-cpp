@@ -2,7 +2,7 @@
 #include <cassert>
 #include "nplex-cpp/exception.hpp"
 #include "messages.hpp"
-#include "cache.hpp"
+#include "store.hpp"
 
 namespace {
 
@@ -14,7 +14,7 @@ gto::cstring create_cstring(const flatbuffers::Vector<std::uint8_t> *value) {
 
 }; // unnamed namespace
 
-nplex::meta_ptr nplex::cache_t::create_meta(const msgs::Update *updmsg)
+nplex::meta_ptr nplex::store_t::create_meta(const msgs::Update *updmsg)
 {
     gto::cstring user;
     rev_t rev = updmsg->rev();
@@ -36,7 +36,7 @@ nplex::meta_ptr nplex::cache_t::create_meta(const msgs::Update *updmsg)
     return std::make_shared<meta_t>(meta_t{rev, user, timestamp, updmsg->type(), 0});
 }
 
-void nplex::cache_t::release_meta(const meta_ptr &meta)
+void nplex::store_t::release_meta(const meta_ptr &meta)
 {
     if (meta->nrefs > 0)
         meta->nrefs--;
@@ -57,7 +57,7 @@ void nplex::cache_t::release_meta(const meta_ptr &meta)
     }
 }
 
-nplex::change_t nplex::cache_t::upsert_entry(const char *key, const value_ptr &value)
+nplex::change_t nplex::store_t::upsert_entry(const char *key, const value_ptr &value)
 {
     assert(value && value->m_meta);
 
@@ -95,7 +95,7 @@ nplex::change_t nplex::cache_t::upsert_entry(const char *key, const value_ptr &v
     return change;
 }
 
-nplex::change_t nplex::cache_t::delete_entry(const char *key)
+nplex::change_t nplex::store_t::delete_entry(const char *key)
 {
     if (!is_valid_key(key))
         throw nplex_exception("Trying to delete an invalid key: {}", key);
@@ -117,7 +117,7 @@ nplex::change_t nplex::cache_t::delete_entry(const char *key)
     return change;
 }
 
-void nplex::cache_t::load(const msgs::Snapshot *snapshot)
+void nplex::store_t::load(const msgs::Snapshot *snapshot)
 {
     std::lock_guard<decltype(m_mutex)> lock(m_mutex);
 
@@ -145,7 +145,7 @@ void nplex::cache_t::load(const msgs::Snapshot *snapshot)
     m_rev = snapshot->rev();
 }
 
-std::vector<change_t> nplex::cache_t::update(const msgs::Update *updmsg)
+std::vector<change_t> nplex::store_t::update(const msgs::Update *updmsg)
 {
     if (!updmsg) {
         assert(false);
@@ -163,7 +163,7 @@ std::vector<change_t> nplex::cache_t::update(const msgs::Update *updmsg)
     rev_t rev = updmsg->rev();
 
     if (rev <= m_rev)
-        throw nplex_exception("Received an update to r{} when cache is at r{}", rev, m_rev);
+        throw nplex_exception("Received an update to r{} when store is at r{}", rev, m_rev);
 
     auto meta = create_meta(updmsg);
 

@@ -11,7 +11,7 @@
 #include "cqueue.hpp"
 #include "nplex-cpp/client.hpp"
 #include "transaction_impl.hpp"
-#include "cache.hpp"
+#include "store.hpp"
 #include "connection.hpp"
 #include "client_internals.hpp"
 
@@ -67,7 +67,7 @@ class client_t::impl_t
   public:
 
     std::set<tx_impl_ptr, shared_ptr_less_t> transactions;  //!< List of current transactions.
-    cache_ptr cache;                                //!< Database content.
+    store_ptr store;                                //!< Database content.
 
     impl_t(const params_t &params, rev_t rev0, listener_t &listener, client_t &parent);
     ~impl_t();

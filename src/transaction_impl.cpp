@@ -4,22 +4,22 @@
 #include "messages.hpp"
 #include "transaction_impl.hpp"
 
-nplex::transaction_impl_t::transaction_impl_t(cache_ptr cache, isolation_e isolation, bool read_only) : 
-    m_cache{std::move(cache)}, m_isolation_level{isolation}, m_read_only{read_only}
+nplex::transaction_impl_t::transaction_impl_t(store_ptr store, isolation_e isolation, bool read_only) : 
+    m_store{std::move(store)}, m_isolation_level{isolation}, m_read_only{read_only}
 {
-    if (!m_cache)
+    if (!m_store)
         throw std::invalid_argument("Invalid database");
 
-    std::lock_guard<decltype(m_cache->m_mutex)> lock_cache(m_cache->m_mutex);
+    std::lock_guard<decltype(m_store->m_mutex)> lock(m_store->m_mutex);
 
-    m_rev_creation = m_cache->m_rev;
+    m_rev_creation = m_store->m_rev;
     m_state = state_e::OPEN;
 }
 
 nplex::rev_t nplex::transaction_impl_t::rev() const
 {
-    std::lock_guard<decltype(m_cache->m_mutex)> lock_cache(m_cache->m_mutex);
-    return m_cache->m_rev;
+    std::lock_guard<decltype(m_store->m_mutex)> lock(m_store->m_mutex);
+    return m_store->m_rev;
 }
 
 nplex::value_ptr nplex::transaction_impl_t::read(const char *key, bool check)
@@ -27,7 +27,7 @@ nplex::value_ptr nplex::transaction_impl_t::read(const char *key, bool check)
     if (!is_valid_key(key))
         throw nplex_exception("Trying to read an invalid key: {}", key);
 
-    std::lock_guard<decltype(m_cache->m_mutex)> lock_cache(m_cache->m_mutex);
+    std::lock_guard<decltype(m_store->m_mutex)> lock(m_store->m_mutex);
 
     if (m_state != state_e::OPEN)
         throw nplex_exception("Transaction is not open");
@@ -48,20 +48,20 @@ nplex::value_ptr nplex::transaction_impl_t::read(const char *key, bool check)
     }
 
     // Search for the key in the database
-    auto it_cache = m_cache->m_data.find(key);
+    auto it_store = m_store->m_data.find(key);
 
     // Case: key does not exist in the database
-    if (it_cache == m_cache->m_data.end())
+    if (it_store == m_store->m_data.end())
         return {};
 
     // Case: key exists in the database
     if (m_isolation_level != transaction_t::isolation_e::READ_COMMITTED)
-        m_items.emplace(it_cache->first, std::make_tuple(action_e::READ, it_cache->second));
+        m_items.emplace(it_store->first, std::make_tuple(action_e::READ, it_store->second));
 
     if (check)
         ensure(key);
 
-    return it_cache->second;
+    return it_store->second;
 }
 
 bool nplex::transaction_impl_t::upsert(const char *key, const std::string_view &data, bool force)
@@ -74,7 +74,7 @@ bool nplex::transaction_impl_t::upsert(const char *key, const std::string_view &
         meta_ptr{}  // Metadata is empty because the current transaction was not committed
     );
 
-    std::lock_guard<decltype(m_cache->m_mutex)> lock_cache(m_cache->m_mutex);
+    std::lock_guard<decltype(m_store->m_mutex)> lock(m_store->m_mutex);
 
     if (m_state != state_e::OPEN)
         throw nplex_exception("Transaction is not open");
@@ -100,20 +100,20 @@ bool nplex::transaction_impl_t::upsert(const char *key, const std::string_view &
     }
 
     // Search for the key in the database
-    auto it_cache = m_cache->m_data.find(key);
+    auto it_store = m_store->m_data.find(key);
 
     // Case: key does not exist in the database
-    if (it_cache == m_cache->m_data.end()) {
+    if (it_store == m_store->m_data.end()) {
         m_items.emplace(key, std::make_tuple(action_e::UPSERT, value));
         return true;
     }
 
     // Case: key exists in database AND has the same value
-    if (!force && it_cache->second->data() == value->data())
+    if (!force && it_store->second->data() == value->data())
         return false;
 
     // Case: key exists in the database with distinct value (or force mode)
-    m_items.emplace(it_cache->first, std::make_tuple(action_e::UPSERT, value));
+    m_items.emplace(it_store->first, std::make_tuple(action_e::UPSERT, value));
     return true;
 }
 
@@ -122,7 +122,7 @@ bool nplex::transaction_impl_t::remove(const key_t &key)
     if (!is_valid_key(key))
         throw std::invalid_argument("Invalid key");
 
-    std::lock_guard<decltype(m_cache->m_mutex)> lock_cache(m_cache->m_mutex);
+    std::lock_guard<decltype(m_store->m_mutex)> lock(m_store->m_mutex);
 
     if (m_state != state_e::OPEN)
         throw nplex_exception("Transaction is not open");
@@ -146,20 +146,20 @@ bool nplex::transaction_impl_t::remove(const key_t &key)
     }
 
     // Search for the key in the database
-    auto it_cache = m_cache->m_data.find(key);
+    auto it_store = m_store->m_data.find(key);
 
     // Case: key does not exist in the database
-    if (it_cache == m_cache->m_data.end())
+    if (it_store == m_store->m_data.end())
         return false;
 
     // Case: key exists in the database
-    m_items.emplace(it_cache->first, std::make_tuple(action_e::DELETE, nullptr));
+    m_items.emplace(it_store->first, std::make_tuple(action_e::DELETE, nullptr));
     return true;
 }
 
 std::size_t nplex::transaction_impl_t::remove(const char *pattern)
 {
-    std::lock_guard<decltype(m_cache->m_mutex)> lock_cache(m_cache->m_mutex);
+    std::lock_guard<decltype(m_store->m_mutex)> lock(m_store->m_mutex);
 
     if (m_state != state_e::OPEN)
         throw nplex_exception("Transaction is not open");
@@ -179,7 +179,7 @@ bool nplex::transaction_impl_t::ensure(const char *pattern)
     if (!pattern)
         return false;
 
-    std::lock_guard<decltype(m_cache->m_mutex)> lock_cache(m_cache->m_mutex);
+    std::lock_guard<decltype(m_store->m_mutex)> lock(m_store->m_mutex);
 
     if (m_state != state_e::OPEN)
         throw nplex_exception("Transaction is not open");
@@ -199,7 +199,7 @@ std::size_t nplex::transaction_impl_t::for_each(const char *pattern, const callb
         return 0;
 
     std::string_view prefix = std::string_view{pattern, strcspn(pattern, "*?")};
-    std::lock_guard<decltype(m_cache->m_mutex)> lock_cache(m_cache->m_mutex);
+    std::lock_guard<decltype(m_store->m_mutex)> lock(m_store->m_mutex);
 
     if (m_state != state_e::OPEN)
         throw nplex_exception("Transaction is not open");
@@ -207,10 +207,10 @@ std::size_t nplex::transaction_impl_t::for_each(const char *pattern, const callb
     std::size_t ret = 0;
     auto it_tx = (prefix.empty() ? m_items.begin() : m_items.lower_bound(prefix));
     auto it_tx_end = m_items.end();
-    auto it_cache = (prefix.empty() ? m_cache->m_data.begin() : m_cache->m_data.lower_bound(prefix));
-    auto it_cache_end = m_cache->m_data.end();
+    auto it_store = (prefix.empty() ? m_store->m_data.begin() : m_store->m_data.lower_bound(prefix));
+    auto it_store_end = m_store->m_data.end();
 
-    while (it_tx != it_tx_end || it_cache != it_cache_end)
+    while (it_tx != it_tx_end || it_store != it_store_end)
     {
         while (it_tx != it_tx_end)
         {
@@ -222,19 +222,19 @@ std::size_t nplex::transaction_impl_t::for_each(const char *pattern, const callb
                 it_tx++;
         }
 
-        while (it_cache != it_cache_end)
+        while (it_store != it_store_end)
         {
-            if (!it_cache->first.starts_with(prefix))
-                it_cache = it_cache_end;
-            else if (glob_match(it_cache->first.data(), pattern))
+            if (!it_store->first.starts_with(prefix))
+                it_store = it_store_end;
+            else if (glob_match(it_store->first.data(), pattern))
                 break;
             else
-                it_cache++;
+                it_store++;
         }
 
-        if (it_tx != it_tx_end && it_cache != it_cache_end)
+        if (it_tx != it_tx_end && it_store != it_store_end)
         {
-            if (it_tx->first < it_cache->first)
+            if (it_tx->first < it_store->first)
             {
                 if (std::get<action_e>(it_tx->second) != action_e::DELETE)
                 {
@@ -244,12 +244,12 @@ std::size_t nplex::transaction_impl_t::for_each(const char *pattern, const callb
 
                 it_tx++;
             }
-            else if (it_cache->first < it_tx->first)
+            else if (it_store->first < it_tx->first)
             {
-                if (ret++, !callback(it_cache->first, *it_cache->second))
+                if (ret++, !callback(it_store->first, *it_store->second))
                     break;
 
-                it_cache++;
+                it_store++;
             }
             else
             {
@@ -260,7 +260,7 @@ std::size_t nplex::transaction_impl_t::for_each(const char *pattern, const callb
                 }
 
                 it_tx++;
-                it_cache++;
+                it_store++;
             }
         }
         else if (it_tx != it_tx_end)
@@ -273,12 +273,12 @@ std::size_t nplex::transaction_impl_t::for_each(const char *pattern, const callb
 
             it_tx++;
         }
-        else if (it_cache != it_cache_end)
+        else if (it_store != it_store_end)
         {
-            if (ret++, !callback(it_cache->first, *it_cache->second))
+            if (ret++, !callback(it_store->first, *it_store->second))
                 break;
 
-            it_cache++;
+            it_store++;
         }
     }
 
@@ -287,7 +287,7 @@ std::size_t nplex::transaction_impl_t::for_each(const char *pattern, const callb
 
 void nplex::transaction_impl_t::update(const std::vector<change_t> &changes)
 {
-    std::lock_guard<decltype(m_cache->m_mutex)> lock_cache(m_cache->m_mutex);
+    std::lock_guard<decltype(m_store->m_mutex)> lock(m_store->m_mutex);
 
     if (m_state != state_e::OPEN) {
         assert(false);

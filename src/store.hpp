@@ -20,14 +20,14 @@ namespace msgs {
  * This is an internal class whose contents are updated by the server.
  * The user has not direct access to this class.
  * 
- * The server streams commits to maintain the clients' cache in sync.
+ * The server streams commits to maintain the clients' store in sync.
  * This structure holds the in-memory representation of the database,
  * including the current revision, data and transactions metadata.
  * 
  * @note This class is not copyable nor movable due to mutex.
  * @note This class is not thread-safe, the user must lock the mutex.
  */
-struct cache_t
+struct store_t
 {
     rev_t m_rev = 0;
     std::recursive_mutex m_mutex;
@@ -40,7 +40,7 @@ struct cache_t
      * 
      * On exception, the database is left in an inconsistent state.
      * 
-     * @param[in] snapshot Content to load (nullptr reset cache).
+     * @param[in] snapshot Content to load (nullptr reset store).
      * 
      * @exception nplex_exception Invalid snapshot.
      */
@@ -55,7 +55,7 @@ struct cache_t
      * 
      * @return List of applied changes.
      * 
-     * @exception nplex_exception Invalid update (ex: update.rev < cache.rev, or invalid-key).
+     * @exception nplex_exception Invalid update (ex: update.rev < store.rev, or invalid-key).
      */
     std::vector<change_t> update(const msgs::Update *updmsg);
 
@@ -63,7 +63,7 @@ struct cache_t
 
     /**
      * Creates a transaction metadata object.
-     * Updates metas and users cache objects.
+     * Updates metas and users store objects.
      * Caution, internal function not guarded by the mutex.
      * 
      * @param[in] updmsg Update to process.
@@ -101,6 +101,6 @@ struct cache_t
 
 };
 
-using cache_ptr = std::shared_ptr<cache_t>;
+using store_ptr = std::shared_ptr<store_t>;
 
 } // namespace nplex

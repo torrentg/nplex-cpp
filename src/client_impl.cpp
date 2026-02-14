@@ -133,7 +133,7 @@ nplex::client_t::impl_t::impl_t(const params_t &params, rev_t rev0, listener_t &
     if (m_params.servers.empty())
         throw invalid_config("no servers");
 
-    cache = std::make_shared<cache_t>();
+    store = std::make_shared<store_t>();
 
     // initialize the event loop
     m_loop = std::make_unique<uv_loop_t>();
@@ -197,6 +197,8 @@ void nplex::client_t::impl_t::run() noexcept
 
     try
     {
+        // TODO: call connection.disconnect()
+
         uv_walk(m_loop.get(), ::cb_close_handle, nullptr);
         while (uv_run(m_loop.get(), UV_RUN_NOWAIT));
         uv_loop_close(m_loop.get());
@@ -634,6 +636,8 @@ void nplex::client_t::impl_t::process_login_resp(connection_t *con, const nplex:
 
     m_listener.on_connection_success(m_parent, m_con->addr().str());
 
+    log_debug("Login successful on server {}, available data = [{}-{}]", m_con->addr().str(), resp->rev0(), resp->crev());
+
     // case: reconnecting
     if (m_state == client_state_e::RECONNECTING)
     {
@@ -643,7 +647,7 @@ void nplex::client_t::impl_t::process_login_resp(connection_t *con, const nplex:
         send(
             create_updates_msg(
                 m_data_cid,
-                cache->m_rev
+                store->m_rev
             )
         );
 
@@ -655,7 +659,7 @@ void nplex::client_t::impl_t::process_login_resp(connection_t *con, const nplex:
     // case: no snapshot required
     if (m_rev0 == 0 )
     {
-        cache->m_rev = resp->crev();
+        store->m_rev = resp->crev();
         set_state(client_state_e::CONNECTED);
         m_data_cid = m_correlation++;
 
@@ -697,7 +701,7 @@ void nplex::client_t::impl_t::process_snapshot_resp(const nplex::msgs::SnapshotR
     }
 
     if (resp->snapshot())
-        cache->load(resp->snapshot());
+        store->load(resp->snapshot());
 
     set_state(client_state_e::CONNECTED);
 
@@ -708,7 +712,7 @@ void nplex::client_t::impl_t::process_snapshot_resp(const nplex::msgs::SnapshotR
     send(
         create_updates_msg(
             m_data_cid, 
-            cache->m_rev
+            store->m_rev
         )
     );
 }
@@ -769,9 +773,9 @@ void nplex::client_t::impl_t::process_update(const nplex::msgs::Update *upd)
 {
     assert(m_loop_thread_id == std::this_thread::get_id());
 
-    std::lock_guard<decltype(cache->m_mutex)> lock(cache->m_mutex);
+    std::lock_guard<decltype(store->m_mutex)> lock(store->m_mutex);
 
-    auto changes = cache->update(upd);
+    auto changes = store->update(upd);
 
     for (auto it = transactions.begin(); it != transactions.end(); )
     {
@@ -803,8 +807,8 @@ void nplex::client_t::impl_t::process_update(const nplex::msgs::Update *upd)
         }
     }
 
-    auto meta = cache->m_metas.rbegin();
-    assert(meta != cache->m_metas.rend());
+    auto meta = store->m_metas.rbegin();
+    assert(meta != store->m_metas.rend());
 
     m_listener.on_update(m_parent, meta->second, changes);
 }

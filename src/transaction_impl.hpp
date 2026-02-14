@@ -6,7 +6,7 @@
 #include <atomic>
 #include "flatbuffers/flatbuffers.h"
 #include "nplex-cpp/transaction.hpp"
-#include "cache.hpp"
+#include "store.hpp"
 
 namespace nplex {
 
@@ -31,7 +31,7 @@ class transaction_impl_t : public transaction_t
   private:
 
     rev_t m_rev_creation;                       //!< Database revision at tx creation.
-    cache_ptr m_cache;                          //!< Database content.
+    store_ptr m_store;                          //!< Database content.
     items_t m_items;                            //!< Transaction items (depends on isolation level).
     ensures_t m_ensures;                        //!< Transaction ensures.
     isolation_e m_isolation_level;              //!< Transaction isolation level.
@@ -47,7 +47,7 @@ class transaction_impl_t : public transaction_t
 
   public:
 
-    transaction_impl_t(cache_ptr cache, isolation_e isolation, bool read_only = false);
+    transaction_impl_t(store_ptr store, isolation_e isolation, bool read_only = false);
     virtual ~transaction_impl_t() override = default;
 
     virtual isolation_e isolation() const override { return m_isolation_level; }

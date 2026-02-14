@@ -1,7 +1,7 @@
 #include <doctest.h>
 #include "nplex-cpp/exception.hpp"
 #include "messages_test.hpp"
-#include "cache.hpp"
+#include "store.hpp"
 
 using namespace std;
 using namespace nplex;
@@ -9,7 +9,7 @@ using namespace nplex::msgs;
 using namespace nplex::tests;
 using namespace flatbuffers;
 
-TEST_CASE("cache_load")
+TEST_CASE("store_load")
 {
     auto snapshot = make_snapshot(
         1024,
@@ -33,56 +33,56 @@ TEST_CASE("cache_load")
 
     auto buf = serialize(snapshot);
     auto *ptr = ::GetRoot<nplex::msgs::Snapshot>(buf.data());
-    cache_t cache;
+    store_t store;
 
-    REQUIRE_NOTHROW(cache.load(ptr));
+    REQUIRE_NOTHROW(store.load(ptr));
 
-    CHECK(cache.m_rev == 1024);
+    CHECK(store.m_rev == 1024);
 
-    CHECK(cache.m_users.size() == 2);
-    CHECK(cache.m_users.contains("jdoe"));
-    CHECK(cache.m_users.contains("ljohnson"));
+    CHECK(store.m_users.size() == 2);
+    CHECK(store.m_users.contains("jdoe"));
+    CHECK(store.m_users.contains("ljohnson"));
 
-    CHECK(cache.m_metas.size() == 2);
+    CHECK(store.m_metas.size() == 2);
 
-    auto cache_it = cache.m_metas.find(42);
-    REQUIRE(cache_it != cache.m_metas.end());
-    CHECK(cache_it->second->rev == 42);
-    CHECK(cache_it->second->timestamp == millis_t{1234567890});
-    CHECK(cache_it->second->type == 15);
-    CHECK(cache_it->second->user == "jdoe");
+    auto metas_it = store.m_metas.find(42);
+    REQUIRE(metas_it != store.m_metas.end());
+    CHECK(metas_it->second->rev == 42);
+    CHECK(metas_it->second->timestamp == millis_t{1234567890});
+    CHECK(metas_it->second->type == 15);
+    CHECK(metas_it->second->user == "jdoe");
 
-    cache_it = cache.m_metas.find(546);
-    REQUIRE(cache_it != cache.m_metas.end());
-    CHECK(cache_it->second->rev == 546);
-    CHECK(cache_it->second->timestamp == millis_t{1234567999});
-    CHECK(cache_it->second->type == 7);
-    CHECK(cache_it->second->user == "ljohnson");
+    metas_it = store.m_metas.find(546);
+    REQUIRE(metas_it != store.m_metas.end());
+    CHECK(metas_it->second->rev == 546);
+    CHECK(metas_it->second->timestamp == millis_t{1234567999});
+    CHECK(metas_it->second->type == 7);
+    CHECK(metas_it->second->user == "ljohnson");
 
-    CHECK(cache.m_data.size() == 4);
+    CHECK(store.m_data.size() == 4);
 
-    auto data_it = cache.m_data.find("key1");
-    REQUIRE(data_it != cache.m_data.end());
+    auto data_it = store.m_data.find("key1");
+    REQUIRE(data_it != store.m_data.end());
     CHECK(data_it->second->rev() == 42);
     CHECK(data_it->second->data() == gto::cstring{"a"});
 
-    data_it = cache.m_data.find("key2");
-    REQUIRE(data_it != cache.m_data.end());
+    data_it = store.m_data.find("key2");
+    REQUIRE(data_it != store.m_data.end());
     CHECK(data_it->second->rev() == 42);
     CHECK(data_it->second->data() == gto::cstring{"b"});
 
-    data_it = cache.m_data.find("key5");
-    REQUIRE(data_it != cache.m_data.end());
+    data_it = store.m_data.find("key5");
+    REQUIRE(data_it != store.m_data.end());
     CHECK(data_it->second->rev() == 546);
     CHECK(data_it->second->data() == gto::cstring{"e"});
 
-    data_it = cache.m_data.find("key6");
-    REQUIRE(data_it != cache.m_data.end());
+    data_it = store.m_data.find("key6");
+    REQUIRE(data_it != store.m_data.end());
     CHECK(data_it->second->rev() == 546);
     CHECK(data_it->second->data() == gto::cstring{"f"});
 }
 
-TEST_CASE("cache_load_empty")
+TEST_CASE("store_load_empty")
 {
     auto snapshot = make_snapshot(
         1024,
@@ -91,29 +91,29 @@ TEST_CASE("cache_load_empty")
 
     auto buf = serialize(snapshot);
     auto *ptr = ::GetRoot<nplex::msgs::Snapshot>(buf.data());
-    cache_t cache;
+    store_t store;
 
-    REQUIRE_NOTHROW(cache.load(ptr));
+    REQUIRE_NOTHROW(store.load(ptr));
 
-    CHECK(cache.m_rev == 1024);
-    CHECK(cache.m_users.size() == 0);
-    CHECK(cache.m_metas.size() == 0);
-    CHECK(cache.m_data.size() == 0);
+    CHECK(store.m_rev == 1024);
+    CHECK(store.m_users.size() == 0);
+    CHECK(store.m_metas.size() == 0);
+    CHECK(store.m_data.size() == 0);
 }
 
-TEST_CASE("cache_load_nullptr")
+TEST_CASE("store_load_nullptr")
 {
-    cache_t cache;
+    store_t store;
 
-    REQUIRE_NOTHROW(cache.load(nullptr));
+    REQUIRE_NOTHROW(store.load(nullptr));
 
-    CHECK(cache.m_rev == 0);
-    CHECK(cache.m_users.size() == 0);
-    CHECK(cache.m_metas.size() == 0);
-    CHECK(cache.m_data.size() == 0);
+    CHECK(store.m_rev == 0);
+    CHECK(store.m_users.size() == 0);
+    CHECK(store.m_metas.size() == 0);
+    CHECK(store.m_data.size() == 0);
 }
 
-TEST_CASE("cache_load_error_has_tx_rev_gt_rev")
+TEST_CASE("store_load_error_has_tx_rev_gt_rev")
 {
     auto snapshot = make_snapshot(
         100,
@@ -137,12 +137,12 @@ TEST_CASE("cache_load_error_has_tx_rev_gt_rev")
 
     auto buf = serialize(snapshot);
     auto *ptr = ::GetRoot<nplex::msgs::Snapshot>(buf.data());
-    cache_t cache;
+    store_t store;
 
-    CHECK_THROWS_AS(cache.load(ptr), nplex_exception);
+    CHECK_THROWS_AS(store.load(ptr), nplex_exception);
 }
 
-TEST_CASE("cache_load_error_unsorted_tx")
+TEST_CASE("store_load_error_unsorted_tx")
 {
     auto snapshot = make_snapshot(
         1024,
@@ -166,12 +166,12 @@ TEST_CASE("cache_load_error_unsorted_tx")
 
     auto buf = serialize(snapshot);
     auto *ptr = ::GetRoot<nplex::msgs::Snapshot>(buf.data());
-    cache_t cache;
+    store_t store;
 
-    CHECK_THROWS_AS(cache.load(ptr), nplex_exception);
+    CHECK_THROWS_AS(store.load(ptr), nplex_exception);
 }
 
-TEST_CASE("cache_load_error_invalid_key")
+TEST_CASE("store_load_error_invalid_key")
 {
     auto snapshot = make_snapshot(
         1024,
@@ -187,35 +187,14 @@ TEST_CASE("cache_load_error_invalid_key")
 
     auto buf = serialize(snapshot);
     auto *ptr = ::GetRoot<nplex::msgs::Snapshot>(buf.data());
-    cache_t cache;
+    store_t store;
 
-    CHECK_THROWS_AS(cache.load(ptr), nplex_exception);
+    CHECK_THROWS_AS(store.load(ptr), nplex_exception);
 }
 
-TEST_CASE("cache_load_error_invalid_value")
+TEST_CASE("store_update")
 {
-    auto snapshot = make_snapshot(
-        1024,
-        {
-            make_update(546, "jdoe", 1234567890, 15,
-                {
-                    { .key = "key1", .value = {}},
-                },
-                {}  // there are no deletes on snapshots
-            )
-        }
-    );
-
-    auto buf = serialize(snapshot);
-    auto *ptr = ::GetRoot<nplex::msgs::Snapshot>(buf.data());
-    cache_t cache;
-
-    CHECK_THROWS_AS(cache.load(ptr), nplex_exception);
-}
-
-TEST_CASE("cache_update")
-{
-    cache_t cache;
+    store_t store;
     std::vector<change_t> changes;
     flatbuffers::DetachedBuffer detached_buf;
     const nplex::msgs::Update *update_ptr = nullptr;
@@ -237,11 +216,11 @@ TEST_CASE("cache_update")
     detached_buf = serialize(snapshot);
     auto *snapshot_ptr = ::GetRoot<nplex::msgs::Snapshot>(detached_buf.data());
 
-    REQUIRE_NOTHROW(cache.load(snapshot_ptr));
+    REQUIRE_NOTHROW(store.load(snapshot_ptr));
 
     // content = {key1, key2, key3}
-    CHECK(cache.m_rev == 1024);
-    CHECK(cache.m_data.size() == 3);
+    CHECK(store.m_rev == 1024);
+    CHECK(store.m_data.size() == 3);
 
     auto update1 = make_update(1032, "ljohnson", 1234567891, 16,
         {
@@ -256,7 +235,7 @@ TEST_CASE("cache_update")
     detached_buf = serialize(update1);
     update_ptr = ::GetRoot<nplex::msgs::Update>(detached_buf.data());
 
-    REQUIRE_NOTHROW(changes = cache.update(update_ptr));
+    REQUIRE_NOTHROW(changes = store.update(update_ptr));
 
     REQUIRE(changes.size() == 3);
     CHECK(changes[0].action == change_t::action_e::UPDATE);
@@ -275,26 +254,26 @@ TEST_CASE("cache_update")
     CHECK(changes[2].old_value->data() == gto::cstring("a"));
 
     // content = {key2, key3, key4}
-    CHECK(cache.m_rev == 1032);
-    CHECK(cache.m_data.size() == 3);
-    CHECK(cache.m_users.size() == 2);
-    CHECK(cache.m_metas.size() == 2);
+    CHECK(store.m_rev == 1032);
+    CHECK(store.m_data.size() == 3);
+    CHECK(store.m_users.size() == 2);
+    CHECK(store.m_metas.size() == 2);
 
-    auto data_it = cache.m_data.find("key1");
-    CHECK(data_it == cache.m_data.end());
+    auto data_it = store.m_data.find("key1");
+    CHECK(data_it == store.m_data.end());
 
-    data_it = cache.m_data.find("key2");
-    REQUIRE(data_it != cache.m_data.end());
+    data_it = store.m_data.find("key2");
+    REQUIRE(data_it != store.m_data.end());
     CHECK(data_it->second->rev() == 1032);
     CHECK(data_it->second->data() == gto::cstring("x"));
 
-    data_it = cache.m_data.find("key3");
-    REQUIRE(data_it != cache.m_data.end());
+    data_it = store.m_data.find("key3");
+    REQUIRE(data_it != store.m_data.end());
     CHECK(data_it->second->rev() == 42);
     CHECK(data_it->second->data() == gto::cstring("c"));
 
-    data_it = cache.m_data.find("key4");
-    REQUIRE(data_it != cache.m_data.end());
+    data_it = store.m_data.find("key4");
+    REQUIRE(data_it != store.m_data.end());
     CHECK(data_it->second->rev() == 1032);
     CHECK(data_it->second->data() == gto::cstring("y"));
 
@@ -308,7 +287,7 @@ TEST_CASE("cache_update")
     detached_buf = serialize(update2);
     update_ptr = ::GetRoot<nplex::msgs::Update>(detached_buf.data());
 
-    REQUIRE_NOTHROW(changes = cache.update(update_ptr));
+    REQUIRE_NOTHROW(changes = store.update(update_ptr));
 
     REQUIRE(changes.size() == 1);
     CHECK(changes[0].action == change_t::action_e::DELETE);
@@ -317,21 +296,21 @@ TEST_CASE("cache_update")
     CHECK(changes[0].old_value->data() == gto::cstring("c"));
 
     // content = {key2, key4}
-    CHECK(cache.m_rev == 1033);
-    CHECK(cache.m_data.size() == 2);
+    CHECK(store.m_rev == 1033);
+    CHECK(store.m_data.size() == 2);
 
     // we verify that unreferenced matedata and user was removed
-    CHECK(cache.m_users.size() == 1);
-    CHECK(cache.m_metas.size() == 1);
+    CHECK(store.m_users.size() == 1);
+    CHECK(store.m_metas.size() == 1);
 
-    CHECK(cache.m_users.contains("ljohnson"));
-    CHECK(cache.m_data.find("key2") != cache.m_data.end());
-    CHECK(cache.m_data.find("key4") != cache.m_data.end());
+    CHECK(store.m_users.contains("ljohnson"));
+    CHECK(store.m_data.find("key2") != store.m_data.end());
+    CHECK(store.m_data.find("key4") != store.m_data.end());
 }
 
-TEST_CASE("cache_update_no_changes")
+TEST_CASE("store_update_no_changes")
 {
-    cache_t cache;
+    store_t store;
     std::vector<change_t> changes;
 
     auto update = make_update(1024, "ljohnson", 1234567891, 16,
@@ -342,17 +321,40 @@ TEST_CASE("cache_update_no_changes")
     auto detached_buf = serialize(update);
     auto update_ptr = ::GetRoot<nplex::msgs::Update>(detached_buf.data());
 
-    cache.m_rev = 42;
+    store.m_rev = 42;
 
-    REQUIRE_NOTHROW(changes = cache.update(update_ptr));
+    REQUIRE_NOTHROW(changes = store.update(update_ptr));
 
     CHECK(changes.empty());
-    CHECK(cache.m_rev == 1024);
+    CHECK(store.m_rev == 1024);
 }
 
-TEST_CASE("cache_update_error_prev_rev")
+TEST_CASE("store_update_empty_value")
 {
-    cache_t cache;
+    auto update = make_update(546, "jdoe", 1234567890, 15,
+                {
+                    { .key = "key1", .value = {}},
+                },
+                {}  // there are no deletes on snapshots
+            );
+
+    auto buf = serialize(update);
+    auto *ptr = ::GetRoot<nplex::msgs::Update>(buf.data());
+    std::vector<change_t> changes;
+    store_t store;
+
+    REQUIRE_NOTHROW(changes = store.update(ptr));
+
+    CHECK(changes.size() == 1);
+    CHECK(changes[0].action == change_t::action_e::CREATE);
+    CHECK(changes[0].key == "key1");
+    CHECK(changes[0].value->rev() == 546);
+    CHECK(changes[0].value->data() == gto::cstring{});
+}
+
+TEST_CASE("store_update_error_prev_rev")
+{
+    store_t store;
 
     auto update = make_update(10, "ljohnson", 1234567891, 16,
         {
@@ -364,15 +366,15 @@ TEST_CASE("cache_update_error_prev_rev")
     auto detached_buf = serialize(update);
     auto update_ptr = ::GetRoot<nplex::msgs::Update>(detached_buf.data());
 
-    cache.m_rev = 42;
+    store.m_rev = 42;
 
     // trying to commit a tx with rev less than current rev
-    CHECK_THROWS(cache.update(update_ptr));
+    CHECK_THROWS(store.update(update_ptr));
 }
 
-TEST_CASE("cache_update_invalid_key")
+TEST_CASE("store_update_invalid_key")
 {
-    cache_t cache;
+    store_t store;
 
     auto update = make_update(10, "ljohnson", 1234567891, 16,
         {
@@ -384,5 +386,5 @@ TEST_CASE("cache_update_invalid_key")
     auto detached_buf = serialize(update);
     auto update_ptr = ::GetRoot<nplex::msgs::Update>(detached_buf.data());
 
-    CHECK_THROWS(cache.update(update_ptr));
+    CHECK_THROWS(store.update(update_ptr));
 }

@@ -23,7 +23,7 @@ target_sources(
     ${CMAKE_CURRENT_LIST_DIR}/exception_test.cpp
     ${CMAKE_CURRENT_LIST_DIR}/messages_test.hpp
     ${CMAKE_CURRENT_LIST_DIR}/messages_test.cpp
-    ${CMAKE_CURRENT_LIST_DIR}/cache_test.cpp
+    ${CMAKE_CURRENT_LIST_DIR}/store_test.cpp
     ${CMAKE_CURRENT_LIST_DIR}/match_test.cpp
     ${CMAKE_CURRENT_LIST_DIR}/addr_test.cpp
     ${CMAKE_CURRENT_LIST_DIR}/main.cpp
