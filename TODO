@@ -4,11 +4,9 @@
 * Only a public header -> nplex-cpp.hpp
 * allow ssl connections (see project tlsuv)
 * README: explain nplex purpose
-* Review client_impl_t members access (currently public)
 * submit_tx_fut returns a future (attached to tx.promise)
 * check user permissions in transaction
 * move ERR_xxx codes to errors.hpp, or common.hpp or similar
-* Split client_t into node_t + client_t + reactor_t
 
 ## Useful commands
 

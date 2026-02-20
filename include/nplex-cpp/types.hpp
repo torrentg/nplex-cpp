@@ -6,6 +6,7 @@
 #include <string>
 #include <cstddef>
 #include <cstdint>
+#include <charconv>
 #include <stdexcept>
 #include <string_view>
 #include <type_traits>
@@ -84,13 +85,8 @@ struct change_t
 
     action_e action;
     key_t key;
-    value_ptr value;
-    value_ptr old_value;  // CREATE = empty, UPDATE = previous value, DELETE = same as value
+    value_ptr new_value;    // DELETE = nullptr
+    value_ptr old_value;    // CREATE = nullptr
 };
-
-// Key support functions.
-inline bool is_valid_key(const std::string_view &key) { return !key.empty(); }
-inline bool is_valid_key(const char *key) { return (key && is_valid_key(std::string_view{key})); }
-inline bool is_valid_key(const key_t &key) { return is_valid_key(key.view()); }
 
 } // namespace nplex

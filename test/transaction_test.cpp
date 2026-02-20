@@ -102,7 +102,7 @@ void basic_step_1(tx_impl_ptr &tx)
 {
     // scenario: tx just created and no updates yet
 
-    CHECK(tx->state() == transaction_t::state_e::OPEN);
+    CHECK(tx->state() == transaction::state_e::OPEN);
     CHECK(!tx->read_only());
     CHECK(!tx->dirty());
 
@@ -146,9 +146,9 @@ TEST_CASE("transaction_test")
 
     SUBCASE("read_committed_basic")
     {
-        auto tx = std::make_shared<transaction_impl_t>(store, transaction_t::isolation_e::READ_COMMITTED);
+        auto tx = std::make_shared<transaction_impl>(store, transaction::isolation_e::READ_COMMITTED);
 
-        CHECK(tx->isolation() == transaction_t::isolation_e::READ_COMMITTED);
+        CHECK(tx->isolation() == transaction::isolation_e::READ_COMMITTED);
 
         // no updates yet
         basic_step_1(tx);
@@ -199,9 +199,9 @@ TEST_CASE("transaction_test")
 
     SUBCASE("repeatable_read_basic")
     {
-        auto tx = std::make_shared<transaction_impl_t>(store, transaction_t::isolation_e::REPEATABLE_READ);
+        auto tx = std::make_shared<transaction_impl>(store, transaction::isolation_e::REPEATABLE_READ);
 
-        CHECK(tx->isolation() == transaction_t::isolation_e::REPEATABLE_READ);
+        CHECK(tx->isolation() == transaction::isolation_e::REPEATABLE_READ);
 
         basic_step_1(tx);
 
@@ -251,9 +251,9 @@ TEST_CASE("transaction_test")
 
     SUBCASE("serializable_basic")
     {
-        auto tx = std::make_shared<transaction_impl_t>(store, transaction_t::isolation_e::SERIALIZABLE);
+        auto tx = std::make_shared<transaction_impl>(store, transaction::isolation_e::SERIALIZABLE);
 
-        CHECK(tx->isolation() == transaction_t::isolation_e::SERIALIZABLE);
+        CHECK(tx->isolation() == transaction::isolation_e::SERIALIZABLE);
 
         basic_step_1(tx);
 
@@ -303,11 +303,11 @@ TEST_CASE("transaction_test")
 
     SUBCASE("read_upsert_remove_exceptions")
     {
-        auto tx = std::make_shared<transaction_impl_t>(store, transaction_t::isolation_e::SERIALIZABLE, true);
+        auto tx = std::make_shared<transaction_impl>(store, transaction::isolation_e::SERIALIZABLE, true);
 
         CHECK_THROWS_AS(tx->upsert("key1", "abc"), nplex_exception); // read-only exception
         CHECK_THROWS_AS(tx->remove("key1"), nplex_exception); // read-only exception
-        tx->state(transaction_t::state_e::ABORTED);
+        tx->state(transaction::state_e::ABORTED);
         CHECK_THROWS_AS(tx->read("key1"), nplex_exception); // not-open exception
     }
 }
@@ -315,7 +315,7 @@ TEST_CASE("transaction_test")
 TEST_CASE("transaction_for_each")
 {
     store_ptr store = make_basic_store();
-    auto tx = std::make_shared<transaction_impl_t>(store, transaction_t::isolation_e::READ_COMMITTED);
+    auto tx = std::make_shared<transaction_impl>(store, transaction::isolation_e::READ_COMMITTED);
 
     SUBCASE("iterate_all_only_store")
     {
@@ -376,12 +376,12 @@ TEST_CASE("transaction_for_each")
 
     SUBCASE("iterate_exceptions")
     {
-        tx->state(transaction_t::state_e::ABORTED);
+        tx->state(transaction::state_e::ABORTED);
         CHECK_THROWS_AS(tx->for_each("key1", []([[maybe_unused]] const nplex::key_t &key, [[maybe_unused]] const value_t &value) {
                 return true;
             }), nplex_exception);
 
-        CHECK_THROWS_AS(tx->for_each("key1", transaction_t::callback_t{}), std::invalid_argument);
+        CHECK_THROWS_AS(tx->for_each("key1", transaction::callback_t{}), std::invalid_argument);
 
     }
 }
@@ -390,7 +390,7 @@ TEST_CASE("transaction_ensure")
 {
     store_ptr store = make_basic_store();
     std::vector<nplex::change_t> changes;
-    auto tx = std::make_shared<transaction_impl_t>(store, transaction_t::isolation_e::READ_COMMITTED);
+    auto tx = std::make_shared<transaction_impl>(store, transaction::isolation_e::READ_COMMITTED);
 
     SUBCASE("ensure_all")
     {
@@ -474,7 +474,7 @@ TEST_CASE("transaction_ensure")
 
     SUBCASE("ensure_error_not_open")
     {
-        tx->state(transaction_t::state_e::COMMITTED);
+        tx->state(transaction::state_e::COMMITTED);
         CHECK_THROWS_AS(tx->ensure("key1"), nplex_exception);
     }
 }

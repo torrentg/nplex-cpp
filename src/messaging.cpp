@@ -1,7 +1,7 @@
 #include "cppcrc.h"
 #include "nplex-cpp/exception.hpp"
 #include "transaction_impl.hpp"
-#include "client_internals.hpp"
+#include "messaging.hpp"
 #include "utils.hpp"
 
 #define API_VERSION 10
@@ -86,13 +86,13 @@ flatbuffers::DetachedBuffer nplex::create_submit_msg(std::size_t cid, rev_t crev
 
     for (const auto &item : tx->items())
     {
-        switch (std::get<transaction_impl_t::action_e>(item.second))
+        switch (std::get<transaction_impl::action_e>(item.second))
         {
-            case transaction_impl_t::action_e::DELETE:
+            case transaction_impl::action_e::DELETE:
                 deletes.push_back(builder.CreateString(item.first));
                 break;
 
-            case transaction_impl_t::action_e::UPSERT:
+            case transaction_impl::action_e::UPSERT:
                 upserts.push_back(
                     CreateKeyValue(
                         builder, 
@@ -119,7 +119,7 @@ flatbuffers::DetachedBuffer nplex::create_submit_msg(std::size_t cid, rev_t crev
         MsgContent::SUBMIT_REQUEST, 
         CreateSubmitRequest(builder, 
             cid,
-            (tx->isolation() == transaction_t::isolation_e::SERIALIZABLE ? tx->rev_creation() : crev),
+            (tx->isolation() == transaction::isolation_e::SERIALIZABLE ? tx->rev_creation() : crev),
             tx->type(),
             builder.CreateVector(upserts),
             builder.CreateVector(deletes),

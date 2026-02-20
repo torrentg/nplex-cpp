@@ -242,12 +242,12 @@ TEST_CASE("store_update")
     CHECK(changes[0].key == "key2");
     CHECK(changes[0].old_value->rev() == 42);
     CHECK(changes[0].old_value->data() == gto::cstring("b"));
-    CHECK(changes[0].value->rev() == 1032);
-    CHECK(changes[0].value->data() == gto::cstring("x"));
+    CHECK(changes[0].new_value->rev() == 1032);
+    CHECK(changes[0].new_value->data() == gto::cstring("x"));
     CHECK(changes[1].action == change_t::action_e::CREATE);
     CHECK(changes[1].key == "key4");
-    CHECK(changes[1].value->rev() == 1032);
-    CHECK(changes[1].value->data() == gto::cstring("y"));
+    CHECK(changes[1].new_value->rev() == 1032);
+    CHECK(changes[1].new_value->data() == gto::cstring("y"));
     CHECK(changes[2].action == change_t::action_e::DELETE);
     CHECK(changes[2].key == "key1");
     CHECK(changes[2].old_value->rev() == 42);
@@ -348,8 +348,8 @@ TEST_CASE("store_update_empty_value")
     CHECK(changes.size() == 1);
     CHECK(changes[0].action == change_t::action_e::CREATE);
     CHECK(changes[0].key == "key1");
-    CHECK(changes[0].value->rev() == 546);
-    CHECK(changes[0].value->data() == gto::cstring{});
+    CHECK(changes[0].new_value->rev() == 546);
+    CHECK(changes[0].new_value->data() == gto::cstring{});
 }
 
 TEST_CASE("store_update_error_prev_rev")

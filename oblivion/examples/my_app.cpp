@@ -1,5 +1,6 @@
 #include <map>
 #include <iostream>
+#include <syncstream>
 #include <uv.h>
 #include <chrono>
 #include <iomanip>
@@ -187,10 +188,10 @@ class my_listener_t : public nplex::listener_t
 
     void on_snapshot(nplex::client_t &client) override
     {
-        fmt::print("Received snapshot at rev {}\n", client.rev());
-
         // we need a tx to access the database content
-        auto tx = client.create_tx(nplex::transaction_t::isolation_e::READ_COMMITTED, true);
+        auto tx = client.create_tx(nplex::transaction::isolation_e::READ_COMMITTED, true);
+
+        fmt::print("Received snapshot at rev {}\n", tx->rev());
 
         // initializing bussiness objects with database content
         tx->for_each("/sensors/*/*", [this](const nplex::key_t &key, const nplex::value_t &value) {
@@ -261,7 +262,8 @@ class my_listener_t : public nplex::listener_t
         }
 
         // Format and print the log message
-        fmt::print("{} [{}] {} - {}\n", time_stream.str(), thread_id, str_severity, msg);
+        std::osyncstream out(std::cout);
+        fmt::print(out, "{} [{}] {} - {}\n", time_stream.str(), thread_id, str_severity, msg);
     }
 };
 

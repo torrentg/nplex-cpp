@@ -1,6 +1,6 @@
 #include <doctest.h>
 #include "cppcrc.h"
-#include "client_internals.hpp"
+#include "messaging.hpp"
 
 using namespace std;
 using namespace nplex;

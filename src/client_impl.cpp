@@ -1,21 +1,29 @@
 #include <cassert>
+#include <limits>
 #include <fmt/ranges.h>
 #include <fmt/format.h>
+#include "utils.hpp"
 #include "client_impl.hpp"
 
 // ==========================================================
 // Internal (static) functions
 // ==========================================================
 
-static const char * to_str(nplex::client_state_e state)
+static const char * to_str(nplex::client_impl::state_e state)
 {
+    using namespace nplex;
+
     switch (state)
     {
-        case nplex::client_state_e::STARTUP:        return "STARTUP";
-        case nplex::client_state_e::CONNECTED:      return "CONNECTED";
-        case nplex::client_state_e::RECONNECTING:   return "RECONNECTING";
-        case nplex::client_state_e::CLOSED:         return "CLOSED";
-        default:                                    return "UNKNOWN";
+        case client_impl::state_e::OFFLINE:             return "OFFLINE";
+        case client_impl::state_e::CONNECTING:          return "CONNECTING";
+        case client_impl::state_e::AUTHENTICATED:       return "AUTHENTICATED";
+        case client_impl::state_e::LOADING_SNAPSHOT:    return "LOADING_SNAPSHOT";
+        case client_impl::state_e::INITIALIZED:         return "INITIALIZED";
+        case client_impl::state_e::SYNCING:             return "SYNCING";
+        case client_impl::state_e::SYNCED:              return "SYNCED";
+        case client_impl::state_e::CLOSED:              return "CLOSED";
+        default:                                        return "UNKNOWN";
     }
 }
 
@@ -53,12 +61,12 @@ static std::string mode_to_string(std::uint8_t mode)
 template <>
 struct fmt::formatter<nplex::acl_t>
 {
-    constexpr auto parse (fmt::format_parse_context& ctx) { 
+    static constexpr auto parse(fmt::format_parse_context &ctx) { 
         return ctx.begin();
     }
 
     template <typename Context>
-    auto format (nplex::acl_t const& obj, Context& ctx) const -> decltype(ctx.out()) {
+    auto format (nplex::acl_t const &obj, Context &ctx) const -> decltype(ctx.out()) {
         return fmt::format_to(ctx.out(), "{}:{}", ::mode_to_string(obj.mode), obj.pattern);
     }
 };
@@ -90,50 +98,48 @@ static void cb_close_handle(uv_handle_t *handle, void *arg)
     }
 }
 
-static void cb_process_async(uv_async_t *handle)
+static void cb_process_async_commands(uv_async_t *handle)
 {
-    auto impl = static_cast<nplex::client_t::impl_t *>(handle->loop->data);
+    auto impl = static_cast<nplex::client_impl *>(handle->loop->data);
     impl->process_commands();
 }
 
 static void cb_timer_connection_lost(uv_timer_t *timer)
 {
-    auto impl = static_cast<nplex::client_t::impl_t *>(timer->loop->data);
+    auto impl = static_cast<nplex::client_impl *>(timer->loop->data);
     impl->on_connection_lost();
 }
 
 static void cb_timer_reconnect(uv_timer_t *timer)
 {
-    auto impl = static_cast<nplex::client_t::impl_t *>(timer->loop->data);
-    impl->log_debug("Reconnect timer expired");
+    auto impl = static_cast<nplex::client_impl *>(timer->loop->data);
     uv_timer_stop(timer);
     impl->try_to_connect();
 }
 
 static void cb_signal_sigint(uv_signal_t *handle, int signum)
 {
-    auto impl = static_cast<nplex::client_t::impl_t *>(handle->loop->data);
+    auto impl = static_cast<nplex::client_impl *>(handle->loop->data);
     impl->abort(fmt::format("Signal {} received, stopping event loop", signum));
     uv_signal_stop(handle);
 }
 
 // ==========================================================
-// client_t::impl_t methods
+// client_impl methods
 // ==========================================================
 
-nplex::client_t::impl_t::impl_t(const params_t &params, rev_t rev0, listener_t &listener, client_t &parent) : 
-    m_parent(parent),
-    m_listener(listener),
+nplex::client_impl::client_impl(const client_params_t &params) :
     m_params(params),
-    m_rev0(rev0),
-    m_state{client_state_e::STARTUP}
+    m_rev0(std::numeric_limits<rev_t>::max()),
+    m_state{state_e::OFFLINE}
 {
     int rc = 0;
 
     if (m_params.servers.empty())
-        throw invalid_config("no servers");
+        throw nplex_exception("no servers");
 
-    store = std::make_shared<store_t>();
+    m_store = std::make_shared<store_t>();
+    m_manager = std::make_shared<lifecycle_mngr>();
 
     // initialize the event loop
     m_loop = std::make_unique<uv_loop_t>();
@@ -154,10 +160,10 @@ nplex::client_t::impl_t::impl_t(const params_t &params, rev_t rev0, listener_t &
     m_timer_reconnect->data = this;
 
     // install the async handler
-    m_async = std::make_unique<uv_async_t>();
-    if ((rc = uv_async_init(m_loop.get(), m_async.get(), ::cb_process_async)) != 0)
+    m_async_command = std::make_unique<uv_async_t>();
+    if ((rc = uv_async_init(m_loop.get(), m_async_command.get(), ::cb_process_async_commands)) != 0)
         throw nplex_exception(uv_strerror(rc));
-    m_async->data = this;
+    m_async_command->data = this;
 
     // install the SIGINT (Ctrl-C) handler
     m_signal_sigint = std::make_unique<uv_signal_t>();
@@ -169,21 +175,68 @@ nplex::client_t::impl_t::impl_t(const params_t &params, rev_t rev0, listener_t &
 
     // create connections
     for (const auto &server : m_params.servers)
-        m_connections.push_back(connection_t::create(addr_t{server}, m_loop.get(), m_params));
+        m_connections.push_back(connection::create(addr_t{server}, m_loop.get(), m_params.connection));
 }
 
-nplex::client_t::impl_t::~impl_t()
+nplex::client_impl::~client_impl()
 {
+    assert(m_loop_thread_id == std::thread::id{});
     assert(is_closed());
 }
 
-void nplex::client_t::impl_t::run() noexcept
+nplex::client & nplex::client_impl::set_logger(const std::shared_ptr<logger> &log)
 {
-    assert(m_state == client_state_e::STARTUP);
+    if (is_running())
+        throw nplex_exception("cannot set logger while running");
+
+    m_logger = log;
+    return *this;
+}
+
+nplex::client & nplex::client_impl::set_reactor(const std::shared_ptr<reactor> &rct)
+{
+    if (is_running())
+        throw nplex_exception("cannot set reactor while running");
+
+    m_reactor = rct;
+    return *this;
+}
+
+nplex::client & nplex::client_impl::set_lifecycle_mngr(const std::shared_ptr<lifecycle_mngr> &mngr)
+{
+    if (is_running())
+        throw nplex_exception("cannot set lifecycle manager while running");
+
+    m_manager = (mngr ? mngr : std::make_shared<lifecycle_mngr>());
+
+    return *this;
+}
+
+nplex::client & nplex::client_impl::set_initial_rev(rev_t rev)
+{
+    if (is_running())
+        throw nplex_exception("cannot set initial revision while running");
+
+    m_rev0 = rev;
+    return *this;
+}
+
+void nplex::client_impl::run(std::stop_token st) noexcept
+{
+    assert(m_state == state_e::OFFLINE);
+    assert(m_loop_thread_id == std::thread::id{});
+
+    // Initialize the loop thread id to identify the event loop thread.
     m_loop_thread_id = std::this_thread::get_id();
     m_error = nullptr;
     m_con = nullptr;
 
+    // Register a callback to be called when the stop token is requested.
+    std::stop_callback cb(st, [this]() noexcept {
+        push_command(close_cmd_t{});
+    });
+
+    // Run the event loop. This call blocks until uv_stop() is called.
     try
     {
         log_debug("Event loop started");
@@ -197,36 +250,77 @@ void nplex::client_t::impl_t::run() noexcept
 
     try
     {
+        // Close properly the event loop and all its handles.
+        // This is required to avoid memory leaks.
+
         // TODO: call connection.disconnect()
 
         uv_walk(m_loop.get(), ::cb_close_handle, nullptr);
         while (uv_run(m_loop.get(), UV_RUN_NOWAIT));
         uv_loop_close(m_loop.get());
-
-        set_state(client_state_e::CLOSED);
-        log_debug("Event loop terminated");
-        m_listener.on_closed(m_parent);
     }
     catch (const std::exception &e) {
-        log_error("{}", e.what());
         m_error = std::current_exception();
+        log_error("{}", e.what());
     }
+
+    log_debug("Event loop terminated");
+    set_state(state_e::CLOSED);
+    m_loop_thread_id = std::thread::id{};
 }
 
-void nplex::client_t::impl_t::wait_for_startup()
+void nplex::client_impl::set_state(state_e state)
 {
+    assert(m_loop_thread_id == std::this_thread::get_id());
+
+    if (m_state == state)
+        return;
+
+    log_debug("State changed from {} to {}", ::to_str(m_state.load()), ::to_str(state));
+
+    m_state = state;
+    m_cv.notify_all();
+}
+
+bool nplex::client_impl::wait_for_usable(millis timeout)
+{
+    if (is_closed())
+        throw nplex_exception("client is closed");
+
     std::unique_lock<std::mutex> lock(m_mutex);
 
-    m_cv.wait(lock, [this]{
+    if (!m_cv.wait_for(lock, timeout, [this] {
         auto s = m_state.load();
-        return (s != client_state_e::STARTUP);
-    });
+        if (s == state_e::CLOSED)
+            throw nplex_exception("client is closed");
+        return m_initialized.load();
+    })) {
+        return false;
+    }
 
-    if (m_error)
-        std::rethrow_exception(m_error);
+    return true;
 }
 
-void nplex::client_t::impl_t::send(flatbuffers::DetachedBuffer &&buf)
+bool nplex::client_impl::wait_for_synced(millis timeout)
+{
+    if (is_closed())
+        throw nplex_exception("client is closed");
+
+    std::unique_lock<std::mutex> lock(m_mutex);
+
+    if (!m_cv.wait_for(lock, timeout, [this] {
+        auto s = m_state.load();
+        if (s == state_e::CLOSED)
+            throw nplex_exception("client is closed");
+        return (m_state.load() == state_e::SYNCED);
+    })) {
+        return false;
+    }
+
+    return true;
+}
+
+void nplex::client_impl::send(flatbuffers::DetachedBuffer &&buf)
 {
     assert(m_loop_thread_id == std::this_thread::get_id());
 
@@ -239,7 +333,7 @@ void nplex::client_t::impl_t::send(flatbuffers::DetachedBuffer &&buf)
     m_con->send(std::move(buf));
 }
 
-void nplex::client_t::impl_t::abort(const std::string &msg)
+void nplex::client_impl::abort(const std::string &msg)
 {
     assert(m_loop_thread_id == std::this_thread::get_id());
 
@@ -263,7 +357,7 @@ void nplex::client_t::impl_t::abort(const std::string &msg)
         uv_timer_stop(m_timer_reconnect.get());
     }
 
-    set_state(client_state_e::CLOSED);
+    set_state(state_e::CLOSED);
     log_error("{}", msg);
 
     {
@@ -274,20 +368,7 @@ void nplex::client_t::impl_t::abort(const std::string &msg)
     uv_stop(m_loop.get());
 }
 
-void nplex::client_t::impl_t::set_state(client_state_e state)
-{
-    assert(m_loop_thread_id == std::this_thread::get_id());
-
-    if (m_state == state)
-        return;
-
-    log_debug("State changed from {} to {}", to_str(m_state.load()), to_str(state));
-
-    m_state = state;
-    m_cv.notify_all();
-}
-
-void nplex::client_t::impl_t::report_server_activity()
+void nplex::client_impl::report_server_activity()
 {
     assert(m_loop_thread_id == std::this_thread::get_id());
 
@@ -300,11 +381,11 @@ void nplex::client_t::impl_t::report_server_activity()
     }
 }
 
-void nplex::client_t::impl_t::try_to_connect()
+void nplex::client_impl::try_to_connect()
 {
     assert(m_loop_thread_id == std::this_thread::get_id());
 
-    if (is_closed())
+    if (is_closed() || m_state != state_e::OFFLINE)
         return;
 
     log_debug("Trying to connect to servers...");
@@ -317,6 +398,8 @@ void nplex::client_t::impl_t::try_to_connect()
         uv_timer_stop(m_timer_reconnect.get());
     }
 
+    set_state(state_e::CONNECTING);
+
     for (auto &con : m_connections) {
         log_debug("Connecting to {}", con->addr().str());
         assert(con->is_closed());
@@ -324,7 +407,7 @@ void nplex::client_t::impl_t::try_to_connect()
     }
 }
 
-void nplex::client_t::impl_t::on_connection_established(connection_t *con)
+void nplex::client_impl::on_connection_established(connection *con)
 {
     assert(m_loop_thread_id == std::this_thread::get_id());
 
@@ -346,7 +429,7 @@ void nplex::client_t::impl_t::on_connection_established(connection_t *con)
     );
 }
 
-static bool all_connections_closed(const std::vector<nplex::connection_ptr> &connections)
+static bool are_all_connections_closed(const std::vector<nplex::connection_ptr> &connections)
 {
     for (const auto &con : connections) {
         if (!con->is_closed())
@@ -356,7 +439,7 @@ static bool all_connections_closed(const std::vector<nplex::connection_ptr> &con
     return true;
 }
 
-void nplex::client_t::impl_t::schedule_reconnect(std::uint32_t millis)
+void nplex::client_impl::schedule_reconnect(std::uint32_t delay_ms)
 {
     assert(m_loop_thread_id == std::this_thread::get_id());
 
@@ -368,11 +451,11 @@ void nplex::client_t::impl_t::schedule_reconnect(std::uint32_t millis)
         uv_timer_stop(m_timer_reconnect.get());
     }
 
-    uv_timer_start(m_timer_reconnect.get(), ::cb_timer_reconnect, millis, 0);
-    log_debug("Starting reconnect timer with {} ms delay", millis);
+    uv_timer_start(m_timer_reconnect.get(), ::cb_timer_reconnect, delay_ms, 0);
+    log_debug("Starting reconnect timer with {} ms delay", delay_ms);
 }
 
-void nplex::client_t::impl_t::on_connection_closed(connection_t *con)
+void nplex::client_impl::on_connection_closed(connection *con)
 {
     assert(m_loop_thread_id == std::this_thread::get_id());
 
@@ -382,31 +465,21 @@ void nplex::client_t::impl_t::on_connection_closed(connection_t *con)
         return;
 
     // Case: connection to cluster failed
-    if (!m_con && all_connections_closed(m_connections))
+    if (!m_con && are_all_connections_closed(m_connections))
     {
-        switch (m_state)
-        {
-            case client_state_e::STARTUP:
-                abort("Unable to connect to any server");
-                return;
+        log_debug("Unable to connect to any server");
 
-            case client_state_e::RECONNECTING:
-            {
-                auto wait_time = m_listener.on_connection_failed(m_parent);
+        auto wait_time = m_manager->on_connection_failed(*this);
 
-                // case: do not reconnect
-                if (wait_time < 0) {
-                    abort("Client closed by listener");
-                    return;
-                }
-
-                // case: re-schedule reconnection
-                schedule_reconnect(static_cast<std::uint32_t>(wait_time));
-                return;
-            }
-            default:
-                assert(false);
+        // case: do not reconnect
+        if (wait_time < 0) {
+            abort("Client closed by lifecycle manager");
+            return;
         }
+
+        // case: re-schedule reconnection
+        schedule_reconnect(static_cast<std::uint32_t>(wait_time));
+        return;
     }
 
     // Case: connection to server established previously (m_con != nullptr)
@@ -415,7 +488,7 @@ void nplex::client_t::impl_t::on_connection_closed(connection_t *con)
         return;
 
     // Case: current server connection failed (con == m_con)
-    assert(is_connected());
+    set_state(state_e::OFFLINE);
     m_con = nullptr;
     m_data_cid = 0;
 
@@ -424,18 +497,17 @@ void nplex::client_t::impl_t::on_connection_closed(connection_t *con)
         uv_timer_stop(m_timer_con_lost.get());
     }
 
-    bool retry = m_listener.on_connection_lost(m_parent, con->addr().str());
+    bool retry = m_manager->on_connection_lost(*this, con->addr().str());
 
     if (retry) {
-        set_state(client_state_e::RECONNECTING);
         try_to_connect();
+        return;
     }
-    else {
-        abort("Client closed by listener");
-    }
+    
+    abort("Client closed by lifecycle manager");
 }
 
-void nplex::client_t::impl_t::on_connection_lost()
+void nplex::client_impl::on_connection_lost()
 {
     assert(m_loop_thread_id == std::this_thread::get_id());
 
@@ -450,17 +522,17 @@ void nplex::client_t::impl_t::on_connection_lost()
     }
 }
 
-void nplex::client_t::impl_t::push_command(const command_t &cmd)
+void nplex::client_impl::push_command(const command_t &cmd) noexcept
 {
     if (is_closed())
         return;
 
     std::lock_guard<std::mutex> lock(m_mutex);
     m_commands.push(cmd);
-    uv_async_send(m_async.get());
+    uv_async_send(m_async_command.get());
 }
 
-void nplex::client_t::impl_t::process_commands()
+void nplex::client_impl::process_commands()
 {
     assert(m_loop_thread_id == std::this_thread::get_id());
 
@@ -498,7 +570,7 @@ void nplex::client_t::impl_t::process_commands()
     }
 }
 
-void nplex::client_t::impl_t::process_submit_cmd(const nplex::submit_cmd_t &cmd)
+void nplex::client_impl::process_submit_cmd(const nplex::submit_cmd_t &cmd)
 {
     assert(m_loop_thread_id == std::this_thread::get_id());
 
@@ -506,13 +578,13 @@ void nplex::client_t::impl_t::process_submit_cmd(const nplex::submit_cmd_t &cmd)
     // TODO: implement
 }
 
-void nplex::client_t::impl_t::process_close_cmd([[maybe_unused]] const nplex::close_cmd_t &cmd)
+void nplex::client_impl::process_close_cmd([[maybe_unused]] const nplex::close_cmd_t &cmd)
 {
     assert(m_loop_thread_id == std::this_thread::get_id());
     abort("nplex closed by user");
 }
 
-void nplex::client_t::impl_t::process_ping_cmd(const nplex::ping_cmd_t &cmd)
+void nplex::client_impl::process_ping_cmd(const nplex::ping_cmd_t &cmd)
 {
     assert(m_loop_thread_id == std::this_thread::get_id());
 
@@ -520,7 +592,7 @@ void nplex::client_t::impl_t::process_ping_cmd(const nplex::ping_cmd_t &cmd)
     // TODO: implement
 }
 
-void nplex::client_t::impl_t::on_msg_delivered(connection_t *con, [[maybe_unused]] const msgs::Message *msg)
+void nplex::client_impl::on_msg_delivered(connection *con, [[maybe_unused]] const msgs::Message *msg)
 {
     assert(m_loop_thread_id == std::this_thread::get_id());
 
@@ -530,7 +602,7 @@ void nplex::client_t::impl_t::on_msg_delivered(connection_t *con, [[maybe_unused
     report_server_activity();
 }
 
-void nplex::client_t::impl_t::on_msg_received(connection_t *con, const msgs::Message *msg)
+void nplex::client_impl::on_msg_received(connection *con, const msgs::Message *msg)
 {
     assert(m_loop_thread_id == std::this_thread::get_id());
 
@@ -586,7 +658,7 @@ void nplex::client_t::impl_t::on_msg_received(connection_t *con, const msgs::Mes
     }
 }
 
-void nplex::client_t::impl_t::process_login_resp(connection_t *con, const nplex::msgs::LoginResponse *resp)
+void nplex::client_impl::process_login_resp(connection *con, const nplex::msgs::LoginResponse *resp)
 {
     assert(m_loop_thread_id == std::this_thread::get_id());
 
@@ -595,7 +667,7 @@ void nplex::client_t::impl_t::process_login_resp(connection_t *con, const nplex:
         return;
     }
 
-    assert(m_state == client_state_e::STARTUP || m_state == client_state_e::RECONNECTING);
+    assert(m_state == state_e::CONNECTING);
 
     if (resp->code() != msgs::LoginCode::AUTHORIZED) {
         log_error("Login failed on server {} ({})", con->addr().str(), msgs::EnumNameLoginCode(resp->code()));
@@ -623,44 +695,40 @@ void nplex::client_t::impl_t::process_login_resp(connection_t *con, const nplex:
 
     if (resp->keepalive())
     {
-        auto timeout = static_cast<uint64_t>(resp->keepalive() * static_cast<double>(m_params.timeout_factor));
+        auto timeout = static_cast<uint64_t>(resp->keepalive() * static_cast<double>(m_params.connection.timeout_factor));
         uv_timer_start(m_timer_con_lost.get(), ::cb_timer_connection_lost, timeout, timeout);
         log_debug("Started connection-lost timer with {} ms timeout", timeout);
     }
 
     m_con = con;
+    set_state(state_e::AUTHENTICATED);
 
     for (auto &server : m_connections)
         if (server.get() != m_con)
             server->disconnect(ERR_ALREADY_CONNECTED);
 
-    m_listener.on_connection_success(m_parent, m_con->addr().str());
-
     log_debug("Login successful on server {}, available data = [{}-{}]", m_con->addr().str(), resp->rev0(), resp->crev());
 
-    // case: reconnecting
-    if (m_state == client_state_e::RECONNECTING)
+    // case: initialized
+    if (m_initialized.load())
     {
-        set_state(client_state_e::CONNECTED);
+        set_state(state_e::SYNCING);
         m_data_cid = m_correlation++;
 
         send(
             create_updates_msg(
                 m_data_cid,
-                store->m_rev
+                m_store->m_rev
             )
         );
 
         return;
     }
 
-    assert(m_state == client_state_e::STARTUP);
-
     // case: no snapshot required
     if (m_rev0 == 0 )
     {
-        store->m_rev = resp->crev();
-        set_state(client_state_e::CONNECTED);
+        set_state(state_e::SYNCING);
         m_data_cid = m_correlation++;
 
         send(
@@ -676,6 +744,7 @@ void nplex::client_t::impl_t::process_login_resp(connection_t *con, const nplex:
     // case: snapshot required
     rev_t srev = (m_rev0 <= resp->rev0() ? resp->rev0() : m_rev0 <= resp->crev() ? m_rev0 : 0);
 
+    set_state(state_e::LOADING_SNAPSHOT);
     m_data_cid = m_correlation++;
 
     send(
@@ -686,11 +755,11 @@ void nplex::client_t::impl_t::process_login_resp(connection_t *con, const nplex:
     );
 }
 
-void nplex::client_t::impl_t::process_snapshot_resp(const nplex::msgs::SnapshotResponse *resp)
+void nplex::client_impl::process_snapshot_resp(const nplex::msgs::SnapshotResponse *resp)
 {
     assert(m_loop_thread_id == std::this_thread::get_id());
 
-    if (m_state != client_state_e::STARTUP || resp->cid() != m_data_cid) {
+    if (m_state != state_e::LOADING_SNAPSHOT || resp->cid() != m_data_cid) {
         m_con->disconnect(ERR_MSG_UNEXPECTED);
         return;
     }
@@ -701,27 +770,27 @@ void nplex::client_t::impl_t::process_snapshot_resp(const nplex::msgs::SnapshotR
     }
 
     if (resp->snapshot())
-        store->load(resp->snapshot());
+        m_store->load(resp->snapshot());
 
-    set_state(client_state_e::CONNECTED);
+    if (m_reactor) m_reactor->on_snapshot(*this);
 
-    m_listener.on_snapshot(m_parent);
-
+    m_initialized = true;
+    set_state(state_e::SYNCING);
     m_data_cid = m_correlation++;
 
     send(
         create_updates_msg(
             m_data_cid, 
-            store->m_rev
+            m_store->m_rev
         )
     );
 }
 
-void nplex::client_t::impl_t::process_updates_resp(const nplex::msgs::UpdatesResponse *resp)
+void nplex::client_impl::process_updates_resp(const nplex::msgs::UpdatesResponse *resp)
 {
     assert(m_loop_thread_id == std::this_thread::get_id());
 
-    if (!is_connected() || resp->cid() != m_data_cid) {
+    if (m_state != state_e::SYNCING || resp->cid() != m_data_cid) {
         m_con->disconnect(ERR_MSG_UNEXPECTED);
         return;
     }
@@ -730,9 +799,15 @@ void nplex::client_t::impl_t::process_updates_resp(const nplex::msgs::UpdatesRes
         m_con->disconnect(ERR_LOAD);
         return;
     }
+
+    if (m_rev0 == 0) {
+        m_store->m_rev = resp->crev();
+        set_state(state_e::SYNCED);
+        m_initialized = true;
+    }
 }
 
-void nplex::client_t::impl_t::process_submit_resp(const nplex::msgs::SubmitResponse *resp)
+void nplex::client_impl::process_submit_resp(const nplex::msgs::SubmitResponse *resp)
 {
     assert(m_loop_thread_id == std::this_thread::get_id());
 
@@ -751,11 +826,11 @@ void nplex::client_t::impl_t::process_submit_resp(const nplex::msgs::SubmitRespo
     // update tx status
 }
 
-void nplex::client_t::impl_t::process_updates_push(const nplex::msgs::UpdatesPush *resp)
+void nplex::client_impl::process_updates_push(const nplex::msgs::UpdatesPush *resp)
 {
     assert(m_loop_thread_id == std::this_thread::get_id());
 
-    if (!is_connected() || resp->cid() != m_data_cid) {
+    if (resp->cid() != m_data_cid) {
         m_con->disconnect(ERR_MSG_UNEXPECTED);
         return;
     }
@@ -769,51 +844,54 @@ void nplex::client_t::impl_t::process_updates_push(const nplex::msgs::UpdatesPus
     }
 }
 
-void nplex::client_t::impl_t::process_update(const nplex::msgs::Update *upd)
+void nplex::client_impl::process_update(const nplex::msgs::Update *upd)
 {
     assert(m_loop_thread_id == std::this_thread::get_id());
 
-    std::lock_guard<decltype(store->m_mutex)> lock(store->m_mutex);
+    std::lock_guard<decltype(m_store->m_mutex)> lock(m_store->m_mutex);
 
-    auto changes = store->update(upd);
+    // update the local database
+    auto changes = m_store->update(upd);
 
-    for (auto it = transactions.begin(); it != transactions.end(); )
+    // update current transactions and remove the closed ones
+    for (auto it = m_transactions.begin(); it != m_transactions.end(); )
     {
         auto tx = *it;
 
         switch (tx->state())
         {
-            case transaction_t::state_e::OPEN:
+            case transaction::state_e::OPEN:
                 tx->update(changes);
                 ++it;
                 break;
 
-            case transaction_t::state_e::REJECTED:
-            case transaction_t::state_e::COMMITTED:
-            case transaction_t::state_e::DISCARDED:
-            case transaction_t::state_e::ABORTED:
-                it = transactions.erase(it);
+            case transaction::state_e::REJECTED:
+            case transaction::state_e::COMMITTED:
+            case transaction::state_e::DISCARDED:
+            case transaction::state_e::ABORTED:
+                it = m_transactions.erase(it);
                 break;
 
-            case transaction_t::state_e::SUBMITTING:
-            case transaction_t::state_e::SUBMITTED:
+            case transaction::state_e::SUBMITTING:
+            case transaction::state_e::SUBMITTED:
                 ++it;
                 break;
 
-            case transaction_t::state_e::ACCEPTED:
+            case transaction::state_e::ACCEPTED:
                 // TODO: try to match it with the update
                 ++it;
                 break;
         }
     }
 
-    auto meta = store->m_metas.rbegin();
-    assert(meta != store->m_metas.rend());
+    auto meta = m_store->m_metas.rbegin();
+    assert(meta != m_store->m_metas.rend());
 
-    m_listener.on_update(m_parent, meta->second, changes);
+    // update business objects and trigger actions through the reactor
+    if (m_reactor) m_reactor->on_update(*this, meta->second, changes);
 }
 
-void nplex::client_t::impl_t::process_keepalive_push(const nplex::msgs::KeepAlivePush *resp)
+void nplex::client_impl::process_keepalive_push(const nplex::msgs::KeepAlivePush *resp)
 {
     assert(m_loop_thread_id == std::this_thread::get_id());
 
@@ -821,10 +899,62 @@ void nplex::client_t::impl_t::process_keepalive_push(const nplex::msgs::KeepAliv
     // TODO: implement
 }
 
-void nplex::client_t::impl_t::process_ping_resp(const nplex::msgs::PingResponse *resp)
+void nplex::client_impl::process_ping_resp(const nplex::msgs::PingResponse *resp)
 {
     assert(m_loop_thread_id == std::this_thread::get_id());
 
     UNUSED(resp);
     // TODO: implement
 }
+
+nplex::tx_ptr nplex::client_impl::create_tx(transaction::isolation_e isolation, bool read_only)
+{
+    if (is_closed())
+        throw nplex_exception("Client is closed");
+
+    std::lock_guard<decltype(m_mutex)> lock_impl(m_mutex);
+
+    size_t num_txs = m_transactions.size();
+    if (num_txs >= m_params.max_active_txs)
+        throw nplex_exception("Too many concurrent transactions (max={})", m_params.max_active_txs);
+
+    std::lock_guard<decltype(m_store->m_mutex)> lock_store(m_store->m_mutex);
+
+    auto tx = std::make_shared<transaction_impl>(m_store, isolation, read_only);
+    m_transactions.insert(tx);
+
+    log_debug("Transaction created, isolation={}, read_only={}", to_str(isolation), read_only);
+
+    return tx;
+}
+
+#if 0
+bool nplex::client::submit_tx(const tx_ptr &tx, bool force)
+{
+    if (!tx)
+        throw std::invalid_argument("Transaction is empty");
+
+    if (tx->state() != transaction::state_e::OPEN)
+        throw nplex_exception("Transaction is not open");
+
+    std::lock_guard<decltype(m_mutex)> lock(m_mutex);
+
+    if (!m_impl->is_connected())
+        throw nplex_exception("Client is not connected");
+
+    //TODO: caution, m_impl->transactions is not thread-safe
+
+    auto it = m_impl->transactions.find(tx);
+    if (it == m_impl->transactions.end())
+        throw nplex_exception("Transaction not found");
+
+    // TODO: check if there are actions to submit (not-only-reads)
+
+    m_impl->push_command(submit_cmd_t{dynamic_pointer_cast<transaction_impl>(tx), force});
+
+    // TODO: solve visibility error
+    //tx->state(transaction::state_e::SUBMITTING);
+
+    return true;
+}
+#endif

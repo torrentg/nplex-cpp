@@ -18,7 +18,7 @@ target_include_directories(
 target_sources(
     tests
     PRIVATE
-    ${CMAKE_CURRENT_LIST_DIR}/client_internals_test.cpp
+    ${CMAKE_CURRENT_LIST_DIR}/messaging_test.cpp
     ${CMAKE_CURRENT_LIST_DIR}/transaction_test.cpp
     ${CMAKE_CURRENT_LIST_DIR}/exception_test.cpp
     ${CMAKE_CURRENT_LIST_DIR}/messages_test.hpp
@@ -27,6 +27,12 @@ target_sources(
     ${CMAKE_CURRENT_LIST_DIR}/match_test.cpp
     ${CMAKE_CURRENT_LIST_DIR}/addr_test.cpp
     ${CMAKE_CURRENT_LIST_DIR}/main.cpp
+)
+
+set_source_files_properties(
+    ${CMAKE_CURRENT_LIST_DIR}/messaging_test.cpp
+    PROPERTIES 
+    COMPILE_OPTIONS "-Wno-conversion"
 )
 
 target_link_libraries(

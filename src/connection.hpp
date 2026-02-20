@@ -26,7 +26,7 @@ namespace flatbuffers {
 namespace nplex {
 
 // Forward declarations
-struct params_t;
+struct connection_params_t;
 
 /**
  * Class representing a network connection.
@@ -43,7 +43,7 @@ struct params_t;
  * - client()->on_connection_established()
  * - client()->on_connection_closed()
  */
-class connection_t
+class connection
 {
   public:
 
@@ -51,16 +51,16 @@ class connection_t
      * Create a new connection object.
      * 
      * @param[in] addr Remote address.
-     * @param[in] loop Event loop to use (loop->data contains a client_t::impl_t *).
+     * @param[in] loop Event loop to use (loop->data contains a client_impl *).
      * @param[in] params Connection parameters.
      * 
      * @return The connection object.
      * 
      * @exception nplex_exception If invalid address or resources could not be allocated.
      */
-    static std::unique_ptr<connection_t> create(const addr_t &addr, uv_loop_t *loop, const params_t &params);
+    static std::unique_ptr<connection> create(const addr_t &addr, uv_loop_t *loop, const connection_params_t &params);
 
-    virtual ~connection_t() = default;
+    virtual ~connection() = default;
     virtual const addr_t & addr() const = 0;
     virtual bool is_connected() const = 0;
     virtual bool is_closed() const = 0;
@@ -105,18 +105,18 @@ class connection_t
 
   protected:
 
-    connection_t() = default;
+    connection() = default;
 
   private:
 
     // non-copyable class
-    connection_t(const connection_t &) = delete;
-    connection_t & operator=(const connection_t &) = delete;
+    connection(const connection &) = delete;
+    connection & operator=(const connection &) = delete;
     // non-movable class
-    connection_t(connection_t &&) = delete;
-    connection_t & operator=(connection_t &&) = delete;
+    connection(connection &&) = delete;
+    connection & operator=(connection &&) = delete;
 };
 
-using connection_ptr = std::unique_ptr<connection_t>;
+using connection_ptr = std::unique_ptr<connection>;
 
 } // namespace nplex

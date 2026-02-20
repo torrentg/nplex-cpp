@@ -3,9 +3,9 @@
 #include <uv.h>
 #include <fmt/core.h>
 #include "nplex-cpp/exception.hpp"
-#include "nplex-cpp/params.hpp"
 #include "client_impl.hpp"
 #include "connection.hpp"
+#include "params.hpp"
 #include "utils.hpp"
 
 template <typename T>
@@ -20,13 +20,23 @@ static auto get_stream(T* obj) -> decltype(reinterpret_cast<std::conditional_t<s
 
 namespace nplex {
 
+struct connection_stats_t
+{
+    std::size_t unack_msgs = 0;                 // Unacknowledged messages
+    std::size_t unack_bytes = 0;                // Unacknowledged bytes
+    std::size_t recv_msgs = 0;                  // Total received messages
+    std::size_t recv_bytes = 0;                 // Total received bytes
+    std::size_t sent_msgs = 0;                  // Total sent messages
+    std::size_t sent_bytes = 0;                 // Total sent bytes
+};
+
 /**
  * Class implementing the connection interface.
  * 
  * All connection implementation details are hidden from the user.
  * All members are accessible by static libuv callbacks.
  */
-struct connection_impl_t : public connection_t
+struct connection_impl final : public connection
 {
     enum class state_e : std::uint8_t {
         CLOSED,
@@ -40,24 +50,11 @@ struct connection_impl_t : public connection_t
     std::string m_input_msg;                        // Current incoming message
     int m_error = 0;                                // Disconnection cause
     state_e m_state = state_e::CLOSED;              // Connection state
+    connection_params_t m_params;                   // Connection parameters
+    connection_stats_t m_stats;                     // Connection statistics
 
-    struct {
-        std::size_t max_unack_msgs = 0;             // Max unacknowledged messages
-        std::size_t max_unack_bytes = 0;            // Max unacknowledged bytes
-        std::size_t max_msg_bytes = 0;              // Max message size (input and output)
-    } m_params;
-
-    struct {
-        std::size_t unack_msgs = 0;                 // Unacknowledged messages
-        std::size_t unack_bytes = 0;                // Unacknowledged bytes
-        std::size_t recv_msgs = 0;                  // Total received messages
-        std::size_t recv_bytes = 0;                 // Total received bytes
-        std::size_t sent_msgs = 0;                  // Total sent messages
-        std::size_t sent_bytes = 0;                 // Total sent bytes
-    } m_stats;
-
-    connection_impl_t(const addr_t &addr, uv_loop_t *loop, const params_t &params);
-    virtual ~connection_impl_t() override;
+    connection_impl(const addr_t &addr, uv_loop_t *loop, const connection_params_t &params);
+    virtual ~connection_impl() override;
 
     virtual const addr_t & addr() const override { return m_addr; }
     virtual bool is_connected() const override { return (m_state == state_e::CONNECTED); }
@@ -68,7 +65,7 @@ struct connection_impl_t : public connection_t
     virtual void disconnect(int rc = 0) override;
     virtual void send(flatbuffers::DetachedBuffer &&buf) override;
 
-    client_t::impl_t * client() const { return reinterpret_cast<client_t::impl_t *>(m_tcp.loop->data); }
+    client_impl * client() const { return reinterpret_cast<client_impl *>(m_tcp.loop->data); }
 };
 
 } // namespace nplex
@@ -144,7 +141,7 @@ static void cb_tcp_alloc(uv_handle_t *handle, size_t suggested_size, uv_buf_t *b
 {
     UNUSED(suggested_size);
 
-    auto obj = reinterpret_cast<nplex::connection_impl_t *>(handle->data);
+    auto obj = reinterpret_cast<nplex::connection_impl *>(handle->data);
 
     buf->base = obj->m_input_buffer;
     buf->len = sizeof(obj->m_input_buffer);
@@ -154,7 +151,7 @@ static void cb_tcp_read(uv_stream_t *stream, ssize_t nread, const uv_buf_t *buf)
 {
     using namespace nplex;
 
-    auto obj = reinterpret_cast<nplex::connection_impl_t *>(stream->data);
+    auto obj = reinterpret_cast<nplex::connection_impl *>(stream->data);
 
     if (nread == 0)
         return;
@@ -201,7 +198,7 @@ static void cb_tcp_read(uv_stream_t *stream, ssize_t nread, const uv_buf_t *buf)
 
 static void cb_tcp_connect(uv_connect_t *req, int status)
 {
-    auto obj = reinterpret_cast<nplex::connection_impl_t *>(req->handle->data);
+    auto obj = reinterpret_cast<nplex::connection_impl *>(req->handle->data);
 
     delete req;
 
@@ -210,7 +207,7 @@ static void cb_tcp_connect(uv_connect_t *req, int status)
         return;
     }
 
-    obj->m_state = nplex::connection_impl_t::state_e::CONNECTED;
+    obj->m_state = nplex::connection_impl::state_e::CONNECTED;
     uv_read_start(get_stream(&obj->m_tcp), ::cb_tcp_alloc, ::cb_tcp_read);
 
     obj->client()->on_connection_established(obj);
@@ -218,9 +215,9 @@ static void cb_tcp_connect(uv_connect_t *req, int status)
 
 static void cb_tcp_close(uv_handle_t *handle)
 {
-    auto *obj = reinterpret_cast<nplex::connection_impl_t *>(handle->data);
+    auto *obj = reinterpret_cast<nplex::connection_impl *>(handle->data);
 
-    obj->m_state = nplex::connection_impl_t::state_e::CLOSED;
+    obj->m_state = nplex::connection_impl::state_e::CLOSED;
     obj->client()->on_connection_closed(obj);
 }
 
@@ -229,7 +226,7 @@ static void cb_tcp_write(uv_write_t *req, int status)
     using namespace nplex;
 
     auto msg = std::unique_ptr<output_msg_t>(reinterpret_cast<output_msg_t *>(req));
-    auto obj = reinterpret_cast<connection_impl_t *>(req->handle->data);
+    auto obj = reinterpret_cast<connection_impl *>(req->handle->data);
 
     assert(msg);
     assert(obj->m_stats.unack_msgs > 0);
@@ -252,10 +249,10 @@ static void cb_tcp_write(uv_write_t *req, int status)
 }
 
 // ==========================================================
-// connection_impl_t methods
+// connection_impl methods
 // ==========================================================
 
-nplex::connection_impl_t::connection_impl_t(const addr_t &addr, uv_loop_t *loop, const params_t &params) : m_addr(addr)
+nplex::connection_impl::connection_impl(const addr_t &addr, uv_loop_t *loop, const connection_params_t &params) : m_addr(addr)
 {
     if (m_addr.port() == 0)
         throw nplex_exception("Invalid address: {}", m_addr.str());
@@ -268,12 +265,12 @@ nplex::connection_impl_t::connection_impl_t(const addr_t &addr, uv_loop_t *loop,
     m_tcp.data = this;
 }
 
-nplex::connection_impl_t::~connection_impl_t()
+nplex::connection_impl::~connection_impl()
 {
-    assert(this->connection_impl_t::is_closed());
+    assert(this->connection_impl::is_closed());
 }
 
-void nplex::connection_impl_t::connect()
+void nplex::connection_impl::connect()
 {
     int rc = 0;
 
@@ -302,7 +299,7 @@ void nplex::connection_impl_t::connect()
     }
 }
 
-void nplex::connection_impl_t::disconnect(int rc)
+void nplex::connection_impl::disconnect(int rc)
 {
     if (is_closed())
         return;
@@ -314,7 +311,7 @@ void nplex::connection_impl_t::disconnect(int rc)
         uv_close(get_handle(&m_tcp), ::cb_tcp_close);
 }
 
-void nplex::connection_impl_t::send(flatbuffers::DetachedBuffer &&buf)
+void nplex::connection_impl::send(flatbuffers::DetachedBuffer &&buf)
 {
     int rc = 0;
     auto len = get_msg_length(buf);
@@ -345,10 +342,10 @@ void nplex::connection_impl_t::send(flatbuffers::DetachedBuffer &&buf)
 }
 
 // ==========================================================
-// connection_t methods
+// connection methods
 // ==========================================================
 
-std::unique_ptr<nplex::connection_t> nplex::connection_t::create(const addr_t &addr, uv_loop_t *loop, const params_t &params)
+std::unique_ptr<nplex::connection> nplex::connection::create(const addr_t &addr, uv_loop_t *loop, const connection_params_t &params)
 {
-    return std::make_unique<connection_impl_t>(addr, loop, params);
+    return std::make_unique<connection_impl>(addr, loop, params);
 }

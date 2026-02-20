@@ -2,6 +2,7 @@
 #include <cassert>
 #include "nplex-cpp/exception.hpp"
 #include "messages.hpp"
+#include "utils.hpp"
 #include "store.hpp"
 
 namespace {
@@ -71,7 +72,7 @@ nplex::change_t nplex::store_t::upsert_entry(const char *key, const value_ptr &v
     {
         change.action = change_t::action_e::UPDATE;
         change.key = it->first;
-        change.value = value;
+        change.new_value = value;
         change.old_value = it->second;
 
         release_meta(it->second->m_meta);
@@ -84,7 +85,7 @@ nplex::change_t nplex::store_t::upsert_entry(const char *key, const value_ptr &v
 
         change.action = change_t::action_e::CREATE;
         change.key = ckey;
-        change.value = value;
+        change.new_value = value;
         change.old_value = nullptr;
 
         m_data[ckey] = value;
@@ -107,7 +108,7 @@ nplex::change_t nplex::store_t::delete_entry(const char *key)
         return change;
 
     change.key = it->first;
-    change.value = it->second;
+    change.new_value = nullptr;
     change.old_value = it->second;
 
     release_meta(it->second->m_meta);

@@ -1,170 +1,58 @@
 #include "nplex-cpp/client.hpp"
-#include "nplex-cpp/exception.hpp"
-#include "addr.hpp"
 #include "client_impl.hpp"
 
 // ==========================================================
 // Internal (static) functions
 // ==========================================================
 
-static void check_params(const nplex::params_t &params)
+static nplex::client_params_t convert_params(const nplex::params_t &params)
 {
+    nplex::client_params_t ret;
+
     if (params.user.empty())
-        throw nplex::invalid_config("User not found");
+        throw nplex::nplex_exception("User not found");
 
     if (params.password.empty())
-        throw nplex::invalid_config("Password not found");
+        throw nplex::nplex_exception("Password not found");
+
+    ret.user = params.user;
+    ret.password = params.password;
+    ret.max_active_txs = (params.max_active_txs == 0 ? UINT32_MAX : params.max_active_txs);
 
     if (params.servers.empty())
-        throw nplex::invalid_config("Servers not found");
+        throw nplex::nplex_exception("Servers not found");
 
-    try {
-        for (auto &str : params.servers)
-            nplex::addr_t{str};
+    std::string addr;
+    std::istringstream ss(params.servers);
+
+    while (std::getline(ss, addr, ',')) {
+        addr.erase(0, addr.find_first_not_of(' ')); // trim leading spaces
+        addr.erase(addr.find_last_not_of(' ') + 1); // trim trailing spaces
+        ret.servers.push_back(nplex::addr_t{addr}); // validate address format
     }
-    catch(const nplex::nplex_exception &e) {
-        throw nplex::invalid_config(e.what());
-    }
+
+    if (ret.servers.empty())
+        throw nplex::nplex_exception("No valid servers found");
 
     if (params.timeout_factor <= 1.0)
-        throw nplex::invalid_config("Timeout factor <= 1.0");
-}
+        throw nplex::nplex_exception("Timeout factor <= 1.0");
 
-static const char * to_str(nplex::transaction_t::isolation_e isolation)
-{
-    switch (isolation)
-    {
-        case nplex::transaction_t::isolation_e::READ_COMMITTED: return "READ_COMMITTED";
-        case nplex::transaction_t::isolation_e::REPEATABLE_READ: return "REPEATABLE_READ";
-        case nplex::transaction_t::isolation_e::SERIALIZABLE: return "SERIALIZABLE";
-        default: return "UNKNOWN";
-    }
+    ret.connection.timeout_factor = params.timeout_factor;
+
+    ret.connection.max_msg_bytes = (params.max_msg_bytes == 0 ? UINT32_MAX : params.max_msg_bytes);
+    ret.connection.max_unack_msgs = (params.max_unack_msgs == 0 ? UINT32_MAX : params.max_unack_msgs);
+    ret.connection.max_unack_bytes = (params.max_unack_bytes == 0 ? UINT32_MAX : params.max_unack_bytes);
+
+    return ret;
 }
 
 // ==========================================================
-// client_t definitions
+// client definitions
 // ==========================================================
 
-// default listener initialization
-nplex::listener_t nplex::client_t::default_listener{};
-
-nplex::client_t::client_t(const params_t &params, rev_t rev, listener_t &listener)
+nplex::client_ptr nplex::client::create(const params_t &params)
 {
-    check_params(params);
+    auto cli_params = convert_params(params);
 
-    m_impl = std::make_unique<impl_t>(params, rev, listener, *this);
-
-    // Starts the event loop
-    thread_loop = std::thread([this]() {
-        try {
-            m_impl->run();
-        }
-        catch(const std::exception &e) {
-            m_impl->log_error("{}", e.what());
-        }
-        catch(...) {
-            m_impl->log_error("Unknown exception in the event loop");
-        }
-    });
-
-    try {
-        m_impl->wait_for_startup();
-    }
-    catch(...) {
-        close();
-        throw;
-    }
-}
-
-nplex::client_t::~client_t()
-{
-    close();
-}
-
-bool nplex::client_t::is_closed() const
-{ 
-    return m_impl->is_closed();
-}
-
-bool nplex::client_t::is_connected() const
-{
-    return m_impl->is_connected();
-}
-
-nplex::rev_t nplex::client_t::rev() const
-{
-    return m_impl->store->m_rev;
-}
-
-void nplex::client_t::close()
-{
-    m_impl->push_command(close_cmd_t{});
-    join();
-}
-
-void nplex::client_t::join()
-{
-    if (thread_loop.joinable())
-        thread_loop.join();
-}
-
-nplex::tx_ptr nplex::client_t::create_tx(transaction_t::isolation_e isolation, bool read_only)
-{
-    std::lock_guard<decltype(m_mutex)> lock_impl(m_mutex);
-
-    if (m_impl->is_closed())
-        throw nplex_exception("Client is closed");
-
-    size_t num_txs = m_impl->transactions.size();
-    if (num_txs >= m_impl->params().max_active_txs)
-        throw nplex_exception("Too many concurrent transactions (max={})", m_impl->params().max_active_txs);
-
-    std::lock_guard<decltype(m_impl->store->m_mutex)> lock_store(m_impl->store->m_mutex);
-
-    auto tx = std::make_shared<transaction_impl_t>(m_impl->store, isolation, read_only);
-    m_impl->transactions.insert(tx);
-
-    m_impl->log_debug("Transaction created, isolation={}, read_only={}", ::to_str(isolation), read_only);
-
-    return tx;
-}
-
-bool nplex::client_t::submit_tx(const tx_ptr &tx, bool force)
-{
-    if (!tx)
-        throw std::invalid_argument("Transaction is empty");
-
-    if (tx->state() != transaction_t::state_e::OPEN)
-        throw nplex_exception("Transaction is not open");
-
-    std::lock_guard<decltype(m_mutex)> lock(m_mutex);
-
-    if (!m_impl->is_connected())
-        throw nplex_exception("Client is not connected");
-
-    //TODO: caution, m_impl->transactions is not thread-safe
-
-    auto it = m_impl->transactions.find(tx);
-    if (it == m_impl->transactions.end())
-        throw nplex_exception("Transaction not found");
-
-    // TODO: check if there are actions to submit (not-only-reads)
-
-    m_impl->push_command(submit_cmd_t{dynamic_pointer_cast<transaction_impl_t>(tx), force});
-
-    // TODO: solve visibility error
-    //tx->state(transaction_t::state_e::SUBMITTING);
-
-    return true;
-}
-
-bool nplex::client_t::discard_tx(const tx_ptr &tx)
-{
-    std::lock_guard<decltype(m_mutex)> lock(m_mutex);
-
-    // TODO: consider the state == CLOSED
-    // TODO: send async command to discard tx
-
-    UNUSED(tx);
-    return true;
+    return std::make_shared<client_impl>(cli_params);
 }

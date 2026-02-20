@@ -17,7 +17,7 @@ namespace nplex {
  * Transaction is an interface where implementation details are hidden from the user.
  * Transactions can only be created by the client.
  * 
- * @see client_t::create_tx().
+ * @see client::create_tx().
  * 
  * Isolation levels:
  *
@@ -44,14 +44,14 @@ namespace nplex {
  * 
  * Forced mode:
  * 
- *   This mode is declared at submit time (@see client_t::submit_tx()).
+ *   This mode is declared at submit time.
  *   At submit time (client-side) and at commit time (server-side), the transaction is checked 
  *   for conflicts to ensure serialization. Some users (like admin) can force a transaction to 
  *   be committed even if it is dirty or conflicts with another commit. In this case, the 
  *   serialization guarantee is not granted. This mode is useful to apply emergency patches or 
  *   to fix data integrity issues.
  */
-class transaction_t
+class transaction
 {
   public:
 
@@ -74,7 +74,7 @@ class transaction_t
 
     using callback_t = std::function<bool(const key_t &key, const value_t &value)>;
 
-    virtual ~transaction_t() = default;
+    virtual ~transaction() = default;
     virtual isolation_e isolation() const = 0;
     virtual bool read_only() const = 0;
     virtual state_e state() const = 0;
@@ -250,18 +250,18 @@ class transaction_t
 
   protected:
 
-    transaction_t() = default;
+    transaction() = default;
 
   private:
 
     // non-copyable class
-    transaction_t(const transaction_t&) = delete;
-    transaction_t& operator=(const transaction_t&) = delete;
+    transaction(const transaction&) = delete;
+    transaction& operator=(const transaction&) = delete;
     // non-movable class
-    transaction_t(transaction_t&&) = delete;
-    transaction_t& operator=(transaction_t&&) = delete;
+    transaction(transaction&&) = delete;
+    transaction& operator=(transaction&&) = delete;
 };
 
-using tx_ptr = std::shared_ptr<transaction_t>;
+using tx_ptr = std::shared_ptr<transaction>;
 
 } // namespace nplex

@@ -1,10 +1,11 @@
 #include <cstring>
 #include "match.h"
 #include "nplex-cpp/exception.hpp"
+#include "utils.hpp"
 #include "messages.hpp"
 #include "transaction_impl.hpp"
 
-nplex::transaction_impl_t::transaction_impl_t(store_ptr store, isolation_e isolation, bool read_only) : 
+nplex::transaction_impl::transaction_impl(store_ptr store, isolation_e isolation, bool read_only) : 
     m_store{std::move(store)}, m_isolation_level{isolation}, m_read_only{read_only}
 {
     if (!m_store)
@@ -16,13 +17,13 @@ nplex::transaction_impl_t::transaction_impl_t(store_ptr store, isolation_e isola
     m_state = state_e::OPEN;
 }
 
-nplex::rev_t nplex::transaction_impl_t::rev() const
+nplex::rev_t nplex::transaction_impl::rev() const
 {
     std::lock_guard<decltype(m_store->m_mutex)> lock(m_store->m_mutex);
     return m_store->m_rev;
 }
 
-nplex::value_ptr nplex::transaction_impl_t::read(const char *key, bool check)
+nplex::value_ptr nplex::transaction_impl::read(const char *key, bool check)
 {
     if (!is_valid_key(key))
         throw nplex_exception("Trying to read an invalid key: {}", key);
@@ -55,7 +56,7 @@ nplex::value_ptr nplex::transaction_impl_t::read(const char *key, bool check)
         return {};
 
     // Case: key exists in the database
-    if (m_isolation_level != transaction_t::isolation_e::READ_COMMITTED)
+    if (m_isolation_level != transaction::isolation_e::READ_COMMITTED)
         m_items.emplace(it_store->first, std::make_tuple(action_e::READ, it_store->second));
 
     if (check)
@@ -64,7 +65,7 @@ nplex::value_ptr nplex::transaction_impl_t::read(const char *key, bool check)
     return it_store->second;
 }
 
-bool nplex::transaction_impl_t::upsert(const char *key, const std::string_view &data, bool force)
+bool nplex::transaction_impl::upsert(const char *key, const std::string_view &data, bool force)
 {
     if (!is_valid_key(key) || data.empty())
         throw std::invalid_argument("Invalid key or invalid data");
@@ -117,7 +118,7 @@ bool nplex::transaction_impl_t::upsert(const char *key, const std::string_view &
     return true;
 }
 
-bool nplex::transaction_impl_t::remove(const key_t &key)
+bool nplex::transaction_impl::remove(const key_t &key)
 {
     if (!is_valid_key(key))
         throw std::invalid_argument("Invalid key");
@@ -157,7 +158,7 @@ bool nplex::transaction_impl_t::remove(const key_t &key)
     return true;
 }
 
-std::size_t nplex::transaction_impl_t::remove(const char *pattern)
+std::size_t nplex::transaction_impl::remove(const char *pattern)
 {
     std::lock_guard<decltype(m_store->m_mutex)> lock(m_store->m_mutex);
 
@@ -174,7 +175,7 @@ std::size_t nplex::transaction_impl_t::remove(const char *pattern)
     return ret;
 }
 
-bool nplex::transaction_impl_t::ensure(const char *pattern)
+bool nplex::transaction_impl::ensure(const char *pattern)
 {
     if (!pattern)
         return false;
@@ -190,7 +191,7 @@ bool nplex::transaction_impl_t::ensure(const char *pattern)
     return true;
 }
 
-std::size_t nplex::transaction_impl_t::for_each(const char *pattern, const callback_t &callback)
+std::size_t nplex::transaction_impl::for_each(const char *pattern, const callback_t &callback)
 {
     if (!callback)
         throw std::invalid_argument("Invalid callback function");
@@ -285,7 +286,7 @@ std::size_t nplex::transaction_impl_t::for_each(const char *pattern, const callb
     return ret;
 }
 
-void nplex::transaction_impl_t::update(const std::vector<change_t> &changes)
+void nplex::transaction_impl::update(const std::vector<change_t> &changes)
 {
     std::lock_guard<decltype(m_store->m_mutex)> lock(m_store->m_mutex);
 
@@ -322,7 +323,7 @@ void nplex::transaction_impl_t::update(const std::vector<change_t> &changes)
     }
 }
 
-void nplex::transaction_impl_t::update_default(const std::vector<change_t> &changes)
+void nplex::transaction_impl::update_default(const std::vector<change_t> &changes)
 {
     if (m_dirty)
         return;
@@ -341,7 +342,7 @@ void nplex::transaction_impl_t::update_default(const std::vector<change_t> &chan
     }
 }
 
-void nplex::transaction_impl_t::update_serializable(const std::vector<change_t> &changes)
+void nplex::transaction_impl::update_serializable(const std::vector<change_t> &changes)
 {
     for (const auto &change : changes)
     {
@@ -353,13 +354,13 @@ void nplex::transaction_impl_t::update_serializable(const std::vector<change_t> 
             switch (change.action)
             {
                 case change_t::action_e::CREATE:
-                    m_items.emplace(change.key, std::make_tuple(action_e::READ, change.value));
+                    m_items.emplace(change.key, std::make_tuple(action_e::READ, change.new_value));
                     break;
                 case change_t::action_e::UPDATE:
                     m_items.emplace(change.key, std::make_tuple(action_e::READ, change.old_value));
                     break;
                 case change_t::action_e::DELETE:
-                    m_items.emplace(change.key, std::make_tuple(action_e::READ, change.value));
+                    m_items.emplace(change.key, std::make_tuple(action_e::READ, change.old_value));
                     break;
             }
 

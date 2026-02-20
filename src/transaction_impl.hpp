@@ -11,10 +11,10 @@
 namespace nplex {
 
 /**
- * Internal class implementing the transaction_t interface.
+ * Internal class implementing the transaction interface.
  * Also provides methods to update and serialize its content.
  */
-class transaction_impl_t : public transaction_t
+class transaction_impl : public transaction
 {
   public:
 
@@ -47,8 +47,8 @@ class transaction_impl_t : public transaction_t
 
   public:
 
-    transaction_impl_t(store_ptr store, isolation_e isolation, bool read_only = false);
-    virtual ~transaction_impl_t() override = default;
+    transaction_impl(store_ptr store, isolation_e isolation, bool read_only = false);
+    virtual ~transaction_impl() override = default;
 
     virtual isolation_e isolation() const override { return m_isolation_level; }
     virtual bool read_only() const override { return m_read_only; }
@@ -73,6 +73,6 @@ class transaction_impl_t : public transaction_t
     const ensures_t & ensures() const { return m_ensures; }
 };
 
-using tx_impl_ptr = std::shared_ptr<transaction_impl_t>;
+using tx_impl_ptr = std::shared_ptr<transaction_impl>;
 
 } // namespace nplex

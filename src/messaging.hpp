@@ -12,7 +12,7 @@
 #define UNUSED(x) (void)(x)
 
 /**
- * Collection of classes and functions used by client_t::impl_t and connection_t.
+ * Collection of classes and functions used by client_impl and connection.
  */
 
 namespace nplex {

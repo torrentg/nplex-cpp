@@ -112,6 +112,7 @@ add_library(
 target_sources(
     nplex-cpp
     PRIVATE
+    ${CMAKE_CURRENT_LIST_DIR}/deps/cppcrc.h
     ${CMAKE_CURRENT_LIST_DIR}/deps/match.c
     ${CMAKE_CURRENT_LIST_DIR}/src/addr.hpp
     ${CMAKE_CURRENT_LIST_DIR}/src/addr.cpp
@@ -120,19 +121,19 @@ target_sources(
     ${CMAKE_CURRENT_LIST_DIR}/src/client.cpp
     ${CMAKE_CURRENT_LIST_DIR}/src/client_impl.hpp
     ${CMAKE_CURRENT_LIST_DIR}/src/client_impl.cpp
-    ${CMAKE_CURRENT_LIST_DIR}/src/client_internals.hpp
-    ${CMAKE_CURRENT_LIST_DIR}/src/client_internals.cpp
     ${CMAKE_CURRENT_LIST_DIR}/src/connection.hpp
     ${CMAKE_CURRENT_LIST_DIR}/src/connection.cpp
     ${CMAKE_CURRENT_LIST_DIR}/src/messages.fbs
     ${CMAKE_CURRENT_LIST_DIR}/src/messages.hpp
+    ${CMAKE_CURRENT_LIST_DIR}/src/messaging.hpp
+    ${CMAKE_CURRENT_LIST_DIR}/src/messaging.cpp
+    ${CMAKE_CURRENT_LIST_DIR}/src/params.hpp
     ${CMAKE_CURRENT_LIST_DIR}/src/transaction_impl.hpp
     ${CMAKE_CURRENT_LIST_DIR}/src/transaction_impl.cpp
     ${CMAKE_CURRENT_LIST_DIR}/src/utils.hpp
     ${CMAKE_CURRENT_LIST_DIR}/src/utils.cpp
     PUBLIC
     ${CMAKE_CURRENT_LIST_DIR}/include/nplex-cpp/types.hpp
-    ${CMAKE_CURRENT_LIST_DIR}/include/nplex-cpp/params.hpp
     ${CMAKE_CURRENT_LIST_DIR}/include/nplex-cpp/client.hpp
     ${CMAKE_CURRENT_LIST_DIR}/include/nplex-cpp/exception.hpp
     ${CMAKE_CURRENT_LIST_DIR}/include/nplex-cpp/transaction.hpp
@@ -153,6 +154,12 @@ target_include_directories(
     ${CMAKE_CURRENT_LIST_DIR}/include
 )
 
+set_source_files_properties(
+    ${CMAKE_CURRENT_LIST_DIR}/src/messaging.cpp
+    PROPERTIES 
+    COMPILE_OPTIONS "-Wno-conversion"
+)
+
 target_link_libraries(
     nplex-cpp
     "$<$<STREQUAL:${ENABLE_SANITIZERS},ON>:-lasan>"
@@ -165,23 +172,23 @@ target_link_libraries(
 )
 
 add_executable(
-    my_app
+    example1
 )
 
 target_sources(
-    my_app
+    example1
     PRIVATE
-    ${CMAKE_CURRENT_LIST_DIR}/examples/my_app.cpp
+    ${CMAKE_CURRENT_LIST_DIR}/examples/example1.cpp
 )
 
 target_include_directories(
-    my_app
+    example1
     PRIVATE
     ${PROJECT_SOURCE_DIR}/deps
 )
 
 target_link_libraries(
-    my_app
+    example1
     "$<$<STREQUAL:${ENABLE_SANITIZERS},ON>:-lasan>"
     "$<$<STREQUAL:${ENABLE_SANITIZERS},ON>:-lubsan>"
     "$<$<STREQUAL:${ENABLE_COVERAGE},ON>:-lgcov>"
