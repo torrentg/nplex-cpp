@@ -6,12 +6,10 @@
 #include <sstream>
 #include <syncstream>
 #include <thread>
-
 #include <fmt/std.h>
-
 #include "nplex-cpp/client.hpp"
 
-class logger : public nplex::logger
+class logger final : public nplex::logger
 {
   public:  // methods
 
@@ -36,6 +34,7 @@ class logger : public nplex::logger
         const char *str_severity = nullptr;
         switch (severity)
         {
+            case log_level_e::TRACE: str_severity = "[TRACE]"; break;
             case log_level_e::DEBUG: str_severity = "[DEBUG]"; break;
             case log_level_e::INFO:  str_severity = "[INFO] "; break;
             case log_level_e::WARN:  str_severity = "[WARN] "; break;

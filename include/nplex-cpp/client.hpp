@@ -46,6 +46,7 @@ class logger
   public:  // types
 
     enum log_level_e : std::uint8_t {
+        TRACE,                          //!< Trace messages.
         DEBUG,                          //!< Debug messages.
         INFO,                           //!< Informational messages.
         WARN,                           //!< Warning messages.
@@ -111,12 +112,12 @@ class logger
  *   - Avoid using long-running tasks or blocking functions.
  *   - Exceptions thrown in these methods will terminate the client.
  */
-class lifecycle_mngr
+class manager
 {
   public:
 
-    lifecycle_mngr() = default;
-    virtual ~lifecycle_mngr() = default;
+    manager() = default;
+    virtual ~manager() = default;
 
     /**
      * Callback function that is invoked when an established connection to server is lost.
@@ -292,7 +293,7 @@ class client : public std::enable_shared_from_this<client>
      * @return Reference to the client.
      * @exception nplex_exception Nplex client already connected.
      */
-    virtual client & set_lifecycle_mngr(const std::shared_ptr<lifecycle_mngr> &mngr) = 0;
+    virtual client & set_manager(const std::shared_ptr<manager> &mngr) = 0;
 
     /**
      * Register the reactors to handle the data events.

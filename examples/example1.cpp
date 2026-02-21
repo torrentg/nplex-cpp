@@ -1,7 +1,6 @@
-#include <iostream>
-#include <memory>
-#include <thread>
 #include <stop_token>
+#include <iostream>
+#include <thread>
 #include "nplex-cpp/client.hpp"
 #include "logger.hpp"
 
@@ -24,7 +23,7 @@ int main()
 
         // Start client event loop in a dedicated thread and wait for it
         std::jthread worker([cli](std::stop_token st) {
-            cli->run(st);
+            cli->run(std::move(st));
         });
 
         std::cout << "nplex-cpp client running. Press ENTER to stop..." << std::endl;

@@ -101,7 +101,6 @@ set(CMAKE_INTERPROCEDURAL_OPTIMIZATION_RELEASE ON)
 #    # see https://clang.llvm.org/extra/clang-tidy/checks/list.html
 #    CMAKE_CXX_CLANG_TIDY
 #    clang-tidy
-#    -checks=-*,performance-*,portability-*,misc-*,clang-analyzer-*,bugprone-*,-misc-include-cleaner,-misc-const-correctness
 #)
 
 add_library(

@@ -139,7 +139,7 @@ nplex::client_impl::client_impl(const client_params_t &params) :
         throw nplex_exception("no servers");
 
     m_store = std::make_shared<store_t>();
-    m_manager = std::make_shared<lifecycle_mngr>();
+    m_manager = std::make_shared<manager>();
 
     // initialize the event loop
     m_loop = std::make_unique<uv_loop_t>();
@@ -202,12 +202,12 @@ nplex::client & nplex::client_impl::set_reactor(const std::shared_ptr<reactor> &
     return *this;
 }
 
-nplex::client & nplex::client_impl::set_lifecycle_mngr(const std::shared_ptr<lifecycle_mngr> &mngr)
+nplex::client & nplex::client_impl::set_manager(const std::shared_ptr<manager> &mngr)
 {
     if (is_running())
         throw nplex_exception("cannot set lifecycle manager while running");
 
-    m_manager = (mngr ? mngr : std::make_shared<lifecycle_mngr>());
+    m_manager = (mngr ? mngr : std::make_shared<manager>());
 
     return *this;
 }
@@ -348,12 +348,12 @@ void nplex::client_impl::abort(const std::string &msg)
         con->disconnect(ERR_CLOSED_BY_LOCAL);
 
     if (is_timer_active(m_timer_con_lost.get())) {
-        log_debug("Connection-lost timer stopped");
+        log_trace("Connection-lost timer stopped");
         uv_timer_stop(m_timer_con_lost.get());
     }
 
     if (is_timer_active(m_timer_reconnect.get())) {
-        log_debug("Reconnect timer stopped");
+        log_trace("Reconnect timer stopped");
         uv_timer_stop(m_timer_reconnect.get());
     }
 
@@ -376,7 +376,7 @@ void nplex::client_impl::report_server_activity()
         return;
 
     if (is_timer_active(m_timer_con_lost.get())) {
-        log_debug("Resetting connection-lost timer");
+        log_trace("Resetting connection-lost timer");
         uv_timer_again(m_timer_con_lost.get());
     }
 }
@@ -394,7 +394,7 @@ void nplex::client_impl::try_to_connect()
     m_con = nullptr;
 
     if (is_timer_active(m_timer_reconnect.get())) {
-        log_debug("Stopping reconnect timer");
+        log_trace("Stopping reconnect timer");
         uv_timer_stop(m_timer_reconnect.get());
     }
 
@@ -447,12 +447,12 @@ void nplex::client_impl::schedule_reconnect(std::uint32_t delay_ms)
         return;
 
     if (is_timer_active(m_timer_reconnect.get())) {
-        log_debug("Reconnect timer stopped");
+        log_trace("Reconnect timer stopped");
         uv_timer_stop(m_timer_reconnect.get());
     }
 
     uv_timer_start(m_timer_reconnect.get(), ::cb_timer_reconnect, delay_ms, 0);
-    log_debug("Starting reconnect timer with {} ms delay", delay_ms);
+    log_trace("Starting reconnect timer with {} ms delay", delay_ms);
 }
 
 void nplex::client_impl::on_connection_closed(connection *con)
@@ -493,7 +493,7 @@ void nplex::client_impl::on_connection_closed(connection *con)
     m_data_cid = 0;
 
     if (is_timer_active(m_timer_con_lost.get())) {
-        log_debug("Connection-lost timer stopped");
+        log_trace("Connection-lost timer stopped");
         uv_timer_stop(m_timer_con_lost.get());
     }
 
@@ -512,12 +512,12 @@ void nplex::client_impl::on_connection_lost()
     assert(m_loop_thread_id == std::this_thread::get_id());
 
     if (m_con) {
-        log_debug("Connection-lost timer expired");
+        log_trace("Connection-lost timer expired");
         m_con->disconnect(ERR_CON_LOST);
     }
 
     if (is_timer_active(m_timer_con_lost.get())) {
-        log_debug("Connection-lost timer stopped");
+        log_trace("Connection-lost timer stopped");
         uv_timer_stop(m_timer_con_lost.get());
     }
 }
@@ -604,6 +604,7 @@ void nplex::client_impl::on_msg_delivered(connection *con, [[maybe_unused]] cons
 
 void nplex::client_impl::on_msg_received(connection *con, const msgs::Message *msg)
 {
+    using namespace msgs;
     assert(m_loop_thread_id == std::this_thread::get_id());
 
     if (!msg || !msg->content()) {
@@ -611,9 +612,10 @@ void nplex::client_impl::on_msg_received(connection *con, const msgs::Message *m
         return;
     }
 
-    log_debug("Received {} from {}", msgs::EnumNameMsgContent(msg->content_type()), con->addr().str());
+    log((msg->content_type() == MsgContent::KEEPALIVE_PUSH ? logger::log_level_e::TRACE : logger::log_level_e::DEBUG),
+        "Received {} from {}", EnumNameMsgContent(msg->content_type()), con->addr().str());
 
-    if (msg->content_type() == msgs::MsgContent::LOGIN_RESPONSE) {
+    if (msg->content_type() == MsgContent::LOGIN_RESPONSE) {
         process_login_resp(con, msg->content_as_LOGIN_RESPONSE());
         return;
     }
@@ -627,29 +629,29 @@ void nplex::client_impl::on_msg_received(connection *con, const msgs::Message *m
 
     switch (msg->content_type())
     {
-        case msgs::MsgContent::SUBMIT_RESPONSE:
+        case MsgContent::SUBMIT_RESPONSE:
             process_submit_resp(msg->content_as_SUBMIT_RESPONSE());
             break;
 
-        case msgs::MsgContent::SNAPSHOT_RESPONSE:
+        case MsgContent::SNAPSHOT_RESPONSE:
             process_snapshot_resp(msg->content_as_SNAPSHOT_RESPONSE());
             break;
 
-        case msgs::MsgContent::UPDATES_RESPONSE:
+        case MsgContent::UPDATES_RESPONSE:
             process_updates_resp(msg->content_as_UPDATES_RESPONSE());
             break;
 
         [[likely]]
-        case msgs::MsgContent::UPDATES_PUSH:
+        case MsgContent::UPDATES_PUSH:
             process_updates_push(msg->content_as_UPDATES_PUSH());
             break;
 
         [[likely]]
-        case msgs::MsgContent::KEEPALIVE_PUSH:
+        case MsgContent::KEEPALIVE_PUSH:
             process_keepalive_push(msg->content_as_KEEPALIVE_PUSH());
             break;
 
-        case msgs::MsgContent::PING_RESPONSE:
+        case MsgContent::PING_RESPONSE:
             process_ping_resp(msg->content_as_PING_RESPONSE());
             break;
 
@@ -691,23 +693,24 @@ void nplex::client_impl::process_login_resp(connection *con, const nplex::msgs::
         return;
     }
 
-    log_info("can-force = {}, m_permissions = [{}]", m_can_force, fmt::join(m_permissions, ", "));
+    m_con = con;
+    set_state(state_e::AUTHENTICATED);
+
+    log_info("Login successful on server {}", m_con->addr().str());
+    log_debug("Server info: rev = {}, min-rev = {}, keepalive = {}ms", resp->crev(), resp->rev0(), resp->keepalive());
+    log_debug("User info: can-force = {}, permissions = [{}]", m_can_force, fmt::join(m_permissions, ", "));
 
     if (resp->keepalive())
     {
         auto timeout = static_cast<uint64_t>(resp->keepalive() * static_cast<double>(m_params.connection.timeout_factor));
         uv_timer_start(m_timer_con_lost.get(), ::cb_timer_connection_lost, timeout, timeout);
-        log_debug("Started connection-lost timer with {} ms timeout", timeout);
+        log_trace("Started connection-lost timer with {} ms timeout", timeout);
     }
 
-    m_con = con;
-    set_state(state_e::AUTHENTICATED);
-
+    // Closing other connection attempts
     for (auto &server : m_connections)
         if (server.get() != m_con)
             server->disconnect(ERR_ALREADY_CONNECTED);
-
-    log_debug("Login successful on server {}, available data = [{}-{}]", m_con->addr().str(), resp->rev0(), resp->crev());
 
     // case: initialized
     if (m_initialized.load())
@@ -800,11 +803,15 @@ void nplex::client_impl::process_updates_resp(const nplex::msgs::UpdatesResponse
         return;
     }
 
+    // Case: no snapshot installed, only updates
     if (m_rev0 == 0) {
         m_store->m_rev = resp->crev();
-        set_state(state_e::SYNCED);
         m_initialized = true;
     }
+
+    // Case: snapshot has same rev than current rev
+    if (m_store->m_rev == resp->crev())
+        set_state(state_e::SYNCED);
 }
 
 void nplex::client_impl::process_submit_resp(const nplex::msgs::SubmitResponse *resp)
@@ -840,7 +847,12 @@ void nplex::client_impl::process_updates_push(const nplex::msgs::UpdatesPush *re
     if (updates)
     {
         for (auto upd : *updates)
+        {
             process_update(upd);
+
+            if (m_state == state_e::SYNCING && upd->rev() == resp->crev())
+                set_state(state_e::SYNCED);
+        }
     }
 }
 
@@ -896,7 +908,9 @@ void nplex::client_impl::process_keepalive_push(const nplex::msgs::KeepAlivePush
     assert(m_loop_thread_id == std::this_thread::get_id());
 
     UNUSED(resp);
-    // TODO: implement
+
+    // do nothing
+    // catched by report_server_activity
 }
 
 void nplex::client_impl::process_ping_resp(const nplex::msgs::PingResponse *resp)

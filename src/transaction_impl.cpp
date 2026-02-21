@@ -357,8 +357,6 @@ void nplex::transaction_impl::update_serializable(const std::vector<change_t> &c
                     m_items.emplace(change.key, std::make_tuple(action_e::READ, change.new_value));
                     break;
                 case change_t::action_e::UPDATE:
-                    m_items.emplace(change.key, std::make_tuple(action_e::READ, change.old_value));
-                    break;
                 case change_t::action_e::DELETE:
                     m_items.emplace(change.key, std::make_tuple(action_e::READ, change.old_value));
                     break;

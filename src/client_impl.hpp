@@ -67,7 +67,7 @@ class client_impl final : public client
 
     client & set_logger(const std::shared_ptr<logger> &log) override;
     client & set_reactor(const std::shared_ptr<reactor> &rct) override;
-    client & set_lifecycle_mngr(const std::shared_ptr<lifecycle_mngr> &mngr) override;
+    client & set_manager(const std::shared_ptr<manager> &mngr) override;
     client & set_initial_rev(rev_t rev) override;
 
     bool is_usable() const override { return m_initialized.load(); }
@@ -102,6 +102,11 @@ class client_impl final : public client
     }
 
     template<typename... Args>
+    void log_trace(fmt::format_string<Args...> fmt_str, Args&&... args) {
+        log(logger::log_level_e::TRACE, fmt_str, std::forward<Args>(args)...);
+    }
+
+    template<typename... Args>
     void log_debug(fmt::format_string<Args...> fmt_str, Args&&... args) {
         log(logger::log_level_e::DEBUG, fmt_str, std::forward<Args>(args)...);
     }
@@ -130,10 +135,10 @@ class client_impl final : public client
     
     std::shared_ptr<logger> m_logger;               //!< Client logger.
     std::shared_ptr<reactor> m_reactor;             //!< Client reactor.
-    std::shared_ptr<lifecycle_mngr> m_manager;      //!< Lifecycle manager.
+    std::shared_ptr<manager> m_manager;             //!< Lifecycle manager.
 
     std::vector<connection_ptr> m_connections;      //!< Server connections (maybe not established).
-    connection *m_con = nullptr;                  //!< Current connection (established).
+    connection *m_con = nullptr;                    //!< Current connection (established).
     std::size_t m_correlation = 0;                  //!< Last correlation id.
     std::size_t m_data_cid = 0;                     //!< Correlation id of last snapshot/updates sent.
     bool m_can_force = false;                       //!< User can force transactions (set by server at login).
