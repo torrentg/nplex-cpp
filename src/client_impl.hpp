@@ -18,26 +18,44 @@
 
 namespace nplex {
 
-struct acl_t
-{
+using clock = std::chrono::steady_clock;
+using usec = std::chrono::microseconds;
+
+struct acl_t {
     std::uint8_t mode;          // Attributes (1=CREATE, 2=READ, 4=UPDATE, 8=DELETE).
     std::string pattern;        // Pattern (glob).
 };
 
-struct submit_cmd_t {
+struct command_t {
+    virtual ~command_t() = default;
+};
+
+struct request_t : public command_t {
+    virtual ~request_t() override = default;
+    std::size_t cid = 0;
+    clock::time_point t0 = clock::now();
+};
+
+struct close_cmd_t : public command_t {
+    virtual ~close_cmd_t() override = default;
+};
+
+struct submit_req_t : public request_t {
+    virtual ~submit_req_t() override = default;
     tx_impl_ptr tx;
     bool force = false;
+    std::promise<bool> promise;
 };
 
-struct close_cmd_t {
-    // no members
-};
-
-struct ping_cmd_t {
+struct ping_req_t : public request_t {
+    ping_req_t(const std::string &str) : payload(str) {}
+    virtual ~ping_req_t() override = default;
     std::string payload;
+    std::promise<usec> promise;
 };
 
-using command_t = std::variant<submit_cmd_t, close_cmd_t, ping_cmd_t>;
+using command_ptr = std::unique_ptr<command_t>;
+using request_ptr = std::unique_ptr<request_t>;
 
 /**
  * Client implementation.
@@ -79,12 +97,13 @@ class client_impl final : public client
     bool wait_for_usable(millis timeout = millis::max()) override;
     bool wait_for_synced(millis timeout = millis::max()) override;
     tx_ptr create_tx(transaction::isolation_e isolation, bool read_only) override;
-    void close() override { push_command(close_cmd_t{}); }
+    std::future<usec> ping(const std::string &payload) override;
+    void close() override { push_command(std::make_unique<close_cmd_t>()); }
 
     void process_commands();
     void report_server_activity();
     void abort(const std::string &msg);
-    void push_command(const command_t &cmd) noexcept;
+    void push_command(command_ptr &&cmd);
     void try_to_connect();
 
     void on_connection_lost();
@@ -149,7 +168,8 @@ class client_impl final : public client
     std::condition_variable m_cv;                   //!< Condition variable to wait for changes in state.
     std::atomic<state_e> m_state;                   //!< Client state.
     std::exception_ptr m_error;                     //!< Stored exception (if any).
-    gto::cqueue<command_t> m_commands;              //!< Async commands pending to be digested by the event loop.
+    gto::cqueue<command_ptr> m_commands;            //!< Async commands pending to be digested by the event loop.
+    gto::cqueue<request_ptr> m_requests;            //!< Requests pending to receive a response from the server.
 
     std::thread::id m_loop_thread_id;               //!< Thread id of the event loop thread.
     std::unique_ptr<uv_loop_t> m_loop;              //!< Event loop.
@@ -164,9 +184,9 @@ class client_impl final : public client
     void send(flatbuffers::DetachedBuffer &&buf);
     void schedule_reconnect(std::uint32_t delay_ms);
 
-    void process_submit_cmd(const submit_cmd_t &cmd);
-    void process_close_cmd(const close_cmd_t &cmd);
-    void process_ping_cmd(const ping_cmd_t &cmd);
+    void process_close_cmd(command_ptr &&cmd);
+    void process_submit_cmd(command_ptr &&cmd);
+    void process_ping_cmd(command_ptr &&cmd);
 
     void process_login_resp(connection *con, const msgs::LoginResponse *resp);
     void process_snapshot_resp(const msgs::SnapshotResponse *resp);

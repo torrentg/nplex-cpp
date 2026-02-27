@@ -26,18 +26,33 @@ int main()
             cli->run(std::move(st));
         });
 
-        std::cout << "nplex-cpp client running. Press ENTER to stop..." << std::endl;
+        cli->wait_for_synced();
+
+        auto tx = cli->create_tx();
+
+        std::cout << "Nplex database content at rev " << tx->rev() << std::endl;
+
+        tx->for_each([](const nplex::key_t &key, const nplex::value_t &value) {
+            std::cout << key << " = " << value.data() << std::endl;
+            return true;
+        });
+
+        std::cout << "Press ENTER to stop..." << std::endl;
         std::string line;
         std::getline(std::cin, line);
+
+        // Measure ping latency
+        auto ping = cli->ping("Hello, Nplex!");
+        std::cout << "Ping response received in " << ping.get().count() << " microseconds" << std::endl;
 
         // Request client shutdown and wait for thread to finish
         cli->close();
         worker.request_stop();
 
-        return 0;
+        return EXIT_SUCCESS;
     }
     catch (const std::exception &e) {
         std::cerr << "Error: " << e.what() << '\n';
-        return 1;
+        return EXIT_FAILURE;
     }
 }

@@ -289,6 +289,9 @@ void nplex::connection_impl::connect()
     if ((rc = uv_tcp_init(m_tcp.loop, &m_tcp)) != 0)
         throw nplex_exception(uv_strerror(rc));
 
+    if ((rc = uv_tcp_nodelay(&m_tcp, 1)) != 0) // disable nagle
+        throw nplex_exception(uv_strerror(rc));
+
     m_tcp.data = this;
 
     uv_connect_t* connect = new uv_connect_t();

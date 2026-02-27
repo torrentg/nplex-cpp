@@ -27,6 +27,50 @@ nplex::output_msg_t::output_msg_t(DetachedBuffer &&msg) : content(std::move(msg)
     buf[3] = uv_buf_init(reinterpret_cast<char *>(&checksum), sizeof(checksum));
 }
 
+const nplex::msgs::Message * nplex::parse_network_msg(const char *ptr, size_t len)
+{
+    if (len <= 3 * sizeof(std::uint32_t))
+        return nullptr;
+
+    if (len != ntohl_ptr(ptr))
+        return nullptr;
+
+    std::uint32_t metadata = ntohl_ptr(ptr + sizeof(std::uint32_t));
+    // TODO: uncompress if (metadata & LZ4)
+    UNUSED(metadata);
+
+    std::uint32_t checksum = ntohl_ptr(ptr + len - sizeof(std::uint32_t));
+
+    if (checksum != CRC32::CRC32::calc(reinterpret_cast<const std::uint8_t *>(ptr), len - sizeof(std::uint32_t)))
+        return nullptr;
+
+    ptr += 2 * sizeof(std::uint32_t);
+    len -= 3 * sizeof(std::uint32_t);
+
+    auto verifier = flatbuffers::Verifier(reinterpret_cast<const std::uint8_t *>(ptr), len);
+
+    if (!verifier.VerifyBuffer<Message>(nullptr))
+        return nullptr;
+
+    return flatbuffers::GetRoot<Message>(ptr);
+}
+
+flatbuffers::DetachedBuffer nplex::create_ping_msg(std::size_t cid, const std::string &payload)
+{
+    FlatBufferBuilder builder;
+
+    auto msg = CreateMessage(builder, 
+        MsgContent::PING_REQUEST, 
+        CreatePingRequest(builder, 
+            cid, 
+            builder.CreateString(payload)
+        ).Union()
+    );
+
+    builder.Finish(msg);
+    return builder.Release();
+}
+
 flatbuffers::DetachedBuffer nplex::create_login_msg(std::size_t cid, const std::string &user, const std::string &password)
 {
     FlatBufferBuilder builder;
@@ -130,32 +174,4 @@ flatbuffers::DetachedBuffer nplex::create_submit_msg(std::size_t cid, rev_t crev
 
     builder.Finish(msg);
     return builder.Release();
-}
-
-const nplex::msgs::Message * nplex::parse_network_msg(const char *ptr, size_t len)
-{
-    if (len <= 3 * sizeof(std::uint32_t))
-        return nullptr;
-
-    if (len != ntohl_ptr(ptr))
-        return nullptr;
-
-    std::uint32_t metadata = ntohl_ptr(ptr + sizeof(std::uint32_t));
-    // TODO: uncompress if (metadata & LZ4)
-    UNUSED(metadata);
-
-    std::uint32_t checksum = ntohl_ptr(ptr + len - sizeof(std::uint32_t));
-
-    if (checksum != CRC32::CRC32::calc(reinterpret_cast<const std::uint8_t *>(ptr), len - sizeof(std::uint32_t)))
-        return nullptr;
-
-    ptr += 2 * sizeof(std::uint32_t);
-    len -= 3 * sizeof(std::uint32_t);
-
-    auto verifier = flatbuffers::Verifier(reinterpret_cast<const std::uint8_t *>(ptr), len);
-
-    if (!verifier.VerifyBuffer<Message>(nullptr))
-        return nullptr;
-
-    return flatbuffers::GetRoot<Message>(ptr);
 }

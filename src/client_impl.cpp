@@ -58,6 +58,16 @@ static std::string mode_to_string(std::uint8_t mode)
     };
 }
 
+static nplex::request_ptr cmd_to_req(nplex::command_ptr &cmd)
+{
+    auto obj = dynamic_cast<nplex::request_t*>(cmd.get());
+    assert(obj);
+    nplex::request_ptr req{};
+    req.reset(obj);
+    cmd.release();
+    return req;
+}
+
 template <>
 struct fmt::formatter<nplex::acl_t>
 {
@@ -205,7 +215,7 @@ nplex::client & nplex::client_impl::set_reactor(const std::shared_ptr<reactor> &
 nplex::client & nplex::client_impl::set_manager(const std::shared_ptr<manager> &mngr)
 {
     if (is_running())
-        throw nplex_exception("cannot set lifecycle manager while running");
+        throw nplex_exception("cannot set manager while running");
 
     m_manager = (mngr ? mngr : std::make_shared<manager>());
 
@@ -233,7 +243,12 @@ void nplex::client_impl::run(std::stop_token st) noexcept
 
     // Register a callback to be called when the stop token is requested.
     std::stop_callback cb(st, [this]() noexcept {
-        push_command(close_cmd_t{});
+        try {
+            push_command(std::make_unique<close_cmd_t>());
+        } catch (...) {
+            // last resort (not thread-safe, undefined behavior)
+            uv_stop(m_loop.get());
+        }
     });
 
     // Run the event loop. This call blocks until uv_stop() is called.
@@ -287,6 +302,9 @@ bool nplex::client_impl::wait_for_usable(millis timeout)
     if (is_closed())
         throw nplex_exception("client is closed");
 
+    if (timeout.count() > UINT32_MAX)
+        timeout = millis{UINT32_MAX};
+
     std::unique_lock<std::mutex> lock(m_mutex);
 
     if (!m_cv.wait_for(lock, timeout, [this] {
@@ -305,6 +323,9 @@ bool nplex::client_impl::wait_for_synced(millis timeout)
 {
     if (is_closed())
         throw nplex_exception("client is closed");
+
+    if (timeout.count() > UINT32_MAX)
+        timeout = millis{UINT32_MAX};
 
     std::unique_lock<std::mutex> lock(m_mutex);
 
@@ -473,7 +494,7 @@ void nplex::client_impl::on_connection_closed(connection *con)
 
         // case: do not reconnect
         if (wait_time < 0) {
-            abort("Client closed by lifecycle manager");
+            abort("Client closed by manager");
             return;
         }
 
@@ -504,7 +525,7 @@ void nplex::client_impl::on_connection_closed(connection *con)
         return;
     }
     
-    abort("Client closed by lifecycle manager");
+    abort("Client closed by manager");
 }
 
 void nplex::client_impl::on_connection_lost()
@@ -522,14 +543,20 @@ void nplex::client_impl::on_connection_lost()
     }
 }
 
-void nplex::client_impl::push_command(const command_t &cmd) noexcept
+void nplex::client_impl::push_command(command_ptr &&cmd)
 {
     if (is_closed())
         return;
 
     std::lock_guard<std::mutex> lock(m_mutex);
-    m_commands.push(cmd);
-    uv_async_send(m_async_command.get());
+
+    if (m_commands.size() >= 1024)
+        throw nplex_exception("command queue overflow");
+
+    m_commands.push(std::move(cmd));
+
+    if (m_commands.size() == 1)
+        uv_async_send(m_async_command.get());
 }
 
 void nplex::client_impl::process_commands()
@@ -541,10 +568,10 @@ void nplex::client_impl::process_commands()
         return;
     }
 
+    command_ptr cmd;
+
     while (true)
     {
-        command_t cmd;
-
         {
             std::lock_guard<std::mutex> lock(m_mutex);
 
@@ -552,25 +579,29 @@ void nplex::client_impl::process_commands()
                 break;
 
             cmd = m_commands.pop();
+            assert(cmd != nullptr);
         }
 
-        std::visit([this](auto&& arg)
-        {
-            using T = std::decay_t<decltype(arg)>;
-
-            if constexpr (std::is_same_v<T, nplex::submit_cmd_t>)
-                process_submit_cmd(arg);
-            else if constexpr (std::is_same_v<T, nplex::close_cmd_t>)
-                process_close_cmd(arg);
-            else if constexpr (std::is_same_v<T, nplex::ping_cmd_t>)
-                process_ping_cmd(arg);
-            else
-                static_assert(false, "non-exhaustive visitor!");
-        }, cmd);
+        if (dynamic_cast<close_cmd_t*>(cmd.get()))
+            process_close_cmd(std::move(cmd));
+        else if (dynamic_cast<submit_req_t*>(cmd.get()))
+            process_submit_cmd(std::move(cmd));
+        else if (dynamic_cast<ping_req_t*>(cmd.get()))
+            process_ping_cmd(std::move(cmd));
+        else {
+            log_error("Unknown command type");
+            assert(false);
+        }
     }
 }
 
-void nplex::client_impl::process_submit_cmd(const nplex::submit_cmd_t &cmd)
+void nplex::client_impl::process_close_cmd([[maybe_unused]] command_ptr &&cmd)
+{
+    assert(m_loop_thread_id == std::this_thread::get_id());
+    abort("client closed by user");
+}
+
+void nplex::client_impl::process_submit_cmd(command_ptr &&cmd)
 {
     assert(m_loop_thread_id == std::this_thread::get_id());
 
@@ -578,18 +609,29 @@ void nplex::client_impl::process_submit_cmd(const nplex::submit_cmd_t &cmd)
     // TODO: implement
 }
 
-void nplex::client_impl::process_close_cmd([[maybe_unused]] const nplex::close_cmd_t &cmd)
+void nplex::client_impl::process_ping_cmd(command_ptr &&cmd)
 {
     assert(m_loop_thread_id == std::this_thread::get_id());
-    abort("nplex closed by user");
-}
+    
+    ping_req_t *req = dynamic_cast<ping_req_t*>(cmd.get());
 
-void nplex::client_impl::process_ping_cmd(const nplex::ping_cmd_t &cmd)
-{
-    assert(m_loop_thread_id == std::this_thread::get_id());
+    if (!m_con) {
+        req->promise.set_exception(std::make_exception_ptr(nplex_exception("client is not connected")));
+        return;
+    }
 
-    UNUSED(cmd);
-    // TODO: implement
+    req->cid = m_correlation++;
+
+    send(
+        create_ping_msg(
+            req->cid,
+            req->payload
+        )
+    );
+
+    m_requests.push(cmd_to_req(cmd));
+
+    // TODO: process m_requests on connection-loss
 }
 
 void nplex::client_impl::on_msg_delivered(connection *con, [[maybe_unused]] const msgs::Message *msg)
@@ -917,8 +959,18 @@ void nplex::client_impl::process_ping_resp(const nplex::msgs::PingResponse *resp
 {
     assert(m_loop_thread_id == std::this_thread::get_id());
 
-    UNUSED(resp);
-    // TODO: implement
+    if (m_requests.empty())
+        return;
+
+    if (m_requests.front()->cid != resp->cid())
+        return;
+
+    auto ptr = m_requests.pop();
+    auto req = dynamic_cast<ping_req_t*>(ptr.get());
+
+    auto latency = std::chrono::duration_cast<usec>(clock::now() - req->t0);
+
+    req->promise.set_value(latency);
 }
 
 nplex::tx_ptr nplex::client_impl::create_tx(transaction::isolation_e isolation, bool read_only)
@@ -972,3 +1024,19 @@ bool nplex::client::submit_tx(const tx_ptr &tx, bool force)
     return true;
 }
 #endif
+
+std::future<nplex::client::usec> nplex::client_impl::ping(const std::string &payload) 
+{
+    if (is_closed())
+        throw nplex_exception("Client is closed");
+
+    auto req = std::make_unique<ping_req_t>(payload);
+    auto future = req->promise.get_future();
+
+    if (m_loop_thread_id == std::this_thread::get_id())
+        process_ping_cmd(std::move(req));
+    else
+        push_command(std::move(req));
+
+    return future;
+}

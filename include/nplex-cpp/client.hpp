@@ -1,6 +1,7 @@
 #pragma once
 
 #include <memory>
+#include <future>
 #include <atomic>
 #include <chrono>
 #include <stop_token>
@@ -247,6 +248,7 @@ class client : public std::enable_shared_from_this<client>
   public:  // types
 
     using millis = std::chrono::milliseconds;
+    using usec = std::chrono::microseconds;
 
   public:  // methods
 
@@ -382,7 +384,20 @@ class client : public std::enable_shared_from_this<client>
      */
     [[nodiscard]] virtual tx_ptr create_tx(transaction::isolation_e isolation = transaction::isolation_e::READ_COMMITTED, bool read_only = false) = 0;
 
-    // TODO: create ping() method.
+    /**
+     * Sends a ping command to the server.
+     * 
+     * @note This method is thread-safe, it can be called from a callback.
+     * 
+     * @param[in] payload Payload to send with the ping command.
+     * 
+     * @return Future with the microseconds elapsed between the method call and
+     *         the reception of the ping response, or the exception if the client 
+     *         is closed while waiting for the response.
+     * 
+     * @exception nplex_exception Not-connected.
+     */
+    virtual std::future<usec> ping(const std::string &payload = "") = 0;
 
     /**
      * Sends a delayed command to close/finish the client.
