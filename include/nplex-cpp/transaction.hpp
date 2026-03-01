@@ -1,6 +1,7 @@
 #pragma once
 
 #include <functional>
+#include <future>
 #include "types.hpp"
 
 #define NPLEX_CREATE 1
@@ -79,9 +80,29 @@ class transaction
     virtual bool read_only() const = 0;
     virtual state_e state() const = 0;
     virtual bool dirty() const = 0;
+
+    /**
+     * Get/set user-defined type of the transaction.
+     * 
+     * You can use this type to categorize transactions. For example, 
+     * you can set the type to '1' for user transactions, and '2' for admin 
+     * transactions. This value is not used by the Nplex client or server, 
+     * it is only for user reference. By default, its value is '0'.
+     * 
+     * @param[in] type User-defined type of the transaction.
+     */
     virtual std::uint32_t type() const = 0;
     virtual void type(std::uint32_t type) = 0;
-    virtual rev_t rev() const = 0; // current database revision
+
+    /**
+     * Database revision. It value depends on the isolation level:
+     * - read-committed: Current database revision.
+     * - repeatable-reads: Current database revision.
+     * - serializable: Database revision at transaction creation time.
+     * 
+     * @return Database revision.
+     */
+    virtual rev_t rev() const = 0;
 
     /**
      * Read a key-value pair.
@@ -247,6 +268,20 @@ class transaction
      */
     virtual std::size_t for_each(const callback_t &callback) { return for_each("**", callback); }
     virtual std::size_t for_each(const char *pattern, const callback_t &callback) = 0;
+
+    /**
+     * Submit transaction to the server to be committed.
+     * 
+     * @note This method is thread-safe, it can be called from a callback.
+     * 
+     * @param[in] force Override data integrity (only allowed if user has sufficient privileges).
+     * 
+     * @return Future with the transaction state after submit, or the exception 
+     *         if the client there is a problem.
+     * 
+     * @exception nplex_exception Not-connected, not-privilegues, tx-dirty, etc.
+     */
+    virtual std::future<void> submit(bool force = false) = 0;
 
   protected:
 

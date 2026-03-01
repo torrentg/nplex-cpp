@@ -61,7 +61,7 @@ store_ptr make_basic_store()
     store_ptr store = std::make_shared<store_t>();
     const msgs::Update *ptr = nullptr;
 
-    auto transaction1 = make_update(1, "jdoe", 1234567890, 15,
+    auto update_msg1 = make_update(1, "jdoe", 1234567890, 15,
         {
             { .key = "key1", .value = {11}},
             { .key = "key2", .value = {21}},
@@ -73,13 +73,13 @@ store_ptr make_basic_store()
         {}
     );
 
-    buf = serialize(transaction1);
+    buf = serialize(update_msg1);
     ptr = flatbuffers::GetRoot<nplex::msgs::Update>(buf.data());
 
     REQUIRE_NOTHROW(store->update(ptr));
     CHECK(store->m_rev == 1);
 
-    auto transaction2 = make_update(2, "ljohnson", 1234567895, 7,
+    auto update_msg2 = make_update(2, "ljohnson", 1234567895, 7,
         {
             { .key = "key3", .value = {32}},
             { .key = "key4", .value = {42}},
@@ -89,7 +89,7 @@ store_ptr make_basic_store()
         { "key5", "key6" }
     );
 
-    buf = serialize(transaction2);
+    buf = serialize(update_msg2);
     ptr = flatbuffers::GetRoot<nplex::msgs::Update>(buf.data());
 
     REQUIRE_NOTHROW(store->update(ptr));
@@ -146,7 +146,7 @@ TEST_CASE("transaction_test")
 
     SUBCASE("read_committed_basic")
     {
-        auto tx = std::make_shared<transaction_impl>(store, transaction::isolation_e::READ_COMMITTED);
+        auto tx = std::make_shared<transaction_impl>(nullptr, store, transaction::isolation_e::READ_COMMITTED);
 
         CHECK(tx->isolation() == transaction::isolation_e::READ_COMMITTED);
 
@@ -199,7 +199,7 @@ TEST_CASE("transaction_test")
 
     SUBCASE("repeatable_read_basic")
     {
-        auto tx = std::make_shared<transaction_impl>(store, transaction::isolation_e::REPEATABLE_READ);
+        auto tx = std::make_shared<transaction_impl>(nullptr, store, transaction::isolation_e::REPEATABLE_READ);
 
         CHECK(tx->isolation() == transaction::isolation_e::REPEATABLE_READ);
 
@@ -251,7 +251,7 @@ TEST_CASE("transaction_test")
 
     SUBCASE("serializable_basic")
     {
-        auto tx = std::make_shared<transaction_impl>(store, transaction::isolation_e::SERIALIZABLE);
+        auto tx = std::make_shared<transaction_impl>(nullptr, store, transaction::isolation_e::SERIALIZABLE);
 
         CHECK(tx->isolation() == transaction::isolation_e::SERIALIZABLE);
 
@@ -303,7 +303,7 @@ TEST_CASE("transaction_test")
 
     SUBCASE("read_upsert_remove_exceptions")
     {
-        auto tx = std::make_shared<transaction_impl>(store, transaction::isolation_e::SERIALIZABLE, true);
+        auto tx = std::make_shared<transaction_impl>(nullptr, store, transaction::isolation_e::SERIALIZABLE, true);
 
         CHECK_THROWS_AS(tx->upsert("key1", "abc"), nplex_exception); // read-only exception
         CHECK_THROWS_AS(tx->remove("key1"), nplex_exception); // read-only exception
@@ -315,7 +315,7 @@ TEST_CASE("transaction_test")
 TEST_CASE("transaction_for_each")
 {
     store_ptr store = make_basic_store();
-    auto tx = std::make_shared<transaction_impl>(store, transaction::isolation_e::READ_COMMITTED);
+    auto tx = std::make_shared<transaction_impl>(nullptr, store, transaction::isolation_e::READ_COMMITTED);
 
     SUBCASE("iterate_all_only_store")
     {
@@ -390,7 +390,7 @@ TEST_CASE("transaction_ensure")
 {
     store_ptr store = make_basic_store();
     std::vector<nplex::change_t> changes;
-    auto tx = std::make_shared<transaction_impl>(store, transaction::isolation_e::READ_COMMITTED);
+    auto tx = std::make_shared<transaction_impl>(nullptr, store, transaction::isolation_e::READ_COMMITTED);
 
     SUBCASE("ensure_all")
     {

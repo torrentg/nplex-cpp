@@ -984,9 +984,7 @@ nplex::tx_ptr nplex::client_impl::create_tx(transaction::isolation_e isolation, 
     if (num_txs >= m_params.max_active_txs)
         throw nplex_exception("Too many concurrent transactions (max={})", m_params.max_active_txs);
 
-    std::lock_guard<decltype(m_store->m_mutex)> lock_store(m_store->m_mutex);
-
-    auto tx = std::make_shared<transaction_impl>(m_store, isolation, read_only);
+    auto tx = std::make_shared<transaction_impl>(shared_from_this(), m_store, isolation, read_only);
     m_transactions.insert(tx);
 
     log_debug("Transaction created, isolation={}, read_only={}", to_str(isolation), read_only);

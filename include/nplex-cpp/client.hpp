@@ -243,7 +243,7 @@ class reactor
  *   - Thread-safe access to the database.
  *   - Data access according to the tx isolation level.
  */
-class client : public std::enable_shared_from_this<client>
+class client
 {
   public:  // types
 

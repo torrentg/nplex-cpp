@@ -63,7 +63,7 @@ using request_ptr = std::unique_ptr<request_t>;
  * Most methods run on the event loop. Those that don’t are protected by a mutex. 
  * For the remaining ones, execution on the event loop is enforced with an assert.
  */
-class client_impl final : public client
+class client_impl final : public client, public std::enable_shared_from_this<client_impl>
 {
   public:  // types
 

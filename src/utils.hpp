@@ -1,5 +1,6 @@
 #pragma once
 
+#include <chrono>
 #include <cstdint>
 #include "nplex-cpp/transaction.hpp"
 
@@ -34,4 +35,13 @@ inline bool is_valid_key(const std::string_view &key) { return !key.empty(); }
 inline bool is_valid_key(const char *key) { return (key && is_valid_key(std::string_view{key})); }
 inline bool is_valid_key(const key_t &key) { return is_valid_key(key.view()); }
 
-}
+/**
+ * Convert milliseconds since epoch to ISO 8601 format (e.g. "2024-06-30T12:34:56.789Z").
+ * 
+ * @param ms_since_epoch Milliseconds since epoch.
+ * 
+ * @return ISO 8601 formatted string.
+ */
+std::string to_iso8601(std::chrono::milliseconds ms_since_epoch);
+
+} // namespace nplex

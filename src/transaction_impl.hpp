@@ -10,11 +10,15 @@
 
 namespace nplex {
 
+// Forward declaration
+class client_impl;
+using client_impl_ptr = std::shared_ptr<client_impl>;
+
 /**
  * Internal class implementing the transaction interface.
  * Also provides methods to update and serialize its content.
  */
-class transaction_impl : public transaction
+class transaction_impl : public transaction, public std::enable_shared_from_this<transaction_impl>
 {
   public:
 
@@ -30,8 +34,9 @@ class transaction_impl : public transaction
 
   private:
 
-    rev_t m_rev_creation;                       //!< Database revision at tx creation.
+    std::weak_ptr<client_impl> m_client;        //!< Weak reference to the client.
     store_ptr m_store;                          //!< Database content.
+    rev_t m_rev_creation;                       //!< Database revision at tx creation.
     items_t m_items;                            //!< Transaction items (depends on isolation level).
     ensures_t m_ensures;                        //!< Transaction ensures.
     isolation_e m_isolation_level;              //!< Transaction isolation level.
@@ -47,8 +52,8 @@ class transaction_impl : public transaction
 
   public:
 
-    transaction_impl(store_ptr store, isolation_e isolation, bool read_only = false);
-    virtual ~transaction_impl() override = default;
+    transaction_impl(client_impl_ptr client, store_ptr store, isolation_e isolation, bool read_only = false);
+    virtual ~transaction_impl() override;
 
     virtual isolation_e isolation() const override { return m_isolation_level; }
     virtual bool read_only() const override { return m_read_only; }
@@ -67,6 +72,7 @@ class transaction_impl : public transaction
     virtual std::size_t remove(const char *pattern) override;
     virtual bool ensure(const char *pattern) override;
     virtual std::size_t for_each(const char *pattern, const callback_t &callback) override;
+    virtual std::future<void> submit(bool force = false) override;
 
     void update(const std::vector<change_t> &changes);
     const items_t & items() const { return m_items; }

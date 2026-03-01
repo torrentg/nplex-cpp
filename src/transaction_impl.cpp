@@ -3,10 +3,11 @@
 #include "nplex-cpp/exception.hpp"
 #include "utils.hpp"
 #include "messages.hpp"
+#include "client_impl.hpp"
 #include "transaction_impl.hpp"
 
-nplex::transaction_impl::transaction_impl(store_ptr store, isolation_e isolation, bool read_only) : 
-    m_store{std::move(store)}, m_isolation_level{isolation}, m_read_only{read_only}
+nplex::transaction_impl::transaction_impl(client_impl_ptr client, store_ptr store, isolation_e isolation, bool read_only) : 
+    m_client{std::move(client)}, m_store{std::move(store)}, m_isolation_level{isolation}, m_read_only{read_only}
 {
     if (!m_store)
         throw std::invalid_argument("Invalid database");
@@ -17,10 +18,28 @@ nplex::transaction_impl::transaction_impl(store_ptr store, isolation_e isolation
     m_state = state_e::OPEN;
 }
 
+nplex::transaction_impl::~transaction_impl()
+{
+    if (auto client = m_client.lock()) {
+        // TODO: uncomment statement
+        //client->notify_transaction_closed(this);
+    }
+}
+
 nplex::rev_t nplex::transaction_impl::rev() const
 {
-    std::lock_guard<decltype(m_store->m_mutex)> lock(m_store->m_mutex);
-    return m_store->m_rev;
+    switch(m_isolation_level)
+    {
+        case isolation_e::REPEATABLE_READ:
+        case isolation_e::READ_COMMITTED: {
+            std::lock_guard<decltype(m_store->m_mutex)> lock(m_store->m_mutex);
+            return m_store->m_rev;
+        }
+        case isolation_e::SERIALIZABLE:
+            return m_rev_creation;
+        default:
+            throw std::logic_error("Invalid isolation level");
+    }
 }
 
 nplex::value_ptr nplex::transaction_impl::read(const char *key, bool check)
@@ -368,4 +387,25 @@ void nplex::transaction_impl::update_serializable(const std::vector<change_t> &c
         // Case: key exists in the transaction
         m_dirty = true;
     }
+}
+
+std::future<void> nplex::transaction_impl::submit(bool force)
+{
+    std::lock_guard<decltype(m_store->m_mutex)> lock(m_store->m_mutex);
+
+    if (m_state != state_e::OPEN)
+        throw nplex_exception("Transaction is not open");
+    if (m_read_only)
+        throw nplex_exception("Transaction is read-only");
+    if (m_dirty && !force)
+        throw nplex_exception("Transaction is dirty");
+
+    if (auto client = m_client.lock()) {
+        // TODO: uncomment statement
+        //return client->submit(this->shared_from_this(), force);
+        m_state = state_e::SUBMITTING;
+        return std::async([](){});
+    }
+
+    throw std::runtime_error("Client is no longer available");
 }
