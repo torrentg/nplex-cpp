@@ -53,11 +53,11 @@ struct store_t
      * 
      * @param[in] updmsg Update to apply.
      * 
-     * @return List of applied changes.
+     * @return List of applied changes and the associated metadata.
      * 
      * @exception nplex_exception Invalid update (ex: update.rev < store.rev, or invalid-key).
      */
-    std::vector<change_t> update(const msgs::Update *updmsg);
+    std::pair<std::vector<change_t>, meta_ptr> update(const msgs::Update *updmsg);
 
   private:
 

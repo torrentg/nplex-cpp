@@ -38,17 +38,12 @@ struct meta_t
 
 using meta_ptr = std::shared_ptr<meta_t>;
 
-//! Database value.
+//! Database value (immutable).
 class value_t
 {
-    static const gto::cstring EMPTY;
-    friend struct store_t;
+  public:  // methods
 
-  private:
-    gto::cstring m_data;
-    meta_ptr m_meta;
-
-  public:
+    // Constructor.
     value_t(const gto::cstring &data, std::shared_ptr<meta_t> meta) : m_data{data}, m_meta{meta} {}
 
     // Metadata accessors
@@ -61,7 +56,7 @@ class value_t
     const gto::cstring & data() const { return m_data; }
     std::string_view as_string() const { return m_data.view(); }
     bool as_bool() const { return (m_data == "true" || m_data == "1"); }
-    millis_t as_millis() const { return std::chrono::milliseconds{as_number<std::int64_t>()}; }
+    millis_t as_millis() const { return millis_t{as_number<std::int64_t>()}; }
     template<typename T> 
     T as_number() const {
         T value;
@@ -70,6 +65,16 @@ class value_t
             throw std::invalid_argument("Invalid conversion to the requested type");
         return value;
     }
+
+  private:  // types
+
+    static const gto::cstring EMPTY;
+    friend struct store_t;
+
+  private:  // members
+
+    gto::cstring m_data;
+    meta_ptr m_meta;
 };
 
 using value_ptr = std::shared_ptr<value_t>;

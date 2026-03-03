@@ -58,14 +58,15 @@ static std::string mode_to_string(std::uint8_t mode)
     };
 }
 
-static nplex::request_ptr cmd_to_req(nplex::command_ptr &cmd)
+template<typename T, typename Q>
+static std::unique_ptr<T> convert_ptr(std::unique_ptr<Q> &req)
 {
-    auto obj = dynamic_cast<nplex::request_t*>(cmd.get());
+    auto obj = dynamic_cast<T*>(req.get());
     assert(obj);
-    nplex::request_ptr req{};
-    req.reset(obj);
-    cmd.release();
-    return req;
+    std::unique_ptr<T> ret{};
+    ret.reset(obj);
+    req.release();
+    return ret;
 }
 
 template <>
@@ -147,6 +148,9 @@ nplex::client_impl::client_impl(const client_params_t &params) :
 
     if (m_params.servers.empty())
         throw nplex_exception("no servers");
+
+    if (m_params.max_active_txs == 0)
+        m_params.max_active_txs = UINT32_MAX;
 
     m_store = std::make_shared<store_t>();
     m_manager = std::make_shared<manager>();
@@ -294,6 +298,16 @@ void nplex::client_impl::set_state(state_e state)
     log_debug("State changed from {} to {}", ::to_str(m_state.load()), ::to_str(state));
 
     m_state = state;
+
+    if (m_state == state_e::CLOSED)
+    {
+        std::lock_guard<std::mutex> lock(m_mutex);
+        m_transactions.clear();
+        m_commands.clear();
+        m_requests.clear();
+        m_accepted.clear();
+    }
+
     m_cv.notify_all();
 }
 
@@ -563,10 +577,8 @@ void nplex::client_impl::process_commands()
 {
     assert(m_loop_thread_id == std::this_thread::get_id());
 
-    if (is_closed()) {
-        m_commands.clear();
+    if (is_closed())
         return;
-    }
 
     command_ptr cmd;
 
@@ -605,15 +617,32 @@ void nplex::client_impl::process_submit_cmd(command_ptr &&cmd)
 {
     assert(m_loop_thread_id == std::this_thread::get_id());
 
-    UNUSED(cmd);
-    // TODO: implement
+    auto *req = dynamic_cast<submit_req_t*>(cmd.get());
+
+    if (!m_con) {
+        req->tx->set_submit_result(std::make_exception_ptr(nplex_exception("client is not connected")));
+        return;
+    }
+
+    req->cid = m_correlation++;
+
+    send(
+        create_submit_msg(
+            req->cid,
+            m_store->m_rev,
+            req->force,
+            req->tx
+        )
+    );
+
+    m_requests.push(convert_ptr<request_t>(cmd));
 }
 
 void nplex::client_impl::process_ping_cmd(command_ptr &&cmd)
 {
     assert(m_loop_thread_id == std::this_thread::get_id());
     
-    ping_req_t *req = dynamic_cast<ping_req_t*>(cmd.get());
+    auto *req = dynamic_cast<ping_req_t*>(cmd.get());
 
     if (!m_con) {
         req->promise.set_exception(std::make_exception_ptr(nplex_exception("client is not connected")));
@@ -629,7 +658,7 @@ void nplex::client_impl::process_ping_cmd(command_ptr &&cmd)
         )
     );
 
-    m_requests.push(cmd_to_req(cmd));
+    m_requests.push(convert_ptr<request_t>(cmd));
 
     // TODO: process m_requests on connection-loss
 }
@@ -860,19 +889,29 @@ void nplex::client_impl::process_submit_resp(const nplex::msgs::SubmitResponse *
 {
     assert(m_loop_thread_id == std::this_thread::get_id());
 
-    // save server.crev
-    // retrieve request using cid
-    // retrieve tx using cid
-
-    if (resp->code() != msgs::SubmitCode::ACCEPTED)
-    {
-        // TODO: process error
-        //error = "Submit was rejected";
-        //parent.on_reject(tx);
-        return;
+    while (!m_requests.empty() && m_requests.front()->cid < resp->cid()) {
+        log_error("Received response with cid {} but expecting cid {}, discarding it", resp->cid(), m_requests.front()->cid);
+        m_requests.pop();
     }
 
-    // update tx status
+    if (m_requests.empty() || m_requests.front()->cid != resp->cid())
+        return;
+
+    auto ptr = m_requests.pop();
+    auto req = dynamic_cast<submit_req_t*>(ptr.get());
+
+    auto latency = std::chrono::duration_cast<usec>(clock::now() - req->t0);
+
+    log_debug("Received submit response from {} with code {} ({} usec)", m_con->addr().str(), msgs::EnumNameSubmitCode(resp->code()), latency.count());
+
+    req->tx->set_submit_result(resp->code());
+
+    if (resp->code() != msgs::SubmitCode::ACCEPTED)
+        return;
+
+    req->rev = resp->erev();
+
+    m_accepted.push(convert_ptr<submit_req_t>(ptr));
 }
 
 void nplex::client_impl::process_updates_push(const nplex::msgs::UpdatesPush *resp)
@@ -902,47 +941,63 @@ void nplex::client_impl::process_update(const nplex::msgs::Update *upd)
 {
     assert(m_loop_thread_id == std::this_thread::get_id());
 
-    std::lock_guard<decltype(m_store->m_mutex)> lock(m_store->m_mutex);
+    std::vector<nplex::change_t> changes;
+    meta_ptr meta = nullptr;
 
     // update the local database
-    auto changes = m_store->update(upd);
-
-    // update current transactions and remove the closed ones
-    for (auto it = m_transactions.begin(); it != m_transactions.end(); )
     {
-        auto tx = *it;
+        std::lock_guard<decltype(m_store->m_mutex)> lock(m_store->m_mutex);
+        std::tie(changes, meta) = m_store->update(upd);
+        assert(meta && meta->rev == upd->rev());
+    }
 
-        switch (tx->state())
+    // check accepted commits with pending update
+    while (!m_accepted.empty() && m_accepted.front()->rev < meta->rev) {
+        log_error("Discarding accepted tx with rev {} at rev {}", m_accepted.front()->rev, meta->rev);
+        auto req = m_accepted.pop();
+        req->tx->set_submit_result(std::make_exception_ptr(nplex_exception("unexpected update received")));
+        assert(false);
+    }
+
+    if (!m_accepted.empty() && m_accepted.front()->rev == meta->rev) {
+        auto req = m_accepted.pop();
+        req->tx->confirm_commit(meta->rev);
+        log_debug("Tx committed in {} usec", std::chrono::duration_cast<usec>(clock::now() - req->t0).count());
+    }
+
+    {
+        // update current transactions and remove the closed ones
+        std::lock_guard<std::mutex> lock(m_mutex);
+
+        for (auto it = m_transactions.begin(); it != m_transactions.end(); )
         {
-            case transaction::state_e::OPEN:
-                tx->update(changes);
-                ++it;
-                break;
+            auto tx = *it;
 
-            case transaction::state_e::REJECTED:
-            case transaction::state_e::COMMITTED:
-            case transaction::state_e::DISCARDED:
-            case transaction::state_e::ABORTED:
-                it = m_transactions.erase(it);
-                break;
+            switch (tx->state())
+            {
+                case transaction::state_e::OPEN:
+                    tx->update(changes);
+                    ++it;
+                    break;
 
-            case transaction::state_e::SUBMITTING:
-            case transaction::state_e::SUBMITTED:
-                ++it;
-                break;
+                case transaction::state_e::SUBMITTED:
+                case transaction::state_e::ACCEPTED:
+                    ++it;
+                    break;
 
-            case transaction::state_e::ACCEPTED:
-                // TODO: try to match it with the update
-                ++it;
-                break;
+                case transaction::state_e::REJECTED:
+                case transaction::state_e::COMMITTED:
+                case transaction::state_e::DISCARDED:
+                case transaction::state_e::ABORTED:
+                    it = m_transactions.erase(it);
+                    break;
+            }
         }
     }
 
-    auto meta = m_store->m_metas.rbegin();
-    assert(meta != m_store->m_metas.rend());
-
     // update business objects and trigger actions through the reactor
-    if (m_reactor) m_reactor->on_update(*this, meta->second, changes);
+    if (m_reactor) m_reactor->on_update(*this, meta, changes);
+    // TODO: protect with try-catch + log error + warning if too-slow
 }
 
 void nplex::client_impl::process_keepalive_push(const nplex::msgs::KeepAlivePush *resp)
@@ -992,36 +1047,20 @@ nplex::tx_ptr nplex::client_impl::create_tx(transaction::isolation_e isolation, 
     return tx;
 }
 
-#if 0
-bool nplex::client::submit_tx(const tx_ptr &tx, bool force)
+void nplex::client_impl::remove_tx(const transaction_impl *tx)
 {
-    if (!tx)
-        throw std::invalid_argument("Transaction is empty");
+    if (is_closed())
+        return;
 
-    if (tx->state() != transaction::state_e::OPEN)
-        throw nplex_exception("Transaction is not open");
+    std::lock_guard<decltype(m_mutex)> lock_impl(m_mutex);
 
-    std::lock_guard<decltype(m_mutex)> lock(m_mutex);
+    auto it = m_transactions.find(tx);
 
-    if (!m_impl->is_connected())
-        throw nplex_exception("Client is not connected");
-
-    //TODO: caution, m_impl->transactions is not thread-safe
-
-    auto it = m_impl->transactions.find(tx);
-    if (it == m_impl->transactions.end())
-        throw nplex_exception("Transaction not found");
-
-    // TODO: check if there are actions to submit (not-only-reads)
-
-    m_impl->push_command(submit_cmd_t{dynamic_pointer_cast<transaction_impl>(tx), force});
-
-    // TODO: solve visibility error
-    //tx->state(transaction::state_e::SUBMITTING);
-
-    return true;
+    if (it != m_transactions.end()) {
+        log_debug("Transaction removed");
+        m_transactions.erase(it);
+    }
 }
-#endif
 
 std::future<nplex::client::usec> nplex::client_impl::ping(const std::string &payload) 
 {

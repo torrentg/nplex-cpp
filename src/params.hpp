@@ -19,7 +19,7 @@ struct client_params_t
     std::string user;                           //!< User name.
     std::string password;                       //!< User password.
     std::vector<addr_t> servers;                //!< List of servers.
-    std::uint32_t max_active_txs = UINT32_MAX;  //!< Maximum number of concurrent transactions ( > 0).
+    std::uint32_t max_active_txs = UINT32_MAX;  //!< Maximum number of concurrent transactions (> 0).
     connection_params_t connection;             //!< Connection parameters.
 };
 

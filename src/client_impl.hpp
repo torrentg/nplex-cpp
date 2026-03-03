@@ -41,10 +41,11 @@ struct close_cmd_t : public command_t {
 };
 
 struct submit_req_t : public request_t {
+    submit_req_t(const tx_impl_ptr &t, bool f) : tx(t), force(f) {}
     virtual ~submit_req_t() override = default;
     tx_impl_ptr tx;
     bool force = false;
-    std::promise<bool> promise;
+    rev_t rev = 0;
 };
 
 struct ping_req_t : public request_t {
@@ -54,8 +55,28 @@ struct ping_req_t : public request_t {
     std::promise<usec> promise;
 };
 
+struct tx_comparator
+{
+    using is_transparent = std::true_type;
+    
+    template<typename T, typename U>
+    bool operator()(const T &a, const U &b) const
+    {
+        auto get_ptr = [](const auto &x) -> const transaction_impl* {
+            if constexpr (std::is_pointer_v<std::decay_t<decltype(x)>>) {
+                return x;
+            } else {
+                return x.get();
+            }
+        };
+
+        return get_ptr(a) < get_ptr(b);
+    }
+};
+
 using command_ptr = std::unique_ptr<command_t>;
 using request_ptr = std::unique_ptr<request_t>;
+using submit_ptr = std::unique_ptr<submit_req_t>;
 
 /**
  * Client implementation.
@@ -112,6 +133,10 @@ class client_impl final : public client, public std::enable_shared_from_this<cli
     void on_msg_received(connection *con, const msgs::Message *msg);
     void on_msg_delivered(connection *con, const msgs::Message *msg);
 
+    void remove_tx(const transaction_impl *tx);
+    bool can_force () const { return m_can_force; }
+    const std::vector<acl_t> & permissions() const { return m_permissions; }
+
   protected:  // methods
 
     template<typename... Args>
@@ -147,8 +172,10 @@ class client_impl final : public client, public std::enable_shared_from_this<cli
 
   private:  // members
 
+    using set_tx_t = std::set<tx_impl_ptr, tx_comparator>;
+
     store_ptr m_store;                              //!< Database content.
-    std::set<tx_impl_ptr> m_transactions;           //!< List of current transactions.
+    set_tx_t m_transactions;                        //!< List of current transactions.
     client_params_t m_params;                       //!< Client params.
     rev_t m_rev0 = 0;                               //!< Initial revision.
     
@@ -160,16 +187,17 @@ class client_impl final : public client, public std::enable_shared_from_this<cli
     connection *m_con = nullptr;                    //!< Current connection (established).
     std::size_t m_correlation = 0;                  //!< Last correlation id.
     std::size_t m_data_cid = 0;                     //!< Correlation id of last snapshot/updates sent.
-    bool m_can_force = false;                       //!< User can force transactions (set by server at login).
-    std::vector<acl_t> m_permissions;               //!< User permissions (set by server at login).
+    std::vector<acl_t> m_permissions;               //!< User permissions (fixed by server at login).
+    bool m_can_force = false;                       //!< User can force transactions (fixed by server at login).
 
-    std::mutex m_mutex;                             //!< Mutex to protect m_commands and m_async and m_cv.
+    std::mutex m_mutex;                             //!< Mutex to protect m_commands, m_async, m_cv and m_transactions.
     std::atomic<bool> m_initialized = false;        //!< Data was initialized with a snapshot.
     std::condition_variable m_cv;                   //!< Condition variable to wait for changes in state.
     std::atomic<state_e> m_state;                   //!< Client state.
     std::exception_ptr m_error;                     //!< Stored exception (if any).
     gto::cqueue<command_ptr> m_commands;            //!< Async commands pending to be digested by the event loop.
     gto::cqueue<request_ptr> m_requests;            //!< Requests pending to receive a response from the server.
+    gto::cqueue<submit_ptr> m_accepted;             //!< Accepted submits pending to receive its update from the server.
 
     std::thread::id m_loop_thread_id;               //!< Thread id of the event loop thread.
     std::unique_ptr<uv_loop_t> m_loop;              //!< Event loop.

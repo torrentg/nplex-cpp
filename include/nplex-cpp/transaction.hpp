@@ -16,9 +16,19 @@ namespace nplex {
  * according to an isolation level.
  * 
  * Transaction is an interface where implementation details are hidden from the user.
- * Transactions can only be created by the client.
  * 
+ * Transaction is not thread-safe. You should not share a transaction between threads. 
+ * If you need to share a transaction, you should use a mutex to protect it.
+ * 
+ * Transactions can only be created by the client. 
  * @see client::create_tx().
+ * 
+ * There is no rollback method. If you want to discard a transaction, just destroy it 
+ * without submitting it.
+ * 
+ * Transactions are automatically updated on each database commit. If a transaction is 
+ * invalidated by an external update, it is marked as dirty. Destroy unused transactions 
+ * to reduce resources consumption and to avoid confusion.
  * 
  * Isolation levels:
  *
@@ -57,29 +67,47 @@ class transaction
   public:
 
     enum class state_e : std::uint8_t {
-        OPEN,                                   //!< Transaction is ongoing (user is fetching data).
-        SUBMITTING,                             //!< Transaction is being submitted to the server.
-        SUBMITTED,                              //!< Transaction was submitted to the server.
-        ACCEPTED,                               //!< Transaction was accepted by the server (pending to receive the commit).
-        REJECTED,                               //!< Transaction was rejected by the server (commit was rejected).
-        COMMITTED,                              //!< Transaction was committed.
-        DISCARDED,                              //!< Transaction was discarded by the user.
-        ABORTED                                 //!< Transaction was aborted (ex. server disconnected).
+        OPEN,                       //!< Transaction is ongoing (user is fetching data).
+        SUBMITTED,                  //!< Transaction was submitted to the server.
+        ACCEPTED,                   //!< Transaction was accepted by the server (pending to receive the commit).
+        REJECTED,                   //!< Transaction was rejected by the server (commit was rejected).
+        COMMITTED,                  //!< Transaction was committed.
+        DISCARDED,                  //!< Transaction was discarded by the user.
+        ABORTED,                    //!< Transaction was aborted (ex. server disconnected)
     };
 
     enum class isolation_e : std::uint8_t {
-        READ_COMMITTED,                         //!< Read always most recent data.
-        REPEATABLE_READ,                        //!< Read data will not change during the transaction.
-        SERIALIZABLE                            //!< All read data will not change during the transaction.
+        READ_COMMITTED,             //!< Read always most recent data.
+        REPEATABLE_READ,            //!< Read data will not change during the transaction.
+        SERIALIZABLE                //!< All read data will not change during the transaction.
+    };
+
+    enum class submit_e : std::uint8_t {
+        NO_MODIFICATIONS,           //!< There are no modifications to commit (eg. read-only tx).
+        COMMITTED,                  //!< Transaction was committed to the server.
+        TRY_LATER,                  //!< Server too busy. Try again later.
+        REJECTED_PERMISSION,        //!< Commit was rejected due to insufficient permissions.
+        REJECTED_OLD_REVISION,      //!< Commit was rejected due to an old revision (eg. long-running tx).
+        REJECTED_INTEGRITY,         //!< Commit was rejected due to integrity constraints (eg. dirty tx or another tx modified the same key while this tx was being sent).
+        REJECTED_ENSURE,            //!< Commit was rejected due to ensure constraints (eg. another tx altered an ensured key).
+        REJECTED_OTHER              //!< Commit was rejected due to other reasons.
     };
 
     using callback_t = std::function<bool(const key_t &key, const value_t &value)>;
 
     virtual ~transaction() = default;
     virtual isolation_e isolation() const = 0;
-    virtual bool read_only() const = 0;
+    virtual bool is_read_only() const = 0;
+    virtual bool is_dirty() const = 0;
     virtual state_e state() const = 0;
-    virtual bool dirty() const = 0;
+
+    bool is_closed() const { 
+        auto s = state();
+        return (s == state_e::REJECTED || 
+                s == state_e::COMMITTED || 
+                s == state_e::DISCARDED || 
+                s == state_e::ABORTED);
+    }
 
     /**
      * Get/set user-defined type of the transaction.
@@ -140,8 +168,7 @@ class transaction
      *         empty if not found or previously deleted.
      *         If the value was previously upsert, then its metadata is empty.
      * 
-     * @exception std::invalid_argument Invalid key.
-     * @exception nplex_exception Transaction not open, or invalid key.
+     * @exception nplex_exception tx-not-open, or invalid-key.
      */
     virtual value_ptr read(const char *key, bool check = false) = 0;
 
@@ -158,8 +185,7 @@ class transaction
      * @return true if key created or updated,
      *         false if existing key has same value and force = false.
      * 
-     * @exception std::invalid_argument Invalid key or data.
-     * @exception nplex_exception Transaction is read-only, or not open.
+     * @exception nplex_exception tx-read-only, or tx-not-open, or invalid-key, or no-permissions.
      */
     virtual bool upsert(const char *key, const std::string_view &data, bool force = false) = 0;
 
@@ -179,8 +205,7 @@ class transaction
      * 
      * @return Number of removals.
      * 
-     * @exception std::invalid_argument Invalid key.
-     * @exception nplex_exception Transaction is read-only, or not open, or invalid key.
+     * @exception nplex_exception tx-read-only, or tx-not-open, or invalid-key, or no-permissions.
      */
     virtual bool remove(const key_t &key) = 0;
     virtual std::size_t remove(const char *pattern) = 0;
@@ -221,7 +246,7 @@ class transaction
      * @return true if the condition was set, 
      *         false otherwise (invalid-pattern).
      * 
-     * @exception nplex_exception Transaction is not open.
+     * @exception nplex_exception tx-not-open.
      */
     virtual bool ensure(const char *pattern) = 0;
 
@@ -263,8 +288,8 @@ class transaction
      * 
      * @return Number of iterated elements (0 if to < from).
      * 
-     * @exception nplex_exception Transaction is not open, or empty callback function.
-     * @exception nplex_exception Transaction is read-only and callback function calls upsert or delete.
+     * @exception nplex_exception tx-not-open, tx-read-only (if callback calls upsert or delete), 
+     *                            no-permission (if callback calls upsert or delete).
      */
     virtual std::size_t for_each(const callback_t &callback) { return for_each("**", callback); }
     virtual std::size_t for_each(const char *pattern, const callback_t &callback) = 0;
@@ -276,12 +301,21 @@ class transaction
      * 
      * @param[in] force Override data integrity (only allowed if user has sufficient privileges).
      * 
-     * @return Future with the transaction state after submit, or the exception 
-     *         if the client there is a problem.
+     * @return Future with the transaction return code, or the exception if there is a problem.
      * 
-     * @exception nplex_exception Not-connected, not-privilegues, tx-dirty, etc.
+     * @exception nplex_exception not-connected, not-privilegues, tx-dirty, etc.
      */
-    virtual std::future<void> submit(bool force = false) = 0;
+    virtual std::future<submit_e> submit(bool force = false) = 0;
+
+    /**
+     * Discard the transaction.
+     * 
+     * Mark this transaction as discarded. The transaction is removed from the 
+     * client transaction list and is not updated on each commit.
+     * 
+     * This method is thread-safe, it can be called from a callback.
+     */
+    virtual void discard() = 0;
 
   protected:
 

@@ -7,23 +7,47 @@
 #include "transaction_impl.hpp"
 
 nplex::transaction_impl::transaction_impl(client_impl_ptr client, store_ptr store, isolation_e isolation, bool read_only) : 
-    m_client{std::move(client)}, m_store{std::move(store)}, m_isolation_level{isolation}, m_read_only{read_only}
+    m_client{std::move(client)}, m_store{std::move(store)}, m_isolation_level{isolation}, 
+    m_state{state_e::OPEN}, m_read_only{read_only}
 {
     if (!m_store)
         throw std::invalid_argument("Invalid database");
 
     std::lock_guard<decltype(m_store->m_mutex)> lock(m_store->m_mutex);
-
     m_rev_creation = m_store->m_rev;
-    m_state = state_e::OPEN;
 }
 
 nplex::transaction_impl::~transaction_impl()
 {
-    if (auto client = m_client.lock()) {
-        // TODO: uncomment statement
-        //client->notify_transaction_closed(this);
+    discard();
+}
+
+void nplex::transaction_impl::discard()
+{
+    set_state(state_e::DISCARDED);
+
+    try {
+        m_promise.set_exception(
+            std::make_exception_ptr(nplex_exception("Transaction was discarded"))
+        );
     }
+    catch (...) {
+        // do nothing
+    }
+}
+
+void nplex::transaction_impl::set_state(state_e state)
+{
+    if (is_closed() || state == m_state)
+        return;
+
+    m_state = state;
+
+    if (!is_closed())
+        return;
+
+    if (auto client = m_client.lock())
+        client->remove_tx(this);
 }
 
 nplex::rev_t nplex::transaction_impl::rev() const
@@ -107,6 +131,8 @@ bool nplex::transaction_impl::upsert(const char *key, const std::string_view &da
     // Case: key was previously read, upserted or deleted in this transaction
     if (it_tx != m_items.end())
     {
+        // TODO: check for permission (update)
+
         // Case: Same value and not forced
         if (!force && 
             std::get<action_e>(it_tx->second) != action_e::DELETE && 
@@ -124,9 +150,12 @@ bool nplex::transaction_impl::upsert(const char *key, const std::string_view &da
 
     // Case: key does not exist in the database
     if (it_store == m_store->m_data.end()) {
+        // TODO: check for permission (create)
         m_items.emplace(key, std::make_tuple(action_e::UPSERT, value));
         return true;
     }
+
+    // TODO: check for permission (update)
 
     // Case: key exists in database AND has the same value
     if (!force && it_store->second->data() == value->data())
@@ -141,6 +170,8 @@ bool nplex::transaction_impl::remove(const key_t &key)
 {
     if (!is_valid_key(key))
         throw std::invalid_argument("Invalid key");
+
+    // TODO: check permissions (delete)
 
     std::lock_guard<decltype(m_store->m_mutex)> lock(m_store->m_mutex);
 
@@ -199,8 +230,6 @@ bool nplex::transaction_impl::ensure(const char *pattern)
     if (!pattern)
         return false;
 
-    std::lock_guard<decltype(m_store->m_mutex)> lock(m_store->m_mutex);
-
     if (m_state != state_e::OPEN)
         throw nplex_exception("Transaction is not open");
 
@@ -212,10 +241,7 @@ bool nplex::transaction_impl::ensure(const char *pattern)
 
 std::size_t nplex::transaction_impl::for_each(const char *pattern, const callback_t &callback)
 {
-    if (!callback)
-        throw std::invalid_argument("Invalid callback function");
-
-    if (!pattern || *pattern == '\0')
+    if (!callback || !pattern || *pattern == '\0')
         return 0;
 
     std::string_view prefix = std::string_view{pattern, strcspn(pattern, "*?")};
@@ -389,23 +415,121 @@ void nplex::transaction_impl::update_serializable(const std::vector<change_t> &c
     }
 }
 
-std::future<void> nplex::transaction_impl::submit(bool force)
+std::future<nplex::transaction::submit_e> nplex::transaction_impl::submit(bool force)
 {
-    std::lock_guard<decltype(m_store->m_mutex)> lock(m_store->m_mutex);
+    std::lock_guard<std::mutex> lock(m_mutex);
 
     if (m_state != state_e::OPEN)
         throw nplex_exception("Transaction is not open");
-    if (m_read_only)
-        throw nplex_exception("Transaction is read-only");
-    if (m_dirty && !force)
-        throw nplex_exception("Transaction is dirty");
 
-    if (auto client = m_client.lock()) {
-        // TODO: uncomment statement
-        //return client->submit(this->shared_from_this(), force);
-        m_state = state_e::SUBMITTING;
-        return std::async([](){});
+    if (m_read_only) {
+        m_promise.set_value(submit_e::NO_MODIFICATIONS);
+        set_state(state_e::DISCARDED);
+        return m_promise.get_future();
     }
 
-    throw std::runtime_error("Client is no longer available");
+    if (!force)
+    {
+        bool has_modifications = false;
+
+        for (const auto &[key, entry] : m_items) {
+            if (std::get<action_e>(entry) != action_e::READ) {
+                has_modifications = true;
+                break;
+            }
+        }
+
+        if (!has_modifications) {
+            m_promise.set_value(submit_e::NO_MODIFICATIONS);
+            set_state(state_e::DISCARDED);
+            return m_promise.get_future();
+        }
+
+        if (m_dirty) {
+            m_promise.set_value(submit_e::REJECTED_INTEGRITY);
+            set_state(state_e::REJECTED);
+            return m_promise.get_future();
+        }
+    }
+
+    if (auto client = m_client.lock())
+    {
+        if (force && !client->can_force()) {
+            m_promise.set_value(submit_e::REJECTED_PERMISSION);
+            set_state(state_e::REJECTED);
+            return m_promise.get_future();
+        }
+
+        set_state(state_e::SUBMITTED);
+        client->push_command(std::make_unique<submit_req_t>(shared_from_this(), force));
+        return m_promise.get_future();
+    }
+
+    throw nplex_exception("Client is no longer available");
+}
+
+void nplex::transaction_impl::set_submit_result(std::exception_ptr eptr)
+{
+    std::lock_guard<std::mutex> lock(m_mutex);
+
+    if (m_state != state_e::SUBMITTED)
+        return;
+
+    set_state(state_e::ABORTED);
+    m_promise.set_exception(eptr);
+}
+
+void nplex::transaction_impl::set_submit_result(msgs::SubmitCode code)
+{
+    if (m_state != state_e::SUBMITTED)
+        return;
+
+    std::lock_guard<std::mutex> lock(m_mutex);
+
+    switch (code)
+    {
+        case msgs::SubmitCode::ACCEPTED:
+            set_state(state_e::ACCEPTED);
+            break;
+        case msgs::SubmitCode::TRY_LATER:
+            set_state(state_e::OPEN);
+            m_promise.set_value(submit_e::TRY_LATER);
+            m_promise = std::promise<submit_e>{};
+            break;
+        case msgs::SubmitCode::NO_MODIFICATIONS:
+            set_state(state_e::DISCARDED);
+            m_promise.set_value(submit_e::NO_MODIFICATIONS);
+            break;
+        case msgs::SubmitCode::REJECTED_PERMISSION:
+            set_state(state_e::REJECTED);
+            m_promise.set_value(submit_e::REJECTED_PERMISSION);
+            break;
+        case msgs::SubmitCode::REJECTED_OLD_REVISION:
+            set_state(state_e::REJECTED);
+            m_promise.set_value(submit_e::REJECTED_OLD_REVISION);
+            break;
+        case msgs::SubmitCode::REJECTED_INTEGRITY:
+            set_state(state_e::REJECTED);
+            m_promise.set_value(submit_e::REJECTED_INTEGRITY);
+            break;
+        case msgs::SubmitCode::REJECTED_ENSURE:
+            set_state(state_e::REJECTED);
+            m_promise.set_value(submit_e::REJECTED_ENSURE);
+            break;
+        default:
+            set_state(state_e::REJECTED);
+            m_promise.set_value(submit_e::REJECTED_OTHER);
+            break;
+    }
+}
+
+void nplex::transaction_impl::confirm_commit([[maybe_unused]] rev_t rev)
+{
+    std::lock_guard<std::mutex> lock(m_mutex);
+
+    if (m_state != state_e::ACCEPTED)
+        return;
+    
+    set_state(state_e::COMMITTED);
+    m_promise.set_value(submit_e::COMMITTED);
 }

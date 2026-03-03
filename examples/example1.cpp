@@ -59,7 +59,7 @@ int main()
         auto cli = nplex::client::create(params);
 
         // Attach logger
-        auto log = std::make_shared<logger>(nplex::logger::log_level_e::DEBUG);
+        auto log = std::make_shared<logger>(nplex::logger::log_level_e::TRACE);
         cli->set_logger(log);
 
         // Start the nplex event loop in a dedicated thread
@@ -70,6 +70,12 @@ int main()
         cli->wait_for_synced();
         print_database_content(cli);
         measure_latency(cli);
+
+        auto tx = cli->create_tx(nplex::transaction::isolation_e::SERIALIZABLE, false);
+        int val = tx->read("rct.gates.3.open")->as_number<int>();
+        val++;
+        tx->upsert("rct.gates.3.open", std::to_string(val));
+        auto submit_result = tx->submit().get();
 
         // Close the database, alternatively you can call `cli->close();`
         worker.request_stop();

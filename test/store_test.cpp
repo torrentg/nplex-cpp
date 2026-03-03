@@ -195,6 +195,7 @@ TEST_CASE("store_load_error_invalid_key")
 TEST_CASE("store_update")
 {
     store_t store;
+    meta_ptr meta = nullptr;
     std::vector<change_t> changes;
     flatbuffers::DetachedBuffer detached_buf;
     const nplex::msgs::Update *update_ptr = nullptr;
@@ -235,7 +236,7 @@ TEST_CASE("store_update")
     detached_buf = serialize(update1);
     update_ptr = ::GetRoot<nplex::msgs::Update>(detached_buf.data());
 
-    REQUIRE_NOTHROW(changes = store.update(update_ptr));
+    REQUIRE_NOTHROW(std::tie(changes, meta) = store.update(update_ptr));
 
     REQUIRE(changes.size() == 3);
     CHECK(changes[0].action == change_t::action_e::UPDATE);
@@ -287,7 +288,7 @@ TEST_CASE("store_update")
     detached_buf = serialize(update2);
     update_ptr = ::GetRoot<nplex::msgs::Update>(detached_buf.data());
 
-    REQUIRE_NOTHROW(changes = store.update(update_ptr));
+    REQUIRE_NOTHROW(std::tie(changes, meta) = store.update(update_ptr));
 
     REQUIRE(changes.size() == 1);
     CHECK(changes[0].action == change_t::action_e::DELETE);
@@ -311,6 +312,7 @@ TEST_CASE("store_update")
 TEST_CASE("store_update_no_changes")
 {
     store_t store;
+    meta_ptr meta = nullptr;
     std::vector<change_t> changes;
 
     auto update = make_update(1024, "ljohnson", 1234567891, 16,
@@ -323,7 +325,7 @@ TEST_CASE("store_update_no_changes")
 
     store.m_rev = 42;
 
-    REQUIRE_NOTHROW(changes = store.update(update_ptr));
+    REQUIRE_NOTHROW(std::tie(changes, meta) = store.update(update_ptr));
 
     CHECK(changes.empty());
     CHECK(store.m_rev == 1024);
@@ -341,9 +343,10 @@ TEST_CASE("store_update_empty_value")
     auto buf = serialize(update);
     auto *ptr = ::GetRoot<nplex::msgs::Update>(buf.data());
     std::vector<change_t> changes;
+    meta_ptr meta = nullptr;
     store_t store;
 
-    REQUIRE_NOTHROW(changes = store.update(ptr));
+    REQUIRE_NOTHROW(std::tie(changes, meta) = store.update(ptr));
 
     CHECK(changes.size() == 1);
     CHECK(changes[0].action == change_t::action_e::CREATE);

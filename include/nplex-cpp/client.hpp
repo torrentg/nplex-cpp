@@ -242,6 +242,8 @@ class reactor
  *   - Strictly ordered event processing.
  *   - Thread-safe access to the database.
  *   - Data access according to the tx isolation level.
+ * 
+ * This class is thread-safe.
  */
 class client
 {

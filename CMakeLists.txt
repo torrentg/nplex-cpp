@@ -117,11 +117,9 @@ target_sources(
     ${CMAKE_CURRENT_LIST_DIR}/deps/match.c
     ${CMAKE_CURRENT_LIST_DIR}/src/addr.hpp
     ${CMAKE_CURRENT_LIST_DIR}/src/addr.cpp
-    ${CMAKE_CURRENT_LIST_DIR}/src/store.hpp
-    ${CMAKE_CURRENT_LIST_DIR}/src/store.cpp
-    ${CMAKE_CURRENT_LIST_DIR}/src/client.cpp
     ${CMAKE_CURRENT_LIST_DIR}/src/client_impl.hpp
     ${CMAKE_CURRENT_LIST_DIR}/src/client_impl.cpp
+    ${CMAKE_CURRENT_LIST_DIR}/src/client.cpp
     ${CMAKE_CURRENT_LIST_DIR}/src/connection.hpp
     ${CMAKE_CURRENT_LIST_DIR}/src/connection.cpp
     ${CMAKE_CURRENT_LIST_DIR}/src/messages.fbs
@@ -129,15 +127,17 @@ target_sources(
     ${CMAKE_CURRENT_LIST_DIR}/src/messaging.hpp
     ${CMAKE_CURRENT_LIST_DIR}/src/messaging.cpp
     ${CMAKE_CURRENT_LIST_DIR}/src/params.hpp
+    ${CMAKE_CURRENT_LIST_DIR}/src/store.hpp
+    ${CMAKE_CURRENT_LIST_DIR}/src/store.cpp
     ${CMAKE_CURRENT_LIST_DIR}/src/transaction_impl.hpp
     ${CMAKE_CURRENT_LIST_DIR}/src/transaction_impl.cpp
     ${CMAKE_CURRENT_LIST_DIR}/src/utils.hpp
     ${CMAKE_CURRENT_LIST_DIR}/src/utils.cpp
     PUBLIC
-    ${CMAKE_CURRENT_LIST_DIR}/include/nplex-cpp/types.hpp
     ${CMAKE_CURRENT_LIST_DIR}/include/nplex-cpp/client.hpp
     ${CMAKE_CURRENT_LIST_DIR}/include/nplex-cpp/exception.hpp
     ${CMAKE_CURRENT_LIST_DIR}/include/nplex-cpp/transaction.hpp
+    ${CMAKE_CURRENT_LIST_DIR}/include/nplex-cpp/types.hpp
 )
 
 set_target_properties(

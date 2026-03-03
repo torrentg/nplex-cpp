@@ -6,7 +6,6 @@
 #include <variant>
 #include <uv.h>
 #include "nplex-cpp/types.hpp"
-#include "transaction_impl.hpp"
 #include "messages.hpp"
 
 #define UNUSED(x) (void)(x)
@@ -16,6 +15,10 @@
  */
 
 namespace nplex {
+
+// Forward declarations
+class transaction_impl;
+using tx_impl_ptr = std::shared_ptr<transaction_impl>;
 
 struct output_msg_t
 {

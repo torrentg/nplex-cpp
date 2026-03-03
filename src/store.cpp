@@ -146,7 +146,7 @@ void nplex::store_t::load(const msgs::Snapshot *snapshot)
     m_rev = snapshot->rev();
 }
 
-std::vector<change_t> nplex::store_t::update(const msgs::Update *updmsg)
+std::pair<std::vector<change_t>, nplex::meta_ptr> nplex::store_t::update(const msgs::Update *updmsg)
 {
     if (!updmsg) {
         assert(false);
@@ -209,5 +209,5 @@ std::vector<change_t> nplex::store_t::update(const msgs::Update *updmsg)
     if (meta->nrefs)
         m_metas[rev] = meta;
 
-    return changes;
+    return {changes, meta};
 }

@@ -13,13 +13,22 @@ using namespace flatbuffers;
 
 namespace {
 
+class transaction_test : public transaction_impl
+{
+  public:
+    using transaction_impl::transaction_impl;
+    void set_state(state_e state) { m_state = state; }
+    void set_dirty(bool dirty) { m_dirty = dirty; }
+};
+
 auto update_store(store_ptr &store, const msgs::UpdateT &upd)
 {
+    meta_ptr meta = nullptr;
     std::vector<change_t> changes;
     auto detached_buf = serialize(upd);
     auto update_ptr = ::GetRoot<nplex::msgs::Update>(detached_buf.data());
 
-    REQUIRE_NOTHROW(changes = store->update(update_ptr));
+    REQUIRE_NOTHROW(std::tie(changes, meta) = store->update(update_ptr));
 
     return changes;
 }
@@ -98,13 +107,13 @@ store_ptr make_basic_store()
     return store;
 }
 
-void basic_step_1(tx_impl_ptr &tx)
+void basic_step_1(std::shared_ptr<transaction_test> &tx)
 {
     // scenario: tx just created and no updates yet
 
     CHECK(tx->state() == transaction::state_e::OPEN);
-    CHECK(!tx->read_only());
-    CHECK(!tx->dirty());
+    CHECK(!tx->is_read_only());
+    CHECK(!tx->is_dirty());
 
     CHECK(tx->type() == 0);
     tx->type(17);
@@ -146,7 +155,7 @@ TEST_CASE("transaction_test")
 
     SUBCASE("read_committed_basic")
     {
-        auto tx = std::make_shared<transaction_impl>(nullptr, store, transaction::isolation_e::READ_COMMITTED);
+        auto tx = std::make_shared<transaction_test>(nullptr, store, transaction::isolation_e::READ_COMMITTED);
 
         CHECK(tx->isolation() == transaction::isolation_e::READ_COMMITTED);
 
@@ -166,7 +175,7 @@ TEST_CASE("transaction_test")
             ));
 
         tx->update(changes);
-        CHECK(tx->dirty());
+        CHECK(tx->is_dirty());
 
         // reading a read key whose value was updated externally
         REQUIRE(tx->read("key1"));
@@ -199,7 +208,7 @@ TEST_CASE("transaction_test")
 
     SUBCASE("repeatable_read_basic")
     {
-        auto tx = std::make_shared<transaction_impl>(nullptr, store, transaction::isolation_e::REPEATABLE_READ);
+        auto tx = std::make_shared<transaction_test>(nullptr, store, transaction::isolation_e::REPEATABLE_READ);
 
         CHECK(tx->isolation() == transaction::isolation_e::REPEATABLE_READ);
 
@@ -218,7 +227,7 @@ TEST_CASE("transaction_test")
             ));
 
         tx->update(changes);
-        CHECK(tx->dirty());
+        CHECK(tx->is_dirty());
 
         // reading a read key whose value was updated externally
         REQUIRE(tx->read("key1"));
@@ -251,7 +260,7 @@ TEST_CASE("transaction_test")
 
     SUBCASE("serializable_basic")
     {
-        auto tx = std::make_shared<transaction_impl>(nullptr, store, transaction::isolation_e::SERIALIZABLE);
+        auto tx = std::make_shared<transaction_test>(nullptr, store, transaction::isolation_e::SERIALIZABLE);
 
         CHECK(tx->isolation() == transaction::isolation_e::SERIALIZABLE);
 
@@ -270,7 +279,7 @@ TEST_CASE("transaction_test")
             ));
 
         tx->update(changes);
-        CHECK(tx->dirty());
+        CHECK(tx->is_dirty());
 
         // reading a read key whose value was updated externally
         REQUIRE(tx->read("key1"));
@@ -303,11 +312,11 @@ TEST_CASE("transaction_test")
 
     SUBCASE("read_upsert_remove_exceptions")
     {
-        auto tx = std::make_shared<transaction_impl>(nullptr, store, transaction::isolation_e::SERIALIZABLE, true);
+        auto tx = std::make_shared<transaction_test>(nullptr, store, transaction::isolation_e::SERIALIZABLE, true);
 
         CHECK_THROWS_AS(tx->upsert("key1", "abc"), nplex_exception); // read-only exception
         CHECK_THROWS_AS(tx->remove("key1"), nplex_exception); // read-only exception
-        tx->state(transaction::state_e::ABORTED);
+        tx->set_state(transaction::state_e::ABORTED);
         CHECK_THROWS_AS(tx->read("key1"), nplex_exception); // not-open exception
     }
 }
@@ -315,7 +324,17 @@ TEST_CASE("transaction_test")
 TEST_CASE("transaction_for_each")
 {
     store_ptr store = make_basic_store();
-    auto tx = std::make_shared<transaction_impl>(nullptr, store, transaction::isolation_e::READ_COMMITTED);
+    auto tx = std::make_shared<transaction_test>(nullptr, store, transaction::isolation_e::READ_COMMITTED);
+
+    SUBCASE("iterate_with_callback_null")
+    {
+        CHECK(tx->for_each("key1", transaction::callback_t{}) == 0);
+    }
+
+    SUBCASE("iterate_with_key_null")
+    {
+        CHECK(tx->for_each(nullptr, [](auto, auto) { return true; }) == 0);
+    }
 
     SUBCASE("iterate_all_only_store")
     {
@@ -376,13 +395,10 @@ TEST_CASE("transaction_for_each")
 
     SUBCASE("iterate_exceptions")
     {
-        tx->state(transaction::state_e::ABORTED);
+        tx->set_state(transaction::state_e::ABORTED);
         CHECK_THROWS_AS(tx->for_each("key1", []([[maybe_unused]] const nplex::key_t &key, [[maybe_unused]] const value_t &value) {
                 return true;
             }), nplex_exception);
-
-        CHECK_THROWS_AS(tx->for_each("key1", transaction::callback_t{}), std::invalid_argument);
-
     }
 }
 
@@ -390,7 +406,7 @@ TEST_CASE("transaction_ensure")
 {
     store_ptr store = make_basic_store();
     std::vector<nplex::change_t> changes;
-    auto tx = std::make_shared<transaction_impl>(nullptr, store, transaction::isolation_e::READ_COMMITTED);
+    auto tx = std::make_shared<transaction_test>(nullptr, store, transaction::isolation_e::READ_COMMITTED);
 
     SUBCASE("ensure_all")
     {
@@ -398,7 +414,7 @@ TEST_CASE("transaction_ensure")
         REQUIRE_NOTHROW(tx->ensure("**"));
 
         // updating key1
-        tx->dirty(false);
+        tx->set_dirty(false);
         changes = update_store(store, 
             make_update(3, "jdoe", 1234567890, 15, {
                     { .key = "key1", .value = {13}}
@@ -407,10 +423,10 @@ TEST_CASE("transaction_ensure")
             ));
 
         tx->update(changes);
-        CHECK(tx->dirty());
+        CHECK(tx->is_dirty());
 
         // adding new key
-        tx->dirty(false);
+        tx->set_dirty(false);
         changes = update_store(store, 
             make_update(4, "jdoe", 1234567890, 15, {
                     { .key = "key99", .value = {13}}
@@ -419,10 +435,10 @@ TEST_CASE("transaction_ensure")
             ));
 
         tx->update(changes);
-        CHECK(tx->dirty());
+        CHECK(tx->is_dirty());
 
         // deleting key2
-        tx->dirty(false);
+        tx->set_dirty(false);
         changes = update_store(store, 
             make_update(5, "jdoe", 1234567890, 15, 
                 {},
@@ -430,7 +446,7 @@ TEST_CASE("transaction_ensure")
             ));
 
         tx->update(changes);
-        CHECK(tx->dirty());
+        CHECK(tx->is_dirty());
     }
 
     SUBCASE("ensure_some")
@@ -439,7 +455,7 @@ TEST_CASE("transaction_ensure")
         REQUIRE_NOTHROW(tx->ensure("key1*"));
 
         // updating key1
-        tx->dirty(false);
+        tx->set_dirty(false);
         changes = update_store(store, 
             make_update(3, "jdoe", 1234567890, 15, {
                     { .key = "key1", .value = {13}}
@@ -448,7 +464,7 @@ TEST_CASE("transaction_ensure")
             ));
 
         // adding key11
-        tx->dirty(false);
+        tx->set_dirty(false);
         changes = update_store(store, 
             make_update(4, "jdoe", 1234567890, 15, {
                     { .key = "key11", .value = {13}}
@@ -457,10 +473,10 @@ TEST_CASE("transaction_ensure")
             ));
 
         tx->update(changes);
-        CHECK(tx->dirty());
+        CHECK(tx->is_dirty());
 
         // deleting key11
-        tx->dirty(false);
+        tx->set_dirty(false);
         changes = update_store(store, 
             make_update(5, "jdoe", 1234567890, 15, {
                     { .key = "key11", .value = {15}}
@@ -469,12 +485,12 @@ TEST_CASE("transaction_ensure")
             ));
 
         tx->update(changes);
-        CHECK(tx->dirty());
+        CHECK(tx->is_dirty());
     }
 
     SUBCASE("ensure_error_not_open")
     {
-        tx->state(transaction::state_e::COMMITTED);
+        tx->set_state(transaction::state_e::COMMITTED);
         CHECK_THROWS_AS(tx->ensure("key1"), nplex_exception);
     }
 }
