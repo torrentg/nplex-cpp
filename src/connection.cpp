@@ -1,7 +1,7 @@
 #include <cassert>
 #include <arpa/inet.h>
 #include <uv.h>
-#include <fmt/core.h>
+#include <fmt/format.h>
 #include "nplex-cpp/exception.hpp"
 #include "client_impl.hpp"
 #include "connection.hpp"

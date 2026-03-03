@@ -37,11 +37,13 @@ static void print_database_content(const nplex::client_ptr &cli)
         std::cout << "  type: " << value.type() << std::endl;
         return true;
     });
+
+    //tx->discard();
 }
 
 static void measure_latency(const nplex::client_ptr &cli)
 {
-    auto ping = cli->ping("Hello, Nplex!");
+    auto ping = cli->ping("Hello Nplex!");
     std::cout << "Ping response received in " << ping.get().count() << " microseconds" << std::endl;
 }
 

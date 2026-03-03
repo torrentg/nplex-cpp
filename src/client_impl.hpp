@@ -88,7 +88,7 @@ class client_impl final : public client, public std::enable_shared_from_this<cli
 {
   public:  // types
 
-    enum state_e : std::uint8_t {
+    enum class state_e : std::uint8_t {
         OFFLINE,                //!< Not connected to any server.
         CONNECTING,             //!< Trying to connect to a server.
         AUTHENTICATED,          //!< Successfully authenticated in a server.
@@ -121,23 +121,26 @@ class client_impl final : public client, public std::enable_shared_from_this<cli
     std::future<usec> ping(const std::string &payload) override;
     void close() override { push_command(std::make_unique<close_cmd_t>()); }
 
-    void process_commands();
-    void report_server_activity();
-    void abort(const std::string &msg);
+    // submits command to the event loop thread
     void push_command(command_ptr &&cmd);
-    void try_to_connect();
 
+    // used by connections and libuv callbacks
     void on_connection_lost();
     void on_connection_established(connection *con);
     void on_connection_closed(connection *con);
     void on_msg_received(connection *con, const msgs::Message *msg);
     void on_msg_delivered(connection *con, const msgs::Message *msg);
+    void abort(const std::string &msg);
+    void report_server_activity();
+    void process_commands();
+    void try_to_connect();
 
+    // used by transaction_impl
     void remove_tx(const transaction_impl *tx);
     bool can_force () const { return m_can_force; }
     const std::vector<acl_t> & permissions() const { return m_permissions; }
 
-  protected:  // methods
+  public:  // methods
 
     template<typename... Args>
     void log(logger::log_level_e severity, fmt::format_string<Args...> fmt_str, Args&&... args) {
@@ -211,6 +214,7 @@ class client_impl final : public client, public std::enable_shared_from_this<cli
     void set_state(state_e state);
     void send(flatbuffers::DetachedBuffer &&buf);
     void schedule_reconnect(std::uint32_t delay_ms);
+    void purge_unused_txs();
 
     void process_close_cmd(command_ptr &&cmd);
     void process_submit_cmd(command_ptr &&cmd);

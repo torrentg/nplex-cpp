@@ -9,24 +9,6 @@
 // Internal (static) functions
 // ==========================================================
 
-static const char * to_str(nplex::client_impl::state_e state)
-{
-    using namespace nplex;
-
-    switch (state)
-    {
-        case client_impl::state_e::OFFLINE:             return "OFFLINE";
-        case client_impl::state_e::CONNECTING:          return "CONNECTING";
-        case client_impl::state_e::AUTHENTICATED:       return "AUTHENTICATED";
-        case client_impl::state_e::LOADING_SNAPSHOT:    return "LOADING_SNAPSHOT";
-        case client_impl::state_e::INITIALIZED:         return "INITIALIZED";
-        case client_impl::state_e::SYNCING:             return "SYNCING";
-        case client_impl::state_e::SYNCED:              return "SYNCED";
-        case client_impl::state_e::CLOSED:              return "CLOSED";
-        default:                                        return "UNKNOWN";
-    }
-}
-
 static std::string error2str(int error)
 {
     if (error < 0)
@@ -295,7 +277,7 @@ void nplex::client_impl::set_state(state_e state)
     if (m_state == state)
         return;
 
-    log_debug("State changed from {} to {}", ::to_str(m_state.load()), ::to_str(state));
+    log_debug("State changed from {} to {}", to_str(m_state.load()), to_str(state));
 
     m_state = state;
 
@@ -949,6 +931,7 @@ void nplex::client_impl::process_update(const nplex::msgs::Update *upd)
         std::lock_guard<decltype(m_store->m_mutex)> lock(m_store->m_mutex);
         std::tie(changes, meta) = m_store->update(upd);
         assert(meta && meta->rev == upd->rev());
+        log_debug("Store updated to rev {} with {} changes", meta->rev, changes.size());
     }
 
     // check accepted commits with pending update
@@ -965,13 +948,21 @@ void nplex::client_impl::process_update(const nplex::msgs::Update *upd)
         log_debug("Tx committed in {} usec", std::chrono::duration_cast<usec>(clock::now() - req->t0).count());
     }
 
+    std::size_t num_unused_txs = 0;
+
     {
         // update current transactions and remove the closed ones
         std::lock_guard<std::mutex> lock(m_mutex);
 
         for (auto it = m_transactions.begin(); it != m_transactions.end(); )
         {
-            auto tx = *it;
+            auto &tx = *it;
+
+            if (tx.use_count() == 1) {
+                num_unused_txs++;
+                ++it;
+                continue;
+            }
 
             switch (tx->state())
             {
@@ -994,6 +985,9 @@ void nplex::client_impl::process_update(const nplex::msgs::Update *upd)
             }
         }
     }
+
+    if (num_unused_txs > 0)
+        purge_unused_txs();
 
     // update business objects and trigger actions through the reactor
     if (m_reactor) m_reactor->on_update(*this, meta, changes);
@@ -1033,6 +1027,8 @@ nplex::tx_ptr nplex::client_impl::create_tx(transaction::isolation_e isolation, 
     if (is_closed())
         throw nplex_exception("Client is closed");
 
+    purge_unused_txs();
+
     std::lock_guard<decltype(m_mutex)> lock_impl(m_mutex);
 
     size_t num_txs = m_transactions.size();
@@ -1041,8 +1037,6 @@ nplex::tx_ptr nplex::client_impl::create_tx(transaction::isolation_e isolation, 
 
     auto tx = std::make_shared<transaction_impl>(shared_from_this(), m_store, isolation, read_only);
     m_transactions.insert(tx);
-
-    log_debug("Transaction created, isolation={}, read_only={}", to_str(isolation), read_only);
 
     return tx;
 }
@@ -1056,10 +1050,8 @@ void nplex::client_impl::remove_tx(const transaction_impl *tx)
 
     auto it = m_transactions.find(tx);
 
-    if (it != m_transactions.end()) {
-        log_debug("Transaction removed");
+    if (it != m_transactions.end())
         m_transactions.erase(it);
-    }
 }
 
 std::future<nplex::client::usec> nplex::client_impl::ping(const std::string &payload) 
@@ -1076,4 +1068,30 @@ std::future<nplex::client::usec> nplex::client_impl::ping(const std::string &pay
         push_command(std::move(req));
 
     return future;
+}
+
+void nplex::client_impl::purge_unused_txs()
+{
+    if (is_closed())
+        return;
+
+    std::vector<std::shared_ptr<transaction_impl>> txs_to_remove;
+
+    {
+        std::lock_guard<std::mutex> lock(m_mutex);
+
+        for (auto it = m_transactions.begin(); it != m_transactions.end(); )
+        {
+            auto &tx = *it;
+
+            if (tx.use_count() == 1) {
+                txs_to_remove.push_back(tx);
+                it = m_transactions.erase(it);
+            }
+            else
+                ++it;
+        }
+    }
+
+    txs_to_remove.clear();
 }

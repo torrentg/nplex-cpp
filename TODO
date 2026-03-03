@@ -5,8 +5,6 @@
 * README: explain nplex purpose
 * check user permissions in transaction
 * move ERR_xxx codes to errors.hpp, or common.hpp or similar
-* add id (autoincrement) to transaction (used by logger)
-* add logger to transaction_impl
 * warning: meta_ptr can be modified by user, replace it by std::shared_ptr<const meta_t>
 * warning: for_each + remove can cause problems
 * replace for_each by get_keys() -> vector ?

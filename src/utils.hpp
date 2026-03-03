@@ -3,6 +3,7 @@
 #include <chrono>
 #include <cstdint>
 #include "nplex-cpp/transaction.hpp"
+#include "client_impl.hpp"
 
 namespace nplex {
 
@@ -16,13 +17,15 @@ namespace nplex {
 std::uint32_t ntohl_ptr(const char *ptr);
 
 /**
- * Convert isolation level to string.
+ * Convert enum value to string.
  * 
- * @param[in] isolation Isolation level.
+ * @param[in] val Enum value.
  * 
- * @return Isolation level as string.
+ * @return Enum value as string.
  */
-const char * to_str(nplex::transaction::isolation_e isolation);
+const char * to_str(client_impl::state_e val);
+const char * to_str(transaction::state_e val);
+const char * to_str(transaction::isolation_e val);
 
 /**
  * Check if a key is valid.
