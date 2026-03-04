@@ -373,7 +373,7 @@ TEST_CASE("transaction_for_each")
         CHECK(success);
     }
 
-    SUBCASE("iterate_some_tx_and_store")
+    SUBCASE("iterate_some_tx_and_store_1")
     {
         const char *keys[] = { "key1", "key10" };
         std::size_t pos = 0;
@@ -391,6 +391,36 @@ TEST_CASE("transaction_for_each")
 
         CHECK(count == 2);
         CHECK(success);
+    }
+
+    SUBCASE("iterate_some_tx_and_store_2")
+    {
+        const char *keys[] = { "key4" };
+        std::size_t pos = 0;
+        std::size_t count = 0;
+        bool success = true;
+
+        basic_step_1(tx);
+
+        REQUIRE_NOTHROW(count = tx->for_each("*4", [&keys, &pos, &success]([[maybe_unused]] const nplex::key_t &key, [[maybe_unused]] const value_t &value) {
+            if (pos >= 2 || key != keys[pos++])
+                success = false;
+            return true;
+        }));
+
+        CHECK(count == 1);
+        CHECK(success);
+    }
+
+    SUBCASE("no_match")
+    {
+        std::size_t count = 0;
+
+        REQUIRE_NOTHROW(count = tx->for_each("unknown*", []([[maybe_unused]] const nplex::key_t &key, [[maybe_unused]] const value_t &value) {
+            return true;
+        }));
+
+        CHECK(count == 0);
     }
 
     SUBCASE("iterate_exceptions")

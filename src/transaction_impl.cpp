@@ -159,6 +159,9 @@ bool nplex::transaction_impl::upsert(const char *key, const std::string_view &da
     if (!is_valid_key(key) || data.empty())
         throw std::invalid_argument("Invalid key or invalid data");
 
+    if (m_read_only)
+        throw nplex_exception("Transaction is read-only");
+
     auto value = std::make_shared<value_t>(
         gto::cstring{data.data(), data.size()}, 
         meta_ptr{}  // Metadata is empty because the current transaction was not committed
@@ -168,8 +171,6 @@ bool nplex::transaction_impl::upsert(const char *key, const std::string_view &da
 
     if (m_state != state_e::OPEN)
         throw nplex_exception("Transaction is not open");
-    if (m_read_only)
-        throw nplex_exception("Transaction is read-only");
 
     // Search for the key in the transaction
     auto it_tx = m_items.find(key);
@@ -217,14 +218,15 @@ bool nplex::transaction_impl::remove(const key_t &key)
     if (!is_valid_key(key))
         throw std::invalid_argument("Invalid key");
 
+    if (m_read_only)
+        throw nplex_exception("Transaction is read-only");
+
     // TODO: check permissions (delete)
 
     std::lock_guard<decltype(m_store->m_mutex)> lock(m_store->m_mutex);
 
     if (m_state != state_e::OPEN)
         throw nplex_exception("Transaction is not open");
-    if (m_read_only)
-        throw nplex_exception("Transaction is read-only");
 
     // Search for the key in the transaction
     auto it_tx = m_items.find(key);
@@ -256,12 +258,13 @@ bool nplex::transaction_impl::remove(const key_t &key)
 
 std::size_t nplex::transaction_impl::remove(const char *pattern)
 {
+    if (m_read_only)
+        throw nplex_exception("Transaction is read-only");
+
     std::lock_guard<decltype(m_store->m_mutex)> lock(m_store->m_mutex);
 
     if (m_state != state_e::OPEN)
         throw nplex_exception("Transaction is not open");
-    if (m_read_only)
-        throw nplex_exception("Transaction is read-only");
 
     auto ret = for_each(pattern, [this](const key_t &key, [[maybe_unused]] const value_t &value) {
         remove(key);
@@ -290,13 +293,37 @@ std::size_t nplex::transaction_impl::for_each(const char *pattern, const callbac
     if (!callback || !pattern || *pattern == '\0')
         return 0;
 
-    std::string_view prefix = std::string_view{pattern, strcspn(pattern, "*?")};
     std::lock_guard<decltype(m_store->m_mutex)> lock(m_store->m_mutex);
 
     if (m_state != state_e::OPEN)
         throw nplex_exception("Transaction is not open");
 
-    std::size_t ret = 0;
+    // We need to store the results in a vector because the callback can 
+    // modify the transaction (eg. upsert or delete), and this can 
+    // invalidate the iterators.
+
+    auto kvs = for_each_internal(pattern);
+    size_t ret = 0;
+
+    for (const auto &kv : kvs)
+        if (ret++, !callback(kv.first, *kv.second))
+            break;
+
+    return ret;
+}
+
+/**
+ * Internal method.
+ * State is not checked and it is not guarded with a mutex.
+ */
+std::vector<std::pair<nplex::key_t, nplex::value_ptr>> nplex::transaction_impl::for_each_internal(const char *pattern)
+{
+    if (!pattern || *pattern == '\0')
+        pattern = "**";
+
+    std::vector<std::pair<key_t, value_ptr>> ret;
+    std::vector<std::pair<key_t, value_ptr>> pinned;
+    std::string_view prefix = std::string_view{pattern, strcspn(pattern, "*?")};
     auto it_tx = (prefix.empty() ? m_items.begin() : m_items.lower_bound(prefix));
     auto it_tx_end = m_items.end();
     auto it_store = (prefix.empty() ? m_store->m_data.begin() : m_store->m_data.lower_bound(prefix));
@@ -304,6 +331,7 @@ std::size_t nplex::transaction_impl::for_each(const char *pattern, const callbac
 
     while (it_tx != it_tx_end || it_store != it_store_end)
     {
+        // Move iterators to the next matching key
         while (it_tx != it_tx_end)
         {
             if (!it_tx->first.starts_with(prefix))
@@ -314,6 +342,7 @@ std::size_t nplex::transaction_impl::for_each(const char *pattern, const callbac
                 it_tx++;
         }
 
+        // Move iterators to the next matching key
         while (it_store != it_store_end)
         {
             if (!it_store->first.starts_with(prefix))
@@ -326,53 +355,53 @@ std::size_t nplex::transaction_impl::for_each(const char *pattern, const callbac
 
         if (it_tx != it_tx_end && it_store != it_store_end)
         {
-            if (it_tx->first < it_store->first)
+            if (it_tx->first < it_store->first) // key in transaction
             {
                 if (std::get<action_e>(it_tx->second) != action_e::DELETE)
-                {
-                    if (ret++, !callback(it_tx->first, *std::get<value_ptr>(it_tx->second)))
-                        break;
-                }
+                    ret.emplace_back(it_tx->first, std::get<value_ptr>(it_tx->second));
 
                 it_tx++;
             }
-            else if (it_store->first < it_tx->first)
+            else if (it_tx->first > it_store->first)  // key only in store
             {
-                if (ret++, !callback(it_store->first, *it_store->second))
-                    break;
+                ret.emplace_back(it_store->first, it_store->second);
+
+                if (m_isolation_level != transaction::isolation_e::READ_COMMITTED)
+                    pinned.emplace_back(it_store->first, it_store->second);
 
                 it_store++;
             }
-            else
+            else  // key in both places
             {
                 if (std::get<action_e>(it_tx->second) != action_e::DELETE)
-                {
-                    if (ret++, !callback(it_tx->first, *std::get<value_ptr>(it_tx->second)))
-                        break;
-                }
+                    ret.emplace_back(it_tx->first, std::get<value_ptr>(it_tx->second));
 
                 it_tx++;
                 it_store++;
             }
         }
-        else if (it_tx != it_tx_end)
+        else if (it_tx != it_tx_end)  // key only in transaction
         {
             if (std::get<action_e>(it_tx->second) != action_e::DELETE)
-            {
-                if (ret++, !callback(it_tx->first, *std::get<value_ptr>(it_tx->second)))
-                    break;
-            }
+                ret.emplace_back(it_tx->first, std::get<value_ptr>(it_tx->second));
 
             it_tx++;
         }
-        else if (it_store != it_store_end)
+        else if (it_store != it_store_end)  // key only in store
         {
-            if (ret++, !callback(it_store->first, *it_store->second))
-                break;
+            ret.emplace_back(it_store->first, it_store->second);
+
+            if (m_isolation_level != transaction::isolation_e::READ_COMMITTED)
+                pinned.emplace_back(it_store->first, it_store->second);
 
             it_store++;
         }
     }
+
+    // for repeatable read and serializable isolation levels
+    // mark pinned values as read in the transaction
+    for (const auto &[key, value] : pinned)
+        m_items.emplace(key, std::make_tuple(action_e::READ, value));
 
     return ret;
 }

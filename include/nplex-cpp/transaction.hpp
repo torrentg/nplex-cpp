@@ -13,7 +13,7 @@ namespace nplex {
 
 /**
  * Database access can only be done through a transaction, which allows you to operate
- * according to an isolation level.
+ * on data according to an isolation level.
  * 
  * Transaction is an interface where implementation details are hidden from the user.
  * 
@@ -27,7 +27,7 @@ namespace nplex {
  * without submitting it.
  * 
  * Transactions are automatically updated on each database commit. If a transaction is 
- * invalidated by an external update, it is marked as dirty. Destroy unused transactions 
+ * invalidated by an external commit, it is marked as dirty. Destroy unused transactions 
  * to reduce resources consumption and to avoid confusion.
  * 
  * Isolation levels:
@@ -49,7 +49,7 @@ namespace nplex {
  * 
  * Dirty flag:
  * 
- *   A transaction is dirty if it was invalidated by an external update (commit).
+ *   A transaction is dirty if it was invalidated by an external commit.
  *   This transaction will be rejected at submit time, except if you submit it using 
  *   the forced mode. A dirty transaction continue to be updated on each commit.
  * 
@@ -89,7 +89,7 @@ class transaction
         REJECTED_PERMISSION,        //!< Commit was rejected due to insufficient permissions.
         REJECTED_OLD_REVISION,      //!< Commit was rejected due to an old revision (eg. long-running tx).
         REJECTED_INTEGRITY,         //!< Commit was rejected due to integrity constraints (eg. dirty tx or another tx modified the same key while this tx was being sent).
-        REJECTED_ENSURE,            //!< Commit was rejected due to ensure constraints (eg. another tx altered an ensured key).
+        REJECTED_ENSURE,            //!< Commit was rejected due to unsatisfied ensure constraints (eg. another tx altered an ensured key).
         REJECTED_OTHER              //!< Commit was rejected due to other reasons.
     };
 
@@ -253,12 +253,12 @@ class transaction
     /**
      * Executes the callback function for each key-value.
      * 
-     * Each value is read according to the isolation level.
+     * All keys matching the pattern are read according to the isolation level.
      * 
      * During iteration the database is locked (no external commits).
-     * Iteration stops on the first false return value.
+     * Iteration stops on the first false callback return value.
      * 
-     * @note Don't block the database for a long time, as this function locks the database.
+     * @note Don't block on callback, as this function locks the database.
      * 
      * @example: Simple iteration.
      *  tx.for_each([](const key_t &key, const value_t &value) {
@@ -286,10 +286,10 @@ class transaction
      * @param[in] callback The callback function to execute. This function receives the key-value pair.
      *                     It must return true to continue the iteration, or false to stop it.
      * 
-     * @return Number of iterated elements (0 if to < from).
+     * @return Number of iterated elements (0 if no matches or empty callback).
      * 
-     * @exception nplex_exception tx-not-open, tx-read-only (if callback calls upsert or delete), 
-     *                            no-permission (if callback calls upsert or delete).
+     * @exception nplex_exception tx-read-only (if callback calls upsert or delete), 
+     *                            no-permissions (if callback calls upsert or delete).
      */
     virtual std::size_t for_each(const callback_t &callback) { return for_each("**", callback); }
     virtual std::size_t for_each(const char *pattern, const callback_t &callback) = 0;
@@ -303,7 +303,7 @@ class transaction
      * 
      * @return Future with the transaction return code, or the exception if there is a problem.
      * 
-     * @exception nplex_exception not-connected, not-privilegues, tx-dirty, etc.
+     * @exception nplex_exception not-connected, no-permissions, tx-dirty, etc.
      */
     virtual std::future<submit_e> submit(bool force = false) = 0;
 

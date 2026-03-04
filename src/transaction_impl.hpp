@@ -95,6 +95,7 @@ class transaction_impl : public transaction, public std::enable_shared_from_this
     void set_state(state_e state);
     void update_serializable(const std::vector<change_t> &changes);
     void update_default(const std::vector<change_t> &changes);
+    std::vector<std::pair<key_t, value_ptr>> for_each_internal(const char *pattern);
 };
 
 using tx_impl_ptr = std::shared_ptr<transaction_impl>;
