@@ -15,6 +15,12 @@ gto::cstring create_cstring(const flatbuffers::Vector<std::uint8_t> *value) {
 
 }; // unnamed namespace
 
+nplex::rev_t nplex::store_t::rev() const
+{
+    std::lock_guard<decltype(m_mutex)> lock(m_mutex);
+    return m_rev;
+}
+
 nplex::meta_ptr nplex::store_t::create_meta(const msgs::Update *updmsg)
 {
     gto::cstring user;

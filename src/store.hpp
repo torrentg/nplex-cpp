@@ -30,10 +30,19 @@ namespace msgs {
 struct store_t
 {
     rev_t m_rev = 0;
-    std::recursive_mutex m_mutex;
+    mutable std::recursive_mutex m_mutex;
     std::map<key_t, value_ptr, gto::cstring_compare> m_data;
     std::map<rev_t, meta_ptr> m_metas;
     std::map<gto::cstring, std::uint32_t, gto::cstring_compare> m_users; // value=num_refs
+
+    /**
+     * Return the current revision of the database.
+     * 
+     * Invoke this function from transactions (from client you can use safely m_rev).
+     * 
+     * @return Current revision.
+     */
+    rev_t rev() const;
 
     /**
      * Load the database content from a snapshot.

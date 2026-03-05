@@ -251,10 +251,8 @@ void nplex::client_impl::run(std::stop_token st) noexcept
 
     try
     {
-        // Close properly the event loop and all its handles.
-        // This is required to avoid memory leaks.
-
-        // TODO: call connection.disconnect()
+        for (auto &con : m_connections)
+            con->disconnect(ERR_CLOSED_BY_LOCAL);
 
         uv_walk(m_loop.get(), ::cb_close_handle, nullptr);
         while (uv_run(m_loop.get(), UV_RUN_NOWAIT));
@@ -474,6 +472,7 @@ void nplex::client_impl::schedule_reconnect(std::uint32_t delay_ms)
 
 void nplex::client_impl::on_connection_closed(connection *con)
 {
+    assert(con != nullptr);
     assert(m_loop_thread_id == std::this_thread::get_id());
 
     log_warn("{} - {}", con->addr().str(), ::error2str(con->error()));
@@ -499,7 +498,7 @@ void nplex::client_impl::on_connection_closed(connection *con)
         return;
     }
 
-    // Case: connection to server established previously (m_con != nullptr)
+    // Case: already connected to another server (m_con != nullptr)
     // Case: no connection to the server (m_con == nullptr), but there are other attempts in progress
     if (con != m_con)
         return;
@@ -509,6 +508,19 @@ void nplex::client_impl::on_connection_closed(connection *con)
     m_con = nullptr;
     m_data_cid = 0;
 
+    // cancel ongoing requests
+    while (!m_requests.empty()) {
+        auto req = m_requests.pop();
+        req->cancel();
+    }
+
+    // cancel ongoing transactions
+    while (!m_accepted.empty()) {
+        auto req = m_accepted.pop();
+        req->cancel();
+    }
+
+    // close timers
     if (is_timer_active(m_timer_con_lost.get())) {
         log_trace("Connection-lost timer stopped");
         uv_timer_stop(m_timer_con_lost.get());
@@ -641,8 +653,6 @@ void nplex::client_impl::process_ping_cmd(command_ptr &&cmd)
     );
 
     m_requests.push(convert_ptr<request_t>(cmd));
-
-    // TODO: process m_requests on connection-loss
 }
 
 void nplex::client_impl::on_msg_delivered(connection *con, [[maybe_unused]] const msgs::Message *msg)
@@ -923,16 +933,10 @@ void nplex::client_impl::process_update(const nplex::msgs::Update *upd)
 {
     assert(m_loop_thread_id == std::this_thread::get_id());
 
-    std::vector<nplex::change_t> changes;
-    meta_ptr meta = nullptr;
-
     // update the local database
-    {
-        std::lock_guard<decltype(m_store->m_mutex)> lock(m_store->m_mutex);
-        std::tie(changes, meta) = m_store->update(upd);
-        assert(meta && meta->rev == upd->rev());
-        log_debug("Store updated to rev {} with {} changes", meta->rev, changes.size());
-    }
+    auto [changes, meta] = m_store->update(upd);
+    assert(meta && meta->rev == upd->rev());
+    log_debug("Store updated to rev {} with {} changes", meta->rev, changes.size());
 
     // check accepted commits with pending update
     while (!m_accepted.empty() && m_accepted.front()->rev < meta->rev) {
@@ -990,8 +994,22 @@ void nplex::client_impl::process_update(const nplex::msgs::Update *upd)
         purge_unused_txs();
 
     // update business objects and trigger actions through the reactor
-    if (m_reactor) m_reactor->on_update(*this, meta, changes);
-    // TODO: protect with try-catch + log error + warning if too-slow
+    if (m_reactor)
+    {
+        auto t0 = clock::now();
+
+        try {
+            m_reactor->on_update(*this, meta, changes);
+        } catch (const std::exception &e) {
+            log_error("Error in reactor on_update: {}", e.what());
+        } catch (...) {
+            log_error("Unknown error in reactor on_update");
+        }
+
+        auto duration = std::chrono::duration_cast<millis>(clock::now() - t0);
+        if (duration > millis{250})
+            log_warn("on_update(r{}) too slow ({} usec)", upd->rev(), duration.count());
+    }
 }
 
 void nplex::client_impl::process_keepalive_push(const nplex::msgs::KeepAlivePush *resp)

@@ -32,6 +32,7 @@ struct command_t {
 
 struct request_t : public command_t {
     virtual ~request_t() override = default;
+    virtual void cancel() = 0;
     std::size_t cid = 0;
     clock::time_point t0 = clock::now();
 };
@@ -43,6 +44,9 @@ struct close_cmd_t : public command_t {
 struct submit_req_t : public request_t {
     submit_req_t(const tx_impl_ptr &t, bool f) : tx(t), force(f) {}
     virtual ~submit_req_t() override = default;
+    void cancel() override {
+        tx->set_submit_result(std::make_exception_ptr(nplex_exception("request canceled")));
+    }
     tx_impl_ptr tx;
     bool force = false;
     rev_t rev = 0;
@@ -51,6 +55,9 @@ struct submit_req_t : public request_t {
 struct ping_req_t : public request_t {
     ping_req_t(const std::string &str) : payload(str) {}
     virtual ~ping_req_t() override = default;
+    void cancel() override {
+        promise.set_exception(std::make_exception_ptr(nplex_exception("request canceled")));
+    }
     std::string payload;
     std::promise<usec> promise;
 };

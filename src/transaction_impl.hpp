@@ -77,7 +77,7 @@ class transaction_impl : public transaction, public std::enable_shared_from_this
   protected:  // members
 
     const std::uint64_t m_id;                   //!< Transaction unique id (process-wide).
-    std::mutex m_mutex;                         //!< Mutex to protect m_commands, m_async, m_cv, m_promise.
+    std::mutex m_mutex;                         //!< Mutex to protect m_promise.
     std::weak_ptr<client_impl> m_client;        //!< Weak reference to the client.
     std::promise<submit_e> m_promise;           //!< Promise to set the submit result.
     store_ptr m_store;                          //!< Database content.

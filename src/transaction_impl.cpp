@@ -54,8 +54,7 @@ nplex::transaction_impl::transaction_impl(client_impl_ptr client, store_ptr stor
     if (!m_store)
         throw std::invalid_argument("Invalid database");
 
-    std::lock_guard<decltype(m_store->m_mutex)> lock(m_store->m_mutex);
-    m_rev_creation = m_store->m_rev;
+    m_rev_creation = m_store->rev();
 
     log_debug(m_client, "Tx {} created, isolation={}, read_only={}", m_id, to_str(isolation), read_only);
 }
@@ -102,8 +101,7 @@ nplex::rev_t nplex::transaction_impl::rev() const
     {
         case isolation_e::REPEATABLE_READ:
         case isolation_e::READ_COMMITTED: {
-            std::lock_guard<decltype(m_store->m_mutex)> lock(m_store->m_mutex);
-            return m_store->m_rev;
+            return m_store->rev();
         }
         case isolation_e::SERIALIZABLE:
             return m_rev_creation;
@@ -116,8 +114,6 @@ nplex::value_ptr nplex::transaction_impl::read(const char *key, bool check)
 {
     if (!is_valid_key(key))
         throw nplex_exception("Trying to read an invalid key: {}", key);
-
-    std::lock_guard<decltype(m_store->m_mutex)> lock(m_store->m_mutex);
 
     if (m_state != state_e::OPEN)
         throw nplex_exception("Transaction is not open");
@@ -136,6 +132,8 @@ nplex::value_ptr nplex::transaction_impl::read(const char *key, bool check)
 
         return std::get<value_ptr>(it_tx->second);
     }
+
+    std::lock_guard<decltype(m_store->m_mutex)> lock(m_store->m_mutex);
 
     // Search for the key in the database
     auto it_store = m_store->m_data.find(key);
@@ -167,8 +165,6 @@ bool nplex::transaction_impl::upsert(const char *key, const std::string_view &da
         meta_ptr{}  // Metadata is empty because the current transaction was not committed
     );
 
-    std::lock_guard<decltype(m_store->m_mutex)> lock(m_store->m_mutex);
-
     if (m_state != state_e::OPEN)
         throw nplex_exception("Transaction is not open");
 
@@ -192,6 +188,8 @@ bool nplex::transaction_impl::upsert(const char *key, const std::string_view &da
         return true;
     }
 
+    std::lock_guard<decltype(m_store->m_mutex)> lock(m_store->m_mutex);
+
     // Search for the key in the database
     auto it_store = m_store->m_data.find(key);
 
@@ -210,6 +208,7 @@ bool nplex::transaction_impl::upsert(const char *key, const std::string_view &da
 
     // Case: key exists in the database with distinct value (or force mode)
     m_items.emplace(it_store->first, std::make_tuple(action_e::UPSERT, value));
+
     return true;
 }
 
@@ -222,8 +221,6 @@ bool nplex::transaction_impl::remove(const key_t &key)
         throw nplex_exception("Transaction is read-only");
 
     // TODO: check permissions (delete)
-
-    std::lock_guard<decltype(m_store->m_mutex)> lock(m_store->m_mutex);
 
     if (m_state != state_e::OPEN)
         throw nplex_exception("Transaction is not open");
@@ -244,6 +241,8 @@ bool nplex::transaction_impl::remove(const key_t &key)
         return true;
     }
 
+    std::lock_guard<decltype(m_store->m_mutex)> lock(m_store->m_mutex);
+
     // Search for the key in the database
     auto it_store = m_store->m_data.find(key);
 
@@ -261,10 +260,10 @@ std::size_t nplex::transaction_impl::remove(const char *pattern)
     if (m_read_only)
         throw nplex_exception("Transaction is read-only");
 
-    std::lock_guard<decltype(m_store->m_mutex)> lock(m_store->m_mutex);
-
     if (m_state != state_e::OPEN)
         throw nplex_exception("Transaction is not open");
+
+    std::lock_guard<decltype(m_store->m_mutex)> lock(m_store->m_mutex);
 
     auto ret = for_each(pattern, [this](const key_t &key, [[maybe_unused]] const value_t &value) {
         remove(key);
@@ -293,14 +292,14 @@ std::size_t nplex::transaction_impl::for_each(const char *pattern, const callbac
     if (!callback || !pattern || *pattern == '\0')
         return 0;
 
-    std::lock_guard<decltype(m_store->m_mutex)> lock(m_store->m_mutex);
-
     if (m_state != state_e::OPEN)
         throw nplex_exception("Transaction is not open");
 
     // We need to store the results in a vector because the callback can 
     // modify the transaction (eg. upsert or delete), and this can 
     // invalidate the iterators.
+
+    std::lock_guard<decltype(m_store->m_mutex)> lock(m_store->m_mutex);
 
     auto kvs = for_each_internal(pattern);
     size_t ret = 0;
@@ -408,8 +407,6 @@ std::vector<std::pair<nplex::key_t, nplex::value_ptr>> nplex::transaction_impl::
 
 void nplex::transaction_impl::update(const std::vector<change_t> &changes)
 {
-    std::lock_guard<decltype(m_store->m_mutex)> lock(m_store->m_mutex);
-
     if (m_state != state_e::OPEN) {
         assert(false);
         return;
@@ -434,9 +431,9 @@ void nplex::transaction_impl::update(const std::vector<change_t> &changes)
     // Checking validations
     for (const auto &change : changes)
     {
-        for (const auto &item : m_ensures)
+        for (const auto &ensure : m_ensures)
         {
-            if (!glob_match(change.key.data(), item.data()))
+            if (!glob_match(change.key.data(), ensure.data()))
                 continue;
 
             m_dirty = true;
