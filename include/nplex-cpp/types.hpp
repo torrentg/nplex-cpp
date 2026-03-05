@@ -37,6 +37,7 @@ struct meta_t
 };
 
 using meta_ptr = std::shared_ptr<meta_t>;
+using const_meta_ptr = std::shared_ptr<const meta_t>;
 
 //! Database value (immutable).
 class value_t

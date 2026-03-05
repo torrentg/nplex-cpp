@@ -209,7 +209,7 @@ class reactor
      * @param[in] changes List of changes.
      */
     virtual void on_update([[maybe_unused]] client &cli, 
-                           [[maybe_unused]] const meta_ptr &meta, 
+                           [[maybe_unused]] const const_meta_ptr &meta, 
                            [[maybe_unused]] const std::vector<change_t> &changes) {}
 };
 
