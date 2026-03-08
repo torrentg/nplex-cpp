@@ -1,7 +1,8 @@
+#include <cassert>
 #include <cstring>
 #include "match.h"
 #include "nplex-cpp/exception.hpp"
-#include "utils.hpp"
+#include "misc.hpp"
 #include "messages.hpp"
 #include "client_impl.hpp"
 #include "transaction_impl.hpp"

@@ -24,7 +24,6 @@ struct params_t
     std::string user;                   //!< User name (as declared in the nplex.ini server file).
     std::string password;               //!< User password (as declared in the nplex.ini server file).
     std::uint32_t max_active_txs = 0;   //!< Maximum number of concurrent transactions (0 = unlimited).
-    std::uint32_t max_msg_bytes = 0;    //!< Maximum message size (0 = unlimited).
     std::uint32_t max_unack_msgs = 0;   //!< Maximum number of output in-flight messages (0 = unlimited).
     std::uint32_t max_unack_bytes = 0;  //!< Maximum bytes of output in-flight messages (0 = unlimited).
     float timeout_factor = 2.5;         //!< Timeout factor (greater than 1.0, used to check for connection lost).

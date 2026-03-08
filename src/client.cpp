@@ -39,7 +39,6 @@ static nplex::client_params_t convert_params(const nplex::params_t &params)
 
     ret.connection.timeout_factor = params.timeout_factor;
 
-    ret.connection.max_msg_bytes = (params.max_msg_bytes == 0 ? UINT32_MAX : params.max_msg_bytes);
     ret.connection.max_unack_msgs = (params.max_unack_msgs == 0 ? UINT32_MAX : params.max_unack_msgs);
     ret.connection.max_unack_bytes = (params.max_unack_bytes == 0 ? UINT32_MAX : params.max_unack_bytes);
 

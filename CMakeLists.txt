@@ -126,6 +126,8 @@ target_sources(
     ${CMAKE_CURRENT_LIST_DIR}/src/messages.hpp
     ${CMAKE_CURRENT_LIST_DIR}/src/messaging.hpp
     ${CMAKE_CURRENT_LIST_DIR}/src/messaging.cpp
+    ${CMAKE_CURRENT_LIST_DIR}/src/misc.hpp
+    ${CMAKE_CURRENT_LIST_DIR}/src/misc.cpp
     ${CMAKE_CURRENT_LIST_DIR}/src/params.hpp
     ${CMAKE_CURRENT_LIST_DIR}/src/store.hpp
     ${CMAKE_CURRENT_LIST_DIR}/src/store.cpp
@@ -133,8 +135,6 @@ target_sources(
     ${CMAKE_CURRENT_LIST_DIR}/src/transaction_impl.cpp
     ${CMAKE_CURRENT_LIST_DIR}/src/user.hpp
     ${CMAKE_CURRENT_LIST_DIR}/src/user.cpp
-    ${CMAKE_CURRENT_LIST_DIR}/src/utils.hpp
-    ${CMAKE_CURRENT_LIST_DIR}/src/utils.cpp
     PUBLIC
     ${CMAKE_CURRENT_LIST_DIR}/include/nplex-cpp/client.hpp
     ${CMAKE_CURRENT_LIST_DIR}/include/nplex-cpp/exception.hpp

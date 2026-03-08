@@ -5,7 +5,30 @@
 #include <cstdint>
 #include "nplex-cpp/transaction.hpp"
 
+// Nplex error codes (0 = OK, 1-999 reserved to libuv errors)
+#define ERR_CLOSED_BY_LOCAL     1000
+#define ERR_CLOSED_BY_PEER      1001
+#define ERR_MSG_ERROR           1002
+#define ERR_MSG_UNEXPECTED      1003
+#define ERR_QUEUE_EXCEEDED      1004
+#define ERR_ALREADY_CONNECTED   1005
+#define ERR_CON_LOST            1006
+#define ERR_AUTH                1007
+#define ERR_LOAD                1008
+#define ERR_SIGNAL              1009
+
+#define UNUSED(x) (void)(x)
+
 namespace nplex {
+
+/**
+ * Get a human-readable string for a given error code.
+ * 
+ * @param error Error code (see ERR_xxx values).
+ * 
+ * @return Human-readable string for the error code.
+ */
+const char * strerror(int error);
 
 /**
  * Same as ntohl but receiving a pointer to uint32_t instead of a uint32_t.

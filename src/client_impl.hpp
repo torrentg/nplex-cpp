@@ -11,14 +11,18 @@
 #include "cqueue.hpp"
 #include "nplex-cpp/client.hpp"
 #include "transaction_impl.hpp"
-#include "user.hpp"
-#include "store.hpp"
 #include "connection.hpp"
-#include "messaging.hpp"
 #include "params.hpp"
 
 namespace nplex {
 
+// Forward declarations
+struct store_t;
+struct user_t;
+
+using store_ptr = std::shared_ptr<store_t>;
+using user_ptr = std::shared_ptr<user_t>;
+using const_user_ptr = std::shared_ptr<const user_t>;
 using clock = std::chrono::steady_clock;
 using usec = std::chrono::microseconds;
 

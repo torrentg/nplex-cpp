@@ -4,9 +4,10 @@
 #include <fmt/format.h>
 #include "nplex-cpp/exception.hpp"
 #include "client_impl.hpp"
-#include "connection.hpp"
+#include "messaging.hpp"
 #include "params.hpp"
-#include "utils.hpp"
+#include "misc.hpp"
+#include "connection.hpp"
 
 template <typename T>
 static auto get_handle(T* obj) -> decltype(reinterpret_cast<std::conditional_t<std::is_const<T>::value, const uv_handle_t*, uv_handle_t*>>(obj)) {
@@ -173,11 +174,6 @@ static void cb_tcp_read(uv_stream_t *stream, ssize_t nread, const uv_buf_t *buf)
         const char *ptr = obj->m_input_msg.data();
         std::uint32_t len = ntohl_ptr(ptr);
 
-        if (len > obj->m_params.max_msg_bytes) {
-            obj->disconnect(ERR_MSG_SIZE);
-            return;
-        }
-
         if (obj->m_input_msg.size() < len)
             break;
 
@@ -257,7 +253,6 @@ nplex::connection_impl::connection_impl(const addr_t &addr, uv_loop_t *loop, con
     if (m_addr.port() == 0)
         throw nplex_exception("Invalid address: {}", m_addr.str());
 
-    m_params.max_msg_bytes = (params.max_msg_bytes == 0 ? UINT32_MAX : params.max_msg_bytes);
     m_params.max_unack_msgs = (params.max_unack_msgs == 0 ? UINT32_MAX : params.max_unack_msgs);
     m_params.max_unack_bytes = (params.max_unack_bytes == 0 ? UINT32_MAX : params.max_unack_bytes);
 
@@ -322,14 +317,15 @@ void nplex::connection_impl::send(flatbuffers::DetachedBuffer &&buf)
     if (m_state != state_e::CONNECTED)
         throw nplex_exception("Connection is not established");
 
-    if (m_stats.unack_msgs >= m_params.max_unack_msgs)
-        throw nplex_exception("Output message queue is full");
+    if (m_stats.unack_msgs >= m_params.max_unack_msgs) {
+        disconnect(ERR_QUEUE_EXCEEDED);
+        return;
+    }
 
-    if (len > m_params.max_msg_bytes)
-        throw nplex_exception("Message too large");
-
-    if (m_stats.unack_bytes + len >= m_params.max_unack_bytes)
-        throw nplex_exception("Too many output unacked bytes");
+    if (m_stats.unack_bytes + len >= m_params.max_unack_bytes) {
+        disconnect(ERR_QUEUE_EXCEEDED);
+        return;
+    }
 
     auto msg = new output_msg_t(std::move(buf));
     assert(len == msg->length());

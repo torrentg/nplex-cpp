@@ -3,12 +3,8 @@
 * Only a public header -> nplex-cpp.hpp
 * allow ssl connections (see project tlsuv)
 * README: explain nplex purpose
-* check user permissions in transaction
-* move ERR_xxx codes to errors.hpp, or common.hpp or similar
 * in client_impl, replace std::unique<uv_*> by uv_*
-* trap exceptions launched by connection::send()
-* remove param max_unack_msgs
-* remove param max_msg_bytes
+* remove client param from logger::log
 
 ## Useful commands
 

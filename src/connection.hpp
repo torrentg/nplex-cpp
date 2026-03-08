@@ -3,17 +3,6 @@
 #include <memory>
 #include "addr.hpp"
 
-#define ERR_CLOSED_BY_LOCAL     1000
-#define ERR_CLOSED_BY_PEER      1001
-#define ERR_MSG_ERROR           1002
-#define ERR_MSG_UNEXPECTED      1003
-#define ERR_MSG_SIZE            1004
-#define ERR_ALREADY_CONNECTED   1005
-#define ERR_CON_LOST            1006
-#define ERR_AUTH                1007
-#define ERR_LOAD                1008
-#define ERR_SIGNAL              1009
-
 // Forward declarations
 struct uv_loop_s;
 typedef struct uv_loop_s uv_loop_t;

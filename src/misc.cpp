@@ -3,9 +3,10 @@
 #include <iomanip>
 #include <arpa/inet.h>
 #include <fmt/format.h>
+#include <uv.h>
 #include "nplex-cpp/types.hpp"
 #include "user.hpp"
-#include "utils.hpp"
+#include "misc.hpp"
 
 const gto::cstring nplex::value_t::EMPTY = "";
 
@@ -95,4 +96,25 @@ std::uint8_t nplex::parse_crud(const std::string_view &str)
     }
 
     return crud;
+}
+
+const char * nplex::strerror(int error)
+{
+    if (error < 0)
+        return uv_strerror(error);
+
+    switch (error)
+    {
+        case ERR_CLOSED_BY_LOCAL:   return "closed by local";
+        case ERR_CLOSED_BY_PEER:    return "closed by peer";
+        case ERR_MSG_ERROR:         return "invalid message";
+        case ERR_MSG_UNEXPECTED:    return "unexpected message";
+        case ERR_QUEUE_EXCEEDED:    return "unack queue exceeded";
+        case ERR_ALREADY_CONNECTED: return "already connected";
+        case ERR_CON_LOST:          return "connection lost";
+        case ERR_AUTH:              return "unauthorized";
+        case ERR_LOAD:              return "snapshot request rejected";
+        case ERR_SIGNAL:            return "signal received";
+        default:                    return "unknown error";
+    }
 }

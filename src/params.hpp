@@ -8,7 +8,6 @@ namespace nplex {
 
 struct connection_params_t
 {
-    std::uint32_t max_msg_bytes = UINT32_MAX;   //!< Maximum message size (> 0).
     std::uint32_t max_unack_msgs = UINT32_MAX;  //!< Maximum number of output infly messages (> 0).
     std::uint32_t max_unack_bytes = UINT32_MAX; //!< Maximum bytes of output infly messages (> 0).
     float timeout_factor = 2.5;                 //!< Timeout factor (> 1.0).

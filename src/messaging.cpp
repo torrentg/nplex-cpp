@@ -2,7 +2,7 @@
 #include "nplex-cpp/exception.hpp"
 #include "transaction_impl.hpp"
 #include "messaging.hpp"
-#include "utils.hpp"
+#include "misc.hpp"
 
 #define API_VERSION 10
 

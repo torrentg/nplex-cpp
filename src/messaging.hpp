@@ -3,12 +3,9 @@
 #include <array>
 #include <string>
 #include <memory>
-#include <variant>
 #include <uv.h>
 #include "nplex-cpp/types.hpp"
 #include "messages.hpp"
-
-#define UNUSED(x) (void)(x)
 
 /**
  * Collection of classes and functions used by client_impl and connection.

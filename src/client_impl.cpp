@@ -1,7 +1,10 @@
 #include <cassert>
 #include <limits>
 #include <fmt/format.h>
-#include "utils.hpp"
+#include "misc.hpp"
+#include "user.hpp"
+#include "store.hpp"
+#include "messaging.hpp"
 #include "client_impl.hpp"
 
 // ==========================================================
@@ -21,27 +24,6 @@ static const char * to_str(nplex::client_impl::state_e state)
         case nplex::client_impl::state_e::SYNCED:            return "SYNCED";
         case nplex::client_impl::state_e::CLOSED:            return "CLOSED";
         default:                                             return "UNKNOWN";
-    }
-}
-
-static std::string error2str(int error)
-{
-    if (error < 0)
-        return uv_strerror(error);
-
-    switch (error)
-    {
-        case ERR_CLOSED_BY_LOCAL:   return "closed by local";
-        case ERR_CLOSED_BY_PEER:    return "closed by peer";
-        case ERR_MSG_ERROR:         return "invalid message";
-        case ERR_MSG_UNEXPECTED:    return "unexpected message";
-        case ERR_MSG_SIZE:          return "message too large";
-        case ERR_ALREADY_CONNECTED: return "already connected";
-        case ERR_CON_LOST:          return "connection lost";
-        case ERR_AUTH:              return "unauthorized";
-        case ERR_LOAD:              return "snapshot request rejected";
-        case ERR_SIGNAL:            return "signal received";
-        default:                    return fmt::format("unknown error -{}-", error);
     }
 }
 
@@ -468,7 +450,7 @@ void nplex::client_impl::on_connection_closed(connection *con)
     assert(con != nullptr);
     assert(m_loop_thread_id == std::this_thread::get_id());
 
-    log_warn("{} - {}", con->addr().str(), ::error2str(con->error()));
+    log_warn("{} - {}", con->addr().str(), strerror(con->error()));
 
     if (is_closed())
         return;
