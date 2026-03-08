@@ -122,6 +122,7 @@ target_sources(
     ${CMAKE_CURRENT_LIST_DIR}/src/client.cpp
     ${CMAKE_CURRENT_LIST_DIR}/src/connection.hpp
     ${CMAKE_CURRENT_LIST_DIR}/src/connection.cpp
+    ${CMAKE_CURRENT_LIST_DIR}/src/loggable.hpp
     ${CMAKE_CURRENT_LIST_DIR}/src/messages.fbs
     ${CMAKE_CURRENT_LIST_DIR}/src/messages.hpp
     ${CMAKE_CURRENT_LIST_DIR}/src/messaging.hpp

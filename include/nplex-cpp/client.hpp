@@ -2,7 +2,6 @@
 
 #include <memory>
 #include <future>
-#include <atomic>
 #include <chrono>
 #include <stop_token>
 #include "types.hpp"
@@ -32,9 +31,8 @@ struct params_t
 /**
  * Logger interface.
  * 
- * This interface provides a method to log nplex messages.
- * 
- * By default, the Nplex client will not log any message.
+ * By default, this class logs no message. To enable logging, 
+ * extend this class and override the log() method,
  * 
  * Important notes:
  *   - The log method is executed in the event loop thread.
@@ -45,7 +43,7 @@ class logger
 {
   public:  // types
 
-    enum log_level_e : std::uint8_t {
+    enum class log_level_e : std::uint8_t {
         TRACE,                          //!< Trace messages.
         DEBUG,                          //!< Debug messages.
         INFO,                           //!< Informational messages.
@@ -63,14 +61,7 @@ class logger
      * 
      * @return Log level.
      */
-    log_level_e log_level() const noexcept { return m_log_level.load(std::memory_order_relaxed); }
-
-    /**
-     * Sets the log level.
-     * 
-     * @param[in] level Log level.
-     */
-    void log_level(log_level_e level) noexcept { m_log_level.store(level); }
+    log_level_e level() const noexcept { return m_log_level; }
 
     /**
      * Function used by Nplex to trace messages.
@@ -79,19 +70,22 @@ class logger
      * or equal to the logger's severity level.
      * 
      * This function is executed in the event loop thread. Do not block it.
+     * 
+     * It may be invoked simultaneously from two different threads, so the
+     * implementation must be thread-safe (for example, protect output with 
+     * a mutex).
+     * 
      * If an exception is thrown, the client will terminate.
      * 
-     * @param[in] cli Nplex instance.
      * @param[in] severity Message severity.
      * @param[in] msg Message to log.
      */
-    virtual void log([[maybe_unused]] client &cli, 
-                     [[maybe_unused]] log_level_e severity,
+    virtual void log([[maybe_unused]] log_level_e severity,
                      [[maybe_unused]] const std::string &msg) {}
 
   protected:  // members
 
-    std::atomic<log_level_e> m_log_level;
+    log_level_e m_log_level;
 };
 
 /**

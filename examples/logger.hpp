@@ -9,13 +9,18 @@
 #include <fmt/std.h>
 #include "nplex-cpp/client.hpp"
 
+/**
+ * Basic example to illustrate how to extend nplex::logger.
+ * In production, logger extensions usually rely on dedicated logging
+ * libraries such as spdlog or similar.
+ */
 class logger final : public nplex::logger
 {
   public:  // methods
 
     logger(log_level_e level = log_level_e::INFO) : nplex::logger(level) {}
 
-    void log([[maybe_unused]] nplex::client &cli, log_level_e severity, const std::string &msg) override
+    void log(log_level_e severity, const std::string &msg) override
     {
         // Get the current time
         auto now = std::chrono::system_clock::now();

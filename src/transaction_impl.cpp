@@ -10,41 +10,6 @@
 std::atomic<std::uint64_t> nplex::transaction_impl::seq_id{1};
 
 // ==========================================================
-// Internal (static) functions
-// ==========================================================
-
-template<typename... Args>
-void log(std::weak_ptr<nplex::client_impl> client, nplex::logger::log_level_e severity, fmt::format_string<Args...> fmt_str, Args&&... args) {
-    if (auto cli = client.lock())
-        cli->log(severity, fmt_str, std::forward<Args>(args)...);
-}
-
-template<typename... Args>
-void log_trace(std::weak_ptr<nplex::client_impl> client, fmt::format_string<Args...> fmt_str, Args&&... args) {
-    log(client, nplex::logger::log_level_e::TRACE, fmt_str, std::forward<Args>(args)...);
-}
-
-template<typename... Args>
-void log_debug(std::weak_ptr<nplex::client_impl> client, fmt::format_string<Args...> fmt_str, Args&&... args) {
-    log(client, nplex::logger::log_level_e::DEBUG, fmt_str, std::forward<Args>(args)...);
-}
-
-template<typename... Args>
-void log_info(std::weak_ptr<nplex::client_impl> client, fmt::format_string<Args...> fmt_str, Args&&... args) {
-    log(client, nplex::logger::log_level_e::INFO, fmt_str, std::forward<Args>(args)...);
-}
-
-template<typename... Args>
-void log_warn(std::weak_ptr<nplex::client_impl> client, fmt::format_string<Args...> fmt_str, Args&&... args) {
-    log(client, nplex::logger::log_level_e::WARN, fmt_str, std::forward<Args>(args)...);
-}
-
-template<typename... Args>
-void log_error(std::weak_ptr<nplex::client_impl> client, fmt::format_string<Args...> fmt_str, Args&&... args) {
-    log(client, nplex::logger::log_level_e::ERROR, fmt_str, std::forward<Args>(args)...);
-}
-
-// ==========================================================
 // transaction_impl methods
 // ==========================================================
 
@@ -53,6 +18,7 @@ nplex::transaction_impl::transaction_impl(client_impl_ptr client, isolation_e is
     m_state{state_e::OPEN}, m_read_only{read_only}
 {
     if (auto cli = m_client.lock()) {
+        set_logger(cli->logger());
         m_store = cli->store();
         m_user = cli->user();
     } else {
@@ -67,7 +33,7 @@ nplex::transaction_impl::transaction_impl(client_impl_ptr client, isolation_e is
 
     m_rev_creation = m_store->rev();
 
-    log_debug(m_client, "Tx {} created, isolation={}, read_only={}", m_id, to_str(isolation), read_only);
+    log_debug("Tx {} created, isolation={}, read_only={}", m_id, to_str(isolation), read_only);
 }
 
 nplex::transaction_impl::transaction_impl(store_ptr store, isolation_e isolation, bool read_only) : 
@@ -76,13 +42,13 @@ nplex::transaction_impl::transaction_impl(store_ptr store, isolation_e isolation
 {
     m_rev_creation = m_store->rev();
 
-    log_debug(m_client, "Tx {} created, isolation={}, read_only={}", m_id, to_str(isolation), read_only);
+    log_debug("Tx {} created, isolation={}, read_only={}", m_id, to_str(isolation), read_only);
 }
 
 nplex::transaction_impl::~transaction_impl()
 {
     discard();
-    log_debug(m_client, "Tx {} destroyed", m_id);
+    log_debug("Tx {} destroyed", m_id);
 }
 
 void nplex::transaction_impl::discard()
@@ -104,7 +70,7 @@ void nplex::transaction_impl::set_state(state_e state)
     if (is_closed() || state == m_state)
         return;
 
-    log_debug(m_client, "Tx {} changed from {} to {}", m_id, to_str(m_state), to_str(state));
+    log_debug("Tx {} changed from {} to {}", m_id, to_str(m_state), to_str(state));
 
     m_state = state;
 
@@ -438,7 +404,7 @@ void nplex::transaction_impl::update(const std::vector<change_t> &changes)
         return;
     }
 
-    log_debug(m_client, "Updating transaction {}", m_id);
+    log_debug("Updating transaction {}", m_id);
 
     switch (m_isolation_level)
     {

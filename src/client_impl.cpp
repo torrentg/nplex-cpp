@@ -155,12 +155,12 @@ nplex::client_impl::~client_impl()
     assert(is_closed());
 }
 
-nplex::client & nplex::client_impl::set_logger(const std::shared_ptr<logger> &log)
+nplex::client & nplex::client_impl::set_logger(const logger_ptr &log)
 {
     if (is_running())
         throw nplex_exception("cannot set logger while running");
 
-    m_logger = log;
+    loggable::set_logger(log);
     return *this;
 }
 

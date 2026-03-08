@@ -12,6 +12,7 @@
 #include "nplex-cpp/client.hpp"
 #include "transaction_impl.hpp"
 #include "connection.hpp"
+#include "loggable.hpp"
 #include "params.hpp"
 
 namespace nplex {
@@ -91,7 +92,7 @@ using submit_ptr = std::unique_ptr<submit_req_t>;
  * Most methods run on the event loop. Those that don’t are protected by a mutex. 
  * For the remaining ones, execution on the event loop is enforced with an assert.
  */
-class client_impl final : public client, public std::enable_shared_from_this<client_impl>
+class client_impl final : public client, public loggable, public std::enable_shared_from_this<client_impl>
 {
   public:  // types
 
@@ -122,6 +123,7 @@ class client_impl final : public client, public std::enable_shared_from_this<cli
     bool is_running() const { return m_loop_thread_id != std::thread::id{}; }
 
     const_user_ptr user() const { return m_user.load(); }
+    logger_ptr logger() const { return m_logger; }
     store_ptr store() const { return m_store; }
 
     void run(std::stop_token st) noexcept override;
@@ -148,39 +150,6 @@ class client_impl final : public client, public std::enable_shared_from_this<cli
     // used by transaction_impl
     void remove_tx(const transaction_impl *tx);
 
-  public:  // methods
-
-    template<typename... Args>
-    void log(logger::log_level_e severity, fmt::format_string<Args...> fmt_str, Args&&... args) {
-        if (m_logger && static_cast<int>(m_logger->log_level()) <= static_cast<int>(severity))
-            m_logger->log(*this, severity, fmt::format(fmt_str, std::forward<Args>(args)...));
-    }
-
-    template<typename... Args>
-    void log_trace(fmt::format_string<Args...> fmt_str, Args&&... args) {
-        log(logger::log_level_e::TRACE, fmt_str, std::forward<Args>(args)...);
-    }
-
-    template<typename... Args>
-    void log_debug(fmt::format_string<Args...> fmt_str, Args&&... args) {
-        log(logger::log_level_e::DEBUG, fmt_str, std::forward<Args>(args)...);
-    }
-
-    template<typename... Args>
-    void log_info(fmt::format_string<Args...> fmt_str, Args&&... args) {
-        log(logger::log_level_e::INFO, fmt_str, std::forward<Args>(args)...);
-    }
-
-    template<typename... Args>
-    void log_warn(fmt::format_string<Args...> fmt_str, Args&&... args) {
-        log(logger::log_level_e::WARN, fmt_str, std::forward<Args>(args)...);
-    }
-
-    template<typename... Args>
-    void log_error(fmt::format_string<Args...> fmt_str, Args&&... args) {
-        log(logger::log_level_e::ERROR, fmt_str, std::forward<Args>(args)...);
-    }
-
   private:  // members
 
     using set_tx_t = std::set<tx_impl_ptr, tx_comparator>;
@@ -191,7 +160,6 @@ class client_impl final : public client, public std::enable_shared_from_this<cli
     client_params_t m_params;                       //!< Client params.
     rev_t m_rev0 = 0;                               //!< Initial revision.
     
-    std::shared_ptr<logger> m_logger;               //!< Client logger.
     std::shared_ptr<reactor> m_reactor;             //!< Client reactor.
     std::shared_ptr<manager> m_manager;             //!< Lifecycle manager.
 

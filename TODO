@@ -4,7 +4,6 @@
 * allow ssl connections (see project tlsuv)
 * README: explain nplex purpose
 * in client_impl, replace std::unique<uv_*> by uv_*
-* remove client param from logger::log
 
 ## Useful commands
 

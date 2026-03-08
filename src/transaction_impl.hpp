@@ -8,6 +8,7 @@
 #include <future>
 #include "flatbuffers/flatbuffers.h"
 #include "nplex-cpp/transaction.hpp"
+#include "loggable.hpp"
 #include "messages.hpp"
 #include "store.hpp"
 #include "user.hpp"
@@ -22,7 +23,7 @@ using client_impl_ptr = std::shared_ptr<client_impl>;
  * Internal class implementing the transaction interface.
  * Also provides methods to update and serialize its content.
  */
-class transaction_impl : public transaction, public std::enable_shared_from_this<transaction_impl>
+class transaction_impl : public transaction, public loggable, public std::enable_shared_from_this<transaction_impl>
 {
   public:  // types
 
