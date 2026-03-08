@@ -131,6 +131,8 @@ target_sources(
     ${CMAKE_CURRENT_LIST_DIR}/src/store.cpp
     ${CMAKE_CURRENT_LIST_DIR}/src/transaction_impl.hpp
     ${CMAKE_CURRENT_LIST_DIR}/src/transaction_impl.cpp
+    ${CMAKE_CURRENT_LIST_DIR}/src/user.hpp
+    ${CMAKE_CURRENT_LIST_DIR}/src/user.cpp
     ${CMAKE_CURRENT_LIST_DIR}/src/utils.hpp
     ${CMAKE_CURRENT_LIST_DIR}/src/utils.cpp
     PUBLIC

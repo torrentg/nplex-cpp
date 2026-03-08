@@ -10,6 +10,7 @@
 #include "nplex-cpp/transaction.hpp"
 #include "messages.hpp"
 #include "store.hpp"
+#include "user.hpp"
 
 namespace nplex {
 
@@ -37,7 +38,8 @@ class transaction_impl : public transaction, public std::enable_shared_from_this
 
   public:  // methods
 
-    transaction_impl(client_impl_ptr client, store_ptr store, isolation_e isolation, bool read_only = false);
+    transaction_impl(client_impl_ptr client, isolation_e isolation, bool read_only = false);
+    transaction_impl(store_ptr store, isolation_e isolation, bool read_only = false);
     virtual ~transaction_impl() override;
 
     // const methods
@@ -79,16 +81,17 @@ class transaction_impl : public transaction, public std::enable_shared_from_this
     const std::uint64_t m_id;                   //!< Transaction unique id (process-wide).
     std::mutex m_mutex;                         //!< Mutex to protect m_promise.
     std::weak_ptr<client_impl> m_client;        //!< Weak reference to the client.
-    std::promise<submit_e> m_promise;           //!< Promise to set the submit result.
     store_ptr m_store;                          //!< Database content.
-    rev_t m_rev_creation;                       //!< Database revision at tx creation.
+    const_user_ptr m_user;                      //!< User associated to the transaction.
+    std::promise<submit_e> m_promise;           //!< Promise to set the submit result.
+    rev_t m_rev_creation = 0;                   //!< Database revision at tx creation.
     items_t m_items;                            //!< Transaction items (depends on isolation level).
     ensures_t m_ensures;                        //!< Transaction ensures.
     isolation_e m_isolation_level;              //!< Transaction isolation level.
     std::atomic<std::uint32_t> m_type = 0;      //!< Transaction type (user-defined value).
     std::atomic<state_e> m_state;               //!< Transaction state.
     std::atomic<bool> m_dirty = false;          //!< Current tx conflicts with a commit.
-    bool m_read_only = true;                    //!< Read-only flag.
+    bool m_read_only = true;                    //!< Transaction read-only flag.
 
   protected:  // methods
 

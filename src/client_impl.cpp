@@ -1,6 +1,5 @@
 #include <cassert>
 #include <limits>
-#include <fmt/ranges.h>
 #include <fmt/format.h>
 #include "utils.hpp"
 #include "client_impl.hpp"
@@ -8,6 +7,22 @@
 // ==========================================================
 // Internal (static) functions
 // ==========================================================
+
+static const char * to_str(nplex::client_impl::state_e state)
+{
+    switch (state)
+    {
+        case nplex::client_impl::state_e::OFFLINE:           return "OFFLINE";
+        case nplex::client_impl::state_e::CONNECTING:        return "CONNECTING";
+        case nplex::client_impl::state_e::AUTHENTICATED:     return "AUTHENTICATED";
+        case nplex::client_impl::state_e::LOADING_SNAPSHOT:  return "LOADING_SNAPSHOT";
+        case nplex::client_impl::state_e::INITIALIZED:       return "INITIALIZED";
+        case nplex::client_impl::state_e::SYNCING:           return "SYNCING";
+        case nplex::client_impl::state_e::SYNCED:            return "SYNCED";
+        case nplex::client_impl::state_e::CLOSED:            return "CLOSED";
+        default:                                             return "UNKNOWN";
+    }
+}
 
 static std::string error2str(int error)
 {
@@ -30,16 +45,6 @@ static std::string error2str(int error)
     }
 }
 
-static std::string mode_to_string(std::uint8_t mode)
-{
-    return std::string{
-        ((mode & NPLEX_CREATE) ? 'c' : '-'),
-        ((mode & NPLEX_READ)   ? 'r' : '-'),
-        ((mode & NPLEX_UPDATE) ? 'u' : '-'),
-        ((mode & NPLEX_DELETE) ? 'd' : '-')
-    };
-}
-
 template<typename T, typename Q>
 static std::unique_ptr<T> convert_ptr(std::unique_ptr<Q> &req)
 {
@@ -50,19 +55,6 @@ static std::unique_ptr<T> convert_ptr(std::unique_ptr<Q> &req)
     req.release();
     return ret;
 }
-
-template <>
-struct fmt::formatter<nplex::acl_t>
-{
-    static constexpr auto parse(fmt::format_parse_context &ctx) { 
-        return ctx.begin();
-    }
-
-    template <typename Context>
-    auto format (nplex::acl_t const &obj, Context &ctx) const -> decltype(ctx.out()) {
-        return fmt::format_to(ctx.out(), "{}:{}", ::mode_to_string(obj.mode), obj.pattern);
-    }
-};
 
 static bool is_timer_active(uv_timer_t *timer)
 {
@@ -134,6 +126,7 @@ nplex::client_impl::client_impl(const client_params_t &params) :
     if (m_params.max_active_txs == 0)
         m_params.max_active_txs = UINT32_MAX;
 
+    m_user = nullptr;
     m_store = std::make_shared<store_t>();
     m_manager = std::make_shared<manager>();
 
@@ -275,7 +268,7 @@ void nplex::client_impl::set_state(state_e state)
     if (m_state == state)
         return;
 
-    log_debug("State changed from {} to {}", to_str(m_state.load()), to_str(state));
+    log_debug("State changed from {} to {}", ::to_str(m_state.load()), ::to_str(state));
 
     m_state = state;
 
@@ -485,7 +478,17 @@ void nplex::client_impl::on_connection_closed(connection *con)
     {
         log_debug("Unable to connect to any server");
 
-        auto wait_time = m_manager->on_connection_failed(*this);
+        std::int32_t wait_time = -1;
+        
+        try {
+            wait_time = m_manager->on_connection_failed(*this);
+        } catch (const std::exception &e) {
+            log_error("Exception in on_connection_failed callback: {}", e.what());
+            wait_time = -1;
+        } catch (...) {
+            log_error("Unknown exception in on_connection_failed callback");
+            wait_time = -1;
+        }
 
         // case: do not reconnect
         if (wait_time < 0) {
@@ -526,7 +529,17 @@ void nplex::client_impl::on_connection_closed(connection *con)
         uv_timer_stop(m_timer_con_lost.get());
     }
 
-    bool retry = m_manager->on_connection_lost(*this, con->addr().str());
+    bool retry = false;
+    
+    try {
+        retry = m_manager->on_connection_lost(*this, con->addr().str());
+    } catch (const std::exception &e) {
+        log_error("Exception in on_connection_lost callback: {}", e.what());
+        retry = false;
+    } catch (...) {
+        log_error("Unknown exception in on_connection_lost callback");
+        retry = false;
+    }
 
     if (retry) {
         try_to_connect();
@@ -740,28 +753,31 @@ void nplex::client_impl::process_login_resp(connection *con, const nplex::msgs::
         return;
     }
 
-    m_can_force = resp->can_force();
-    m_permissions.clear();
+    auto user = std::make_shared<user_t>();
+    user->name = m_params.user;
+    user->can_force = resp->can_force();
+    user->permissions.clear();
 
     if (resp->permissions())
     {
         for (flatbuffers::uoffset_t i = 0; i < resp->permissions()->size(); i++) {
             auto acl = resp->permissions()->Get(i);
-            m_permissions.push_back({acl->mode(), acl->pattern()->str()});
+            user->permissions.push_back({acl->mode(), acl->pattern()->str()});
         }
     }
 
-    if (m_permissions.empty()) {
+    if (user->permissions.empty()) {
         con->disconnect(ERR_AUTH);
         return;
     }
 
     m_con = con;
+    m_user.store(user);
     set_state(state_e::AUTHENTICATED);
 
     log_info("Login successful on server {}", m_con->addr().str());
     log_debug("Server info: rev = {}, min-rev = {}, keepalive = {}ms", resp->crev(), resp->rev0(), resp->keepalive());
-    log_debug("User info: can-force = {}, permissions = [{}]", m_can_force, fmt::join(m_permissions, ", "));
+    log_debug("User info: can-force = {}, permissions = [{}]", m_user.load()->can_force, fmt::join(m_user.load()->permissions, ", "));
 
     if (resp->keepalive())
     {
@@ -838,7 +854,22 @@ void nplex::client_impl::process_snapshot_resp(const nplex::msgs::SnapshotRespon
     if (resp->snapshot())
         m_store->load(resp->snapshot());
 
-    if (m_reactor) m_reactor->on_snapshot(*this);
+    if (m_reactor)
+    {
+        try {
+            m_reactor->on_snapshot(*this);
+        } catch (const std::exception &e) {
+            log_error("Error in reactor on_snapshot: {}", e.what());
+            m_con->disconnect(ERR_CLOSED_BY_LOCAL);
+            abort("Error in on_snapshot");
+            return;
+        } catch (...) {
+            log_error("Error in reactor on_snapshot");
+            m_con->disconnect(ERR_CLOSED_BY_LOCAL);
+            abort("Error in on_snapshot");
+            return;
+        }
+    }
 
     m_initialized = true;
     set_state(state_e::SYNCING);
@@ -1053,7 +1084,7 @@ nplex::tx_ptr nplex::client_impl::create_tx(transaction::isolation_e isolation, 
     if (num_txs >= m_params.max_active_txs)
         throw nplex_exception("Too many concurrent transactions (max={})", m_params.max_active_txs);
 
-    auto tx = std::make_shared<transaction_impl>(shared_from_this(), m_store, isolation, read_only);
+    auto tx = std::make_shared<transaction_impl>(shared_from_this(), isolation, read_only);
     m_transactions.insert(tx);
 
     return tx;

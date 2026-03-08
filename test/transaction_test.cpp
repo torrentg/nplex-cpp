@@ -16,7 +16,7 @@ namespace {
 class transaction_test : public transaction_impl
 {
   public:
-    using transaction_impl::transaction_impl;
+    transaction_test(store_ptr store, isolation_e isolation, bool read_only = false) : transaction_impl(store, isolation, read_only) {}
     void set_state(state_e state) { m_state = state; }
     void set_dirty(bool dirty) { m_dirty = dirty; }
 };
@@ -155,7 +155,7 @@ TEST_CASE("transaction_test")
 
     SUBCASE("read_committed_basic")
     {
-        auto tx = std::make_shared<transaction_test>(nullptr, store, transaction::isolation_e::READ_COMMITTED);
+        auto tx = std::make_shared<transaction_test>(store, transaction::isolation_e::READ_COMMITTED);
 
         CHECK(tx->isolation() == transaction::isolation_e::READ_COMMITTED);
 
@@ -208,7 +208,7 @@ TEST_CASE("transaction_test")
 
     SUBCASE("repeatable_read_basic")
     {
-        auto tx = std::make_shared<transaction_test>(nullptr, store, transaction::isolation_e::REPEATABLE_READ);
+        auto tx = std::make_shared<transaction_test>(store, transaction::isolation_e::REPEATABLE_READ);
 
         CHECK(tx->isolation() == transaction::isolation_e::REPEATABLE_READ);
 
@@ -260,7 +260,7 @@ TEST_CASE("transaction_test")
 
     SUBCASE("serializable_basic")
     {
-        auto tx = std::make_shared<transaction_test>(nullptr, store, transaction::isolation_e::SERIALIZABLE);
+        auto tx = std::make_shared<transaction_test>(store, transaction::isolation_e::SERIALIZABLE);
 
         CHECK(tx->isolation() == transaction::isolation_e::SERIALIZABLE);
 
@@ -312,7 +312,7 @@ TEST_CASE("transaction_test")
 
     SUBCASE("read_upsert_remove_exceptions")
     {
-        auto tx = std::make_shared<transaction_test>(nullptr, store, transaction::isolation_e::SERIALIZABLE, true);
+        auto tx = std::make_shared<transaction_test>(store, transaction::isolation_e::SERIALIZABLE, true);
 
         CHECK_THROWS_AS(tx->upsert("key1", "abc"), nplex_exception); // read-only exception
         CHECK_THROWS_AS(tx->remove("key1"), nplex_exception); // read-only exception
@@ -324,7 +324,7 @@ TEST_CASE("transaction_test")
 TEST_CASE("transaction_for_each")
 {
     store_ptr store = make_basic_store();
-    auto tx = std::make_shared<transaction_test>(nullptr, store, transaction::isolation_e::READ_COMMITTED);
+    auto tx = std::make_shared<transaction_test>(store, transaction::isolation_e::READ_COMMITTED);
 
     SUBCASE("iterate_with_callback_null")
     {
@@ -436,7 +436,7 @@ TEST_CASE("transaction_ensure")
 {
     store_ptr store = make_basic_store();
     std::vector<nplex::change_t> changes;
-    auto tx = std::make_shared<transaction_test>(nullptr, store, transaction::isolation_e::READ_COMMITTED);
+    auto tx = std::make_shared<transaction_test>(store, transaction::isolation_e::READ_COMMITTED);
 
     SUBCASE("ensure_all")
     {

@@ -47,13 +47,32 @@ void log_error(std::weak_ptr<nplex::client_impl> client, fmt::format_string<Args
 // transaction_impl methods
 // ==========================================================
 
-nplex::transaction_impl::transaction_impl(client_impl_ptr client, store_ptr store, isolation_e isolation, bool read_only) : 
-    m_id{seq_id++}, m_client{std::move(client)}, m_store{std::move(store)}, m_isolation_level{isolation}, 
+nplex::transaction_impl::transaction_impl(client_impl_ptr client, isolation_e isolation, bool read_only) : 
+    m_id{seq_id++}, m_client{std::move(client)}, m_isolation_level{isolation}, 
     m_state{state_e::OPEN}, m_read_only{read_only}
 {
-    if (!m_store)
-        throw std::invalid_argument("Invalid database");
+    if (auto cli = m_client.lock()) {
+        m_store = cli->store();
+        m_user = cli->user();
+    } else {
+        throw std::logic_error("Client is not available");
+    }
 
+    if (!m_store)
+        throw std::logic_error("Store is not available");
+
+    if (!m_user)
+        throw std::logic_error("User is not available");
+
+    m_rev_creation = m_store->rev();
+
+    log_debug(m_client, "Tx {} created, isolation={}, read_only={}", m_id, to_str(isolation), read_only);
+}
+
+nplex::transaction_impl::transaction_impl(store_ptr store, isolation_e isolation, bool read_only) : 
+    m_id{seq_id++}, m_store{store}, m_isolation_level{isolation}, 
+    m_state{state_e::OPEN}, m_read_only{read_only}
+{
     m_rev_creation = m_store->rev();
 
     log_debug(m_client, "Tx {} created, isolation={}, read_only={}", m_id, to_str(isolation), read_only);
@@ -174,7 +193,8 @@ bool nplex::transaction_impl::upsert(const char *key, const std::string_view &da
     // Case: key was previously read, upserted or deleted in this transaction
     if (it_tx != m_items.end())
     {
-        // TODO: check for permission (update)
+        if (m_user && !m_user->is_authorized(CRUD_UPDATE, it_tx->first))
+            throw nplex_exception("not authorized to update key {}", it_tx->first);
 
         // Case: Same value and not forced
         if (!force && 
@@ -194,13 +214,17 @@ bool nplex::transaction_impl::upsert(const char *key, const std::string_view &da
     auto it_store = m_store->m_data.find(key);
 
     // Case: key does not exist in the database
-    if (it_store == m_store->m_data.end()) {
-        // TODO: check for permission (create)
+    if (it_store == m_store->m_data.end())
+    {
+        if (m_user && !m_user->is_authorized(CRUD_CREATE, key))
+            throw nplex_exception("not authorized to create key {}", key);
+
         m_items.emplace(key, std::make_tuple(action_e::UPSERT, value));
         return true;
     }
 
-    // TODO: check for permission (update)
+    if (m_user && !m_user->is_authorized(CRUD_UPDATE, key))
+        throw nplex_exception("not authorized to update key {}", key);
 
     // Case: key exists in database AND has the same value
     if (!force && it_store->second->data() == value->data())
@@ -220,10 +244,11 @@ bool nplex::transaction_impl::remove(const key_t &key)
     if (m_read_only)
         throw nplex_exception("Transaction is read-only");
 
-    // TODO: check permissions (delete)
-
     if (m_state != state_e::OPEN)
         throw nplex_exception("Transaction is not open");
+
+    if (m_user && !m_user->is_authorized(CRUD_DELETE, key))
+        throw nplex_exception("not authorized to delete key {}", key);
 
     // Search for the key in the transaction
     auto it_tx = m_items.find(key);
@@ -528,7 +553,7 @@ std::future<nplex::transaction::submit_e> nplex::transaction_impl::submit(bool f
 
     if (auto client = m_client.lock())
     {
-        if (force && !client->can_force()) {
+        if (force && m_user && !m_user->can_force) {
             m_promise.set_value(submit_e::REJECTED_PERMISSION);
             set_state(state_e::REJECTED);
             return m_promise.get_future();

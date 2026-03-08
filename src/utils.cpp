@@ -2,7 +2,9 @@
 #include <sstream>
 #include <iomanip>
 #include <arpa/inet.h>
+#include <fmt/format.h>
 #include "nplex-cpp/types.hpp"
+#include "user.hpp"
 #include "utils.hpp"
 
 const gto::cstring nplex::value_t::EMPTY = "";
@@ -10,22 +12,6 @@ const gto::cstring nplex::value_t::EMPTY = "";
 std::uint32_t nplex::ntohl_ptr(const char *ptr)
 {
     return ntohl(*reinterpret_cast<const std::uint32_t *>(ptr));
-}
-
-const char * nplex::to_str(client_impl::state_e state)
-{
-    switch (state)
-    {
-        case client_impl::state_e::OFFLINE:             return "OFFLINE";
-        case client_impl::state_e::CONNECTING:          return "CONNECTING";
-        case client_impl::state_e::AUTHENTICATED:       return "AUTHENTICATED";
-        case client_impl::state_e::LOADING_SNAPSHOT:    return "LOADING_SNAPSHOT";
-        case client_impl::state_e::INITIALIZED:         return "INITIALIZED";
-        case client_impl::state_e::SYNCING:             return "SYNCING";
-        case client_impl::state_e::SYNCED:              return "SYNCED";
-        case client_impl::state_e::CLOSED:              return "CLOSED";
-        default:                                        return "UNKNOWN";
-    }
 }
 
 const char * nplex::to_str(transaction::state_e state)
@@ -71,4 +57,42 @@ std::string nplex::to_iso8601(std::chrono::milliseconds ms_since_epoch)
     oss << '.' << std::setw(3) << std::setfill('0') << millis << 'Z'; 
 
     return oss.str();
+}
+
+std::string nplex::crud_to_string(std::uint8_t mode)
+{
+    return std::string{
+        ((mode & CRUD_CREATE) ? 'c' : '-'),
+        ((mode & CRUD_READ)   ? 'r' : '-'),
+        ((mode & CRUD_UPDATE) ? 'u' : '-'),
+        ((mode & CRUD_DELETE) ? 'd' : '-')
+    };
+}
+
+std::uint8_t nplex::parse_crud(const std::string_view &str)
+{
+    static const char *crud_str = "crud";
+    std::uint8_t crud = 0;
+
+    if (str.size() != 4)
+        throw std::invalid_argument(fmt::format("Invalid crud ({})", str));
+
+    for (std::size_t i = 0; i < 4; i++)
+    {
+        char c = str[i];
+
+        if (c != crud_str[i] && c != '-')
+            throw std::invalid_argument(fmt::format("Invalid crud ({})", str));
+
+        switch (c)
+        {
+            case 'c': crud |= CRUD_CREATE; break;
+            case 'r': crud |= CRUD_READ;   break;
+            case 'u': crud |= CRUD_UPDATE; break;
+            case 'd': crud |= CRUD_DELETE; break;
+            default: break;
+        }
+    }
+
+    return crud;
 }

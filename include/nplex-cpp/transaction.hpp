@@ -4,11 +4,6 @@
 #include <future>
 #include "types.hpp"
 
-#define NPLEX_CREATE 1
-#define NPLEX_READ   2
-#define NPLEX_UPDATE 4
-#define NPLEX_DELETE 8
-
 namespace nplex {
 
 /**

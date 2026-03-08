@@ -11,6 +11,7 @@
 #include "cqueue.hpp"
 #include "nplex-cpp/client.hpp"
 #include "transaction_impl.hpp"
+#include "user.hpp"
 #include "store.hpp"
 #include "connection.hpp"
 #include "messaging.hpp"
@@ -20,11 +21,6 @@ namespace nplex {
 
 using clock = std::chrono::steady_clock;
 using usec = std::chrono::microseconds;
-
-struct acl_t {
-    std::uint8_t mode;          // Attributes (1=CREATE, 2=READ, 4=UPDATE, 8=DELETE).
-    std::string pattern;        // Pattern (glob).
-};
 
 struct command_t {
     virtual ~command_t() = default;
@@ -121,6 +117,9 @@ class client_impl final : public client, public std::enable_shared_from_this<cli
     bool is_closed() const override { return m_state.load() == state_e::CLOSED; }
     bool is_running() const { return m_loop_thread_id != std::thread::id{}; }
 
+    const_user_ptr user() const { return m_user.load(); }
+    store_ptr store() const { return m_store; }
+
     void run(std::stop_token st) noexcept override;
     bool wait_for_usable(millis timeout = millis::max()) override;
     bool wait_for_synced(millis timeout = millis::max()) override;
@@ -144,8 +143,6 @@ class client_impl final : public client, public std::enable_shared_from_this<cli
 
     // used by transaction_impl
     void remove_tx(const transaction_impl *tx);
-    bool can_force () const { return m_can_force; }
-    const std::vector<acl_t> & permissions() const { return m_permissions; }
 
   public:  // methods
 
@@ -184,6 +181,7 @@ class client_impl final : public client, public std::enable_shared_from_this<cli
 
     using set_tx_t = std::set<tx_impl_ptr, tx_comparator>;
 
+    std::atomic<user_ptr> m_user;                   //!< User data.
     store_ptr m_store;                              //!< Database content.
     set_tx_t m_transactions;                        //!< List of current transactions.
     client_params_t m_params;                       //!< Client params.
@@ -197,8 +195,6 @@ class client_impl final : public client, public std::enable_shared_from_this<cli
     connection *m_con = nullptr;                    //!< Current connection (established).
     std::size_t m_correlation = 0;                  //!< Last correlation id.
     std::size_t m_data_cid = 0;                     //!< Correlation id of last snapshot/updates sent.
-    std::vector<acl_t> m_permissions;               //!< User permissions (fixed by server at login).
-    bool m_can_force = false;                       //!< User can force transactions (fixed by server at login).
 
     std::mutex m_mutex;                             //!< Mutex to protect m_commands, m_async, m_cv and m_transactions.
     std::atomic<bool> m_initialized = false;        //!< Data was initialized with a snapshot.
@@ -211,10 +207,10 @@ class client_impl final : public client, public std::enable_shared_from_this<cli
 
     std::thread::id m_loop_thread_id;               //!< Thread id of the event loop thread.
     std::unique_ptr<uv_loop_t> m_loop;              //!< Event loop.
-    std::unique_ptr<uv_async_t> m_async_command;    //!< Used to notify new pending commands
-    std::unique_ptr<uv_signal_t> m_signal_sigint;   //!< SIGINT handler (Ctrl-C).
     std::unique_ptr<uv_timer_t> m_timer_con_lost;   //!< Connection-lost timer.
     std::unique_ptr<uv_timer_t> m_timer_reconnect;  //!< Reconnect timer.
+    std::unique_ptr<uv_signal_t> m_signal_sigint;   //!< SIGINT handler (Ctrl-C).
+    std::unique_ptr<uv_async_t> m_async_command;    //!< Used to notify new pending commands
 
   private:  // methods
 
