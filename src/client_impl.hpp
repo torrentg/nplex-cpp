@@ -120,7 +120,7 @@ class client_impl final : public client, public loggable, public std::enable_sha
     bool is_usable() const override { return m_initialized.load(); }
     bool is_synced() const override { return m_state.load() == state_e::SYNCED; }
     bool is_closed() const override { return m_state.load() == state_e::CLOSED; }
-    bool is_running() const { return m_loop_thread_id != std::thread::id{}; }
+    bool is_running() const { return m_running.load(); }
 
     const_user_ptr user() const { return m_user.load(); }
     logger_ptr logger() const { return m_logger; }
@@ -147,9 +147,6 @@ class client_impl final : public client, public loggable, public std::enable_sha
     void process_commands();
     void try_to_connect();
 
-    // used by transaction_impl
-    void remove_tx(const transaction_impl *tx);
-
   private:  // members
 
     using set_tx_t = std::set<tx_impl_ptr, tx_comparator>;
@@ -168,8 +165,10 @@ class client_impl final : public client, public loggable, public std::enable_sha
     std::size_t m_correlation = 0;                  //!< Last correlation id.
     std::size_t m_data_cid = 0;                     //!< Correlation id of last snapshot/updates sent.
 
-    std::mutex m_mutex;                             //!< Mutex to protect m_commands, m_async, m_cv and m_transactions.
+    std::mutex m_mutex_commands;                    //!< Mutex to protect m_commands, m_async, m_cv.
+    std::mutex m_mutex_transactions;                //!< Mutex to protect m_transactions.
     std::atomic<bool> m_initialized = false;        //!< Data was initialized with a snapshot.
+    std::atomic<bool> m_running = false;            //!< Client is running.
     std::condition_variable m_cv;                   //!< Condition variable to wait for changes in state.
     std::atomic<state_e> m_state;                   //!< Client state.
     std::exception_ptr m_error;                     //!< Stored exception (if any).

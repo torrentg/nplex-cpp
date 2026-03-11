@@ -56,6 +56,8 @@ void nplex::transaction_impl::discard()
     set_state(state_e::DISCARDED);
 
     try {
+        std::lock_guard<decltype(m_mutex_promise)> lock_promise(m_mutex_promise);
+
         m_promise.set_exception(
             std::make_exception_ptr(nplex_exception("Transaction was discarded"))
         );
@@ -73,12 +75,6 @@ void nplex::transaction_impl::set_state(state_e state)
     log_debug("Tx {} changed from {} to {}", m_id, to_str(m_state), to_str(state));
 
     m_state = state;
-
-    if (!is_closed())
-        return;
-
-    if (auto client = m_client.lock())
-        client->remove_tx(this);
 }
 
 nplex::rev_t nplex::transaction_impl::rev() const
@@ -104,6 +100,8 @@ nplex::value_ptr nplex::transaction_impl::read(const char *key, bool check)
     if (m_state != state_e::OPEN)
         throw nplex_exception("Transaction is not open");
 
+    std::lock_guard<decltype(m_mutex_items)> lock_items(m_mutex_items);
+
     // Search for the key in the transaction
     auto it_tx = m_items.find(key);
 
@@ -119,7 +117,7 @@ nplex::value_ptr nplex::transaction_impl::read(const char *key, bool check)
         return std::get<value_ptr>(it_tx->second);
     }
 
-    std::lock_guard<decltype(m_store->m_mutex)> lock(m_store->m_mutex);
+    std::lock_guard<decltype(m_store->m_mutex)> lock_store(m_store->m_mutex);
 
     // Search for the key in the database
     auto it_store = m_store->m_data.find(key);
@@ -154,6 +152,8 @@ bool nplex::transaction_impl::upsert(const char *key, const std::string_view &da
     if (m_state != state_e::OPEN)
         throw nplex_exception("Transaction is not open");
 
+    std::lock_guard<decltype(m_mutex_items)> lock_items(m_mutex_items);
+
     // Search for the key in the transaction
     auto it_tx = m_items.find(key);
 
@@ -175,7 +175,7 @@ bool nplex::transaction_impl::upsert(const char *key, const std::string_view &da
         return true;
     }
 
-    std::lock_guard<decltype(m_store->m_mutex)> lock(m_store->m_mutex);
+    std::lock_guard<decltype(m_store->m_mutex)> lock_store(m_store->m_mutex);
 
     // Search for the key in the database
     auto it_store = m_store->m_data.find(key);
@@ -217,6 +217,8 @@ bool nplex::transaction_impl::remove(const key_t &key)
     if (m_user && !m_user->is_authorized(CRUD_DELETE, key))
         throw nplex_exception("not authorized to delete key {}", key);
 
+    std::lock_guard<decltype(m_mutex_items)> lock_items(m_mutex_items);
+
     // Search for the key in the transaction
     auto it_tx = m_items.find(key);
 
@@ -233,7 +235,7 @@ bool nplex::transaction_impl::remove(const key_t &key)
         return true;
     }
 
-    std::lock_guard<decltype(m_store->m_mutex)> lock(m_store->m_mutex);
+    std::lock_guard<decltype(m_store->m_mutex)> lock_store(m_store->m_mutex);
 
     // Search for the key in the database
     auto it_store = m_store->m_data.find(key);
@@ -255,7 +257,8 @@ std::size_t nplex::transaction_impl::remove(const char *pattern)
     if (m_state != state_e::OPEN)
         throw nplex_exception("Transaction is not open");
 
-    std::lock_guard<decltype(m_store->m_mutex)> lock(m_store->m_mutex);
+    std::lock_guard<decltype(m_mutex_items)> lock_items(m_mutex_items);
+    std::lock_guard<decltype(m_store->m_mutex)> lock_store(m_store->m_mutex);
 
     auto ret = for_each(pattern, [this](const key_t &key, [[maybe_unused]] const value_t &value) {
         remove(key);
@@ -272,6 +275,8 @@ bool nplex::transaction_impl::ensure(const char *pattern)
 
     if (m_state != state_e::OPEN)
         throw nplex_exception("Transaction is not open");
+
+    std::lock_guard<decltype(m_mutex_items)> lock_items(m_mutex_items);
 
     if (!m_ensures.contains(pattern))
         m_ensures.emplace(pattern);
@@ -291,7 +296,8 @@ std::size_t nplex::transaction_impl::for_each(const char *pattern, const callbac
     // modify the transaction (eg. upsert or delete), and this can 
     // invalidate the iterators.
 
-    std::lock_guard<decltype(m_store->m_mutex)> lock(m_store->m_mutex);
+    std::lock_guard<decltype(m_mutex_items)> lock_items(m_mutex_items);
+    std::lock_guard<decltype(m_store->m_mutex)> lock_store(m_store->m_mutex);
 
     auto kvs = for_each_internal(pattern);
     size_t ret = 0;
@@ -406,6 +412,8 @@ void nplex::transaction_impl::update(const std::vector<change_t> &changes)
 
     log_debug("Updating transaction {}", m_id);
 
+    std::lock_guard<decltype(m_mutex_items)> lock_items(m_mutex_items);
+
     switch (m_isolation_level)
     {
         case isolation_e::SERIALIZABLE:
@@ -483,10 +491,11 @@ void nplex::transaction_impl::update_serializable(const std::vector<change_t> &c
 
 std::future<nplex::transaction::submit_e> nplex::transaction_impl::submit(bool force)
 {
-    std::lock_guard<std::mutex> lock(m_mutex);
-
     if (m_state != state_e::OPEN)
         throw nplex_exception("Transaction is not open");
+
+    std::lock_guard<decltype(m_mutex_items)> lock_items(m_mutex_items);
+    std::lock_guard<decltype(m_mutex_promise)> lock_promise(m_mutex_promise);
 
     if (m_read_only) {
         m_promise.set_value(submit_e::NO_MODIFICATIONS);
@@ -536,7 +545,7 @@ std::future<nplex::transaction::submit_e> nplex::transaction_impl::submit(bool f
 
 void nplex::transaction_impl::set_submit_result(std::exception_ptr eptr)
 {
-    std::lock_guard<std::mutex> lock(m_mutex);
+    std::lock_guard<decltype(m_mutex_promise)> lock_promise(m_mutex_promise);
 
     if (m_state != state_e::SUBMITTED)
         return;
@@ -547,10 +556,10 @@ void nplex::transaction_impl::set_submit_result(std::exception_ptr eptr)
 
 void nplex::transaction_impl::set_submit_result(msgs::SubmitCode code)
 {
+    std::lock_guard<decltype(m_mutex_promise)> lock_promise(m_mutex_promise);
+
     if (m_state != state_e::SUBMITTED)
         return;
-
-    std::lock_guard<std::mutex> lock(m_mutex);
 
     switch (code)
     {
@@ -591,7 +600,7 @@ void nplex::transaction_impl::set_submit_result(msgs::SubmitCode code)
 
 void nplex::transaction_impl::confirm_commit([[maybe_unused]] rev_t rev)
 {
-    std::lock_guard<std::mutex> lock(m_mutex);
+    std::lock_guard<decltype(m_mutex_promise)> lock_promise(m_mutex_promise);
 
     if (m_state != state_e::ACCEPTED)
         return;

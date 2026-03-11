@@ -80,7 +80,8 @@ class transaction_impl : public transaction, public loggable, public std::enable
   protected:  // members
 
     const std::uint64_t m_id;                   //!< Transaction unique id (process-wide).
-    std::mutex m_mutex;                         //!< Mutex to protect m_promise.
+    std::mutex m_mutex_promise;                 //!< Mutex to protect m_promise.
+    std::recursive_mutex m_mutex_items;         //!< Mutex to protect m_items and m_ensures.
     std::weak_ptr<client_impl> m_client;        //!< Weak reference to the client.
     store_ptr m_store;                          //!< Database content.
     const_user_ptr m_user;                      //!< User associated to the transaction.

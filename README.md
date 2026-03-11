@@ -10,12 +10,27 @@ TODO
 
 ```bash
 cd build
+
+# Normal compilation
+cmake ..
+valgrind --tool=helgrind --read-var-info=yes ./example1
+
+# AddressSanitizer + UndefinedBehaviorSanitizer
 cmake -DENABLE_SANITIZERS=ON ..
 make VERBOSE=1
 ctest -V
-valgrind --tool=memcheck --leak-check=yes test/tests
+valgrind --tool=memcheck --leak-check=yes ./example1
+
+# ThreadSanitizer
+cmake -DENABLE_SANITIZERS=OFF -DENABLE_THREAD_SANITIZER=ON ..
+make VERBOSE=1
+ctest -V
+
+# Coverage
 cmake -DENABLE_COVERAGE=ON ..
 ```
+
+`ENABLE_SANITIZERS` and `ENABLE_THREAD_SANITIZER` are mutually exclusive.
 
 ## Dependencies
 

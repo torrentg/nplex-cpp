@@ -77,6 +77,12 @@ add_compile_options(
 endif()
 
 option(ENABLE_SANITIZERS "Enables AddressSanitizer and UndefinedBehaviorSanitizer." OFF)
+option(ENABLE_THREAD_SANITIZER "Enables ThreadSanitizer." OFF)
+
+if(ENABLE_SANITIZERS AND ENABLE_THREAD_SANITIZER)
+    message(FATAL_ERROR "ENABLE_SANITIZERS and ENABLE_THREAD_SANITIZER cannot be enabled at the same time.")
+endif()
+
 if(ENABLE_SANITIZERS)
     add_compile_options(
         -fno-omit-frame-pointer
@@ -85,6 +91,13 @@ if(ENABLE_SANITIZERS)
         -fsanitize=float-cast-overflow
         -fsanitize-address-use-after-scope
         -fno-sanitize-recover
+    )
+endif()
+
+if(ENABLE_THREAD_SANITIZER)
+    add_compile_options(
+        -fno-omit-frame-pointer
+        -fsanitize=thread
     )
 endif()
 
@@ -168,6 +181,7 @@ target_link_libraries(
     nplex-cpp
     "$<$<STREQUAL:${ENABLE_SANITIZERS},ON>:-lasan>"
     "$<$<STREQUAL:${ENABLE_SANITIZERS},ON>:-lubsan>"
+    "$<$<STREQUAL:${ENABLE_THREAD_SANITIZER},ON>:-ltsan>"
     "$<$<STREQUAL:${ENABLE_COVERAGE},ON>:-lgcov>"
     Threads::Threads
     libuv::uv
@@ -195,6 +209,7 @@ target_link_libraries(
     example1
     "$<$<STREQUAL:${ENABLE_SANITIZERS},ON>:-lasan>"
     "$<$<STREQUAL:${ENABLE_SANITIZERS},ON>:-lubsan>"
+    "$<$<STREQUAL:${ENABLE_THREAD_SANITIZER},ON>:-ltsan>"
     "$<$<STREQUAL:${ENABLE_COVERAGE},ON>:-lgcov>"
     nplex-cpp
 )

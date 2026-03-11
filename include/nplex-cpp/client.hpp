@@ -390,7 +390,7 @@ class client
      *         the reception of the ping response, or the exception if the client 
      *         is closed while waiting for the response.
      * 
-     * @exception nplex_exception Not-connected.
+     * @exception nplex_exception Not-connected, too-many-requests.
      */
     virtual std::future<usec> ping(const std::string &payload = "") = 0;
 
@@ -401,6 +401,8 @@ class client
      * All pending commands and pending responses are discarded.
      * 
      * @note This method is async and thread-safe, it can be called from a callback.
+     * 
+     * @exception nplex_exception Too-many-requests.
      */
     virtual void close() = 0;
 

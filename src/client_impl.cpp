@@ -7,6 +7,9 @@
 #include "messaging.hpp"
 #include "client_impl.hpp"
 
+#define MAX_PENDING_COMMANDS   256
+#define MAX_MILLIS_IN_REACTOR  250
+
 // ==========================================================
 // Internal (static) functions
 // ==========================================================
@@ -151,8 +154,8 @@ nplex::client_impl::client_impl(const client_params_t &params) :
 
 nplex::client_impl::~client_impl()
 {
-    assert(m_loop_thread_id == std::thread::id{});
     assert(is_closed());
+    assert(!is_running());
 }
 
 nplex::client & nplex::client_impl::set_logger(const logger_ptr &log)
@@ -194,10 +197,13 @@ nplex::client & nplex::client_impl::set_initial_rev(rev_t rev)
 
 void nplex::client_impl::run(std::stop_token st) noexcept
 {
-    assert(m_state == state_e::OFFLINE);
-    assert(m_loop_thread_id == std::thread::id{});
+    if (is_running() || m_state != state_e::OFFLINE) {
+        assert(false);
+        return;
+    }
 
     // Initialize the loop thread id to identify the event loop thread.
+    m_running.store(true);
     m_loop_thread_id = std::this_thread::get_id();
     m_error = nullptr;
     m_con = nullptr;
@@ -212,7 +218,7 @@ void nplex::client_impl::run(std::stop_token st) noexcept
         }
     });
 
-    // Run the event loop. This call blocks until uv_stop() is called.
+    // Run the event loop
     try
     {
         log_debug("Event loop started");
@@ -224,6 +230,7 @@ void nplex::client_impl::run(std::stop_token st) noexcept
         m_error = std::current_exception();
     }
 
+    // Close the event loop
     try
     {
         for (auto &con : m_connections)
@@ -238,9 +245,11 @@ void nplex::client_impl::run(std::stop_token st) noexcept
         log_error("{}", e.what());
     }
 
+    // Terminate the client
     log_debug("Event loop terminated");
     set_state(state_e::CLOSED);
     m_loop_thread_id = std::thread::id{};
+    m_running.store(false);
 }
 
 void nplex::client_impl::set_state(state_e state)
@@ -256,7 +265,9 @@ void nplex::client_impl::set_state(state_e state)
 
     if (m_state == state_e::CLOSED)
     {
-        std::lock_guard<std::mutex> lock(m_mutex);
+        std::lock_guard<std::mutex> lock_transactions(m_mutex_transactions);
+        std::lock_guard<std::mutex> lock_commands(m_mutex_commands);
+
         m_transactions.clear();
         m_commands.clear();
         m_requests.clear();
@@ -274,7 +285,7 @@ bool nplex::client_impl::wait_for_usable(millis timeout)
     if (timeout.count() > UINT32_MAX)
         timeout = millis{UINT32_MAX};
 
-    std::unique_lock<std::mutex> lock(m_mutex);
+    std::unique_lock<std::mutex> lock(m_mutex_commands);
 
     if (!m_cv.wait_for(lock, timeout, [this] {
         auto s = m_state.load();
@@ -296,7 +307,7 @@ bool nplex::client_impl::wait_for_synced(millis timeout)
     if (timeout.count() > UINT32_MAX)
         timeout = millis{UINT32_MAX};
 
-    std::unique_lock<std::mutex> lock(m_mutex);
+    std::unique_lock<std::mutex> lock(m_mutex_commands);
 
     if (!m_cv.wait_for(lock, timeout, [this] {
         auto s = m_state.load();
@@ -351,7 +362,7 @@ void nplex::client_impl::abort(const std::string &msg)
     log_error("{}", msg);
 
     {
-        std::lock_guard<std::mutex> lock(m_mutex);
+        std::lock_guard<std::mutex> lock_commands(m_mutex_commands);
         m_commands.clear();
     }
 
@@ -551,9 +562,9 @@ void nplex::client_impl::push_command(command_ptr &&cmd)
     if (is_closed())
         return;
 
-    std::lock_guard<std::mutex> lock(m_mutex);
+    std::lock_guard<std::mutex> lock_commands(m_mutex_commands);
 
-    if (m_commands.size() >= 1024)
+    if (m_commands.size() >= MAX_PENDING_COMMANDS)
         throw nplex_exception("command queue overflow");
 
     m_commands.push(std::move(cmd));
@@ -574,7 +585,7 @@ void nplex::client_impl::process_commands()
     while (true)
     {
         {
-            std::lock_guard<std::mutex> lock(m_mutex);
+            std::lock_guard<std::mutex> lock_commands(m_mutex_commands);
 
             if (m_commands.empty())
                 break;
@@ -735,26 +746,26 @@ void nplex::client_impl::process_login_resp(connection *con, const nplex::msgs::
         return;
     }
 
-    auto user = std::make_shared<user_t>();
-    user->name = m_params.user;
-    user->can_force = resp->can_force();
-    user->permissions.clear();
+    auto usr = std::make_shared<user_t>();
+    usr->name = m_params.user;
+    usr->can_force = resp->can_force();
+    usr->permissions.clear();
 
     if (resp->permissions())
     {
         for (flatbuffers::uoffset_t i = 0; i < resp->permissions()->size(); i++) {
             auto acl = resp->permissions()->Get(i);
-            user->permissions.push_back({acl->mode(), acl->pattern()->str()});
+            usr->permissions.push_back({acl->mode(), acl->pattern()->str()});
         }
     }
 
-    if (user->permissions.empty()) {
+    if (usr->permissions.empty()) {
         con->disconnect(ERR_AUTH);
         return;
     }
 
     m_con = con;
-    m_user.store(user);
+    m_user.store(usr);
     set_state(state_e::AUTHENTICATED);
 
     log_info("Login successful on server {}", m_con->addr().str());
@@ -854,6 +865,7 @@ void nplex::client_impl::process_snapshot_resp(const nplex::msgs::SnapshotRespon
     }
 
     m_initialized = true;
+    set_state(state_e::INITIALIZED);
     set_state(state_e::SYNCING);
     m_data_cid = m_correlation++;
 
@@ -881,8 +893,10 @@ void nplex::client_impl::process_updates_resp(const nplex::msgs::UpdatesResponse
 
     // Case: no snapshot installed, only updates
     if (m_rev0 == 0) {
+        std::lock_guard<decltype(m_store->m_mutex)> lock(m_store->m_mutex);
         m_store->m_rev = resp->crev();
         m_initialized = true;
+        set_state(state_e::INITIALIZED);
     }
 
     // Case: snapshot has same rev than current rev
@@ -967,15 +981,15 @@ void nplex::client_impl::process_update(const nplex::msgs::Update *upd)
 
     std::size_t num_unused_txs = 0;
 
+    // update current transactions and remove the closed ones
     {
-        // update current transactions and remove the closed ones
-        std::lock_guard<std::mutex> lock(m_mutex);
-
+        std::lock_guard<std::mutex> lock_transactions(m_mutex_transactions);
+        
         for (auto it = m_transactions.begin(); it != m_transactions.end(); )
         {
             auto &tx = *it;
 
-            if (tx.use_count() == 1) {
+            if (tx.use_count() == 1 || tx->is_closed()) {
                 num_unused_txs++;
                 ++it;
                 continue;
@@ -1020,7 +1034,7 @@ void nplex::client_impl::process_update(const nplex::msgs::Update *upd)
         }
 
         auto duration = std::chrono::duration_cast<millis>(clock::now() - t0);
-        if (duration > millis{250})
+        if (duration > millis{MAX_MILLIS_IN_REACTOR})
             log_warn("on_update(r{}) too slow ({} usec)", upd->rev(), duration.count());
     }
 }
@@ -1060,7 +1074,7 @@ nplex::tx_ptr nplex::client_impl::create_tx(transaction::isolation_e isolation, 
 
     purge_unused_txs();
 
-    std::lock_guard<decltype(m_mutex)> lock_impl(m_mutex);
+    std::lock_guard<std::mutex> lock_transactions(m_mutex_transactions);
 
     size_t num_txs = m_transactions.size();
     if (num_txs >= m_params.max_active_txs)
@@ -1070,19 +1084,6 @@ nplex::tx_ptr nplex::client_impl::create_tx(transaction::isolation_e isolation, 
     m_transactions.insert(tx);
 
     return tx;
-}
-
-void nplex::client_impl::remove_tx(const transaction_impl *tx)
-{
-    if (is_closed())
-        return;
-
-    std::lock_guard<decltype(m_mutex)> lock_impl(m_mutex);
-
-    auto it = m_transactions.find(tx);
-
-    if (it != m_transactions.end())
-        m_transactions.erase(it);
 }
 
 std::future<nplex::client::usec> nplex::client_impl::ping(const std::string &payload) 
@@ -1103,26 +1104,13 @@ std::future<nplex::client::usec> nplex::client_impl::ping(const std::string &pay
 
 void nplex::client_impl::purge_unused_txs()
 {
-    if (is_closed())
-        return;
+    std::lock_guard<std::mutex> lock_transactions(m_mutex_transactions);
 
-    std::vector<std::shared_ptr<transaction_impl>> txs_to_remove;
-
+    for (auto it = m_transactions.begin(); it != m_transactions.end(); )
     {
-        std::lock_guard<std::mutex> lock(m_mutex);
-
-        for (auto it = m_transactions.begin(); it != m_transactions.end(); )
-        {
-            auto &tx = *it;
-
-            if (tx.use_count() == 1) {
-                txs_to_remove.push_back(tx);
-                it = m_transactions.erase(it);
-            }
-            else
-                ++it;
-        }
+        if ((*it).use_count() == 1 || (*it)->is_closed())
+            it = m_transactions.erase(it);
+        else
+            ++it;
     }
-
-    txs_to_remove.clear();
 }

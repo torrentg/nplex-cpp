@@ -108,6 +108,12 @@ struct store_t
      */
     change_t delete_entry(const char *key);
 
+    /**
+     * Apply an update to the database without locking the mutex.
+     * 
+     * @see update() method.
+     */
+    std::pair<std::vector<change_t>, meta_ptr> update_internal(const msgs::Update *updmsg);
 };
 
 using store_ptr = std::shared_ptr<store_t>;

@@ -142,10 +142,12 @@ void nplex::store_t::load(const msgs::Snapshot *snapshot)
     {
         for (flatbuffers::uoffset_t i = 0; i < updates->size(); i++)
         {
-            update(updates->Get(i));
+            auto updmsg = updates->Get(i);
 
-            if (m_rev > snapshot->rev())
+            if (!updmsg || updmsg->rev() > snapshot->rev())
                 throw nplex_exception("Snapshot at r{} contains entries at r{}", snapshot->rev(), m_rev);
+
+            update_internal(updmsg);
         }
     }
 
@@ -153,6 +155,12 @@ void nplex::store_t::load(const msgs::Snapshot *snapshot)
 }
 
 std::pair<std::vector<change_t>, nplex::meta_ptr> nplex::store_t::update(const msgs::Update *updmsg)
+{
+    std::lock_guard<decltype(m_mutex)> lock(m_mutex);
+    return update_internal(updmsg);
+}
+
+std::pair<std::vector<change_t>, nplex::meta_ptr> nplex::store_t::update_internal(const msgs::Update *updmsg)
 {
     if (!updmsg) {
         assert(false);
@@ -164,8 +172,6 @@ std::pair<std::vector<change_t>, nplex::meta_ptr> nplex::store_t::update(const m
     auto deletes = updmsg->deletes();
 
     changes.reserve((upserts ? upserts->size() : 0) + (deletes ? deletes->size() : 0));
-
-    std::lock_guard<decltype(m_mutex)> lock(m_mutex);
 
     rev_t rev = updmsg->rev();
 
