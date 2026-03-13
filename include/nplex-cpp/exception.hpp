@@ -7,7 +7,7 @@
 namespace nplex {
 
 /**
- * @brief Exception throwed by nplex routines.
+ * @brief Exception thrown by nplex routines.
  * @details Inherits std::exception (use e.what() to retrieve message).
  * @details Supports placeholders '{}' in messages (fmt library).
  */
@@ -22,18 +22,6 @@ class nplex_exception : public std::runtime_error
         runtime_error(fmt::format(fmt_string, std::forward<Args>(args)...)) {}
 
     virtual ~nplex_exception() noexcept = default;
-};
-
-struct invalid_config : public nplex_exception {
-    using nplex_exception::nplex_exception;
-};
-
-struct connection_failed : public nplex_exception {
-    using nplex_exception::nplex_exception;
-};
-
-struct nplex_mqueue_exceeded : public nplex_exception {
-    using nplex_exception::nplex_exception;
 };
 
 /**

@@ -74,8 +74,7 @@ int main()
         measure_latency(cli);
 
         auto tx = cli->create_tx(nplex::transaction::isolation_e::SERIALIZABLE, false);
-        auto val = tx->read("rct.gates.3.open");
-        int num = (val ? val->as_number<int>() : 0);
+        int num = tx->read_or("rct.gates.3.open", "0")->as_number_or<int>(42);
         num++;
         tx->upsert("rct.gates.3.open", std::to_string(num));
         tx->type(42);

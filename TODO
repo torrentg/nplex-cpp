@@ -3,8 +3,6 @@
 * Only a public header -> nplex-cpp.hpp
 * allow ssl connections (see project tlsuv)
 * README: explain nplex purpose
-* in client_impl, replace std::unique<uv_*> by uv_*
-* convert store::m_mutex to std::shared_mutex ?
 
 ## Useful commands
 

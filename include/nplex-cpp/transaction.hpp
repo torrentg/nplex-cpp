@@ -27,20 +27,20 @@ namespace nplex {
  * 
  * Isolation levels:
  *
- *   read-committed: Read always most recent data (value = always last committed rev).
+ *   `READ_COMMITTED`: Read always most recent data (value = always last committed rev).
  *     - Pros: Minimal overhead; high performance.
  *     - Cons: Leads to non-repeatable reads and phantoms.
- *     - Note: Invalidated if any new transaction alters the c-ud.
+ *     - Note: Invalidated if any new transaction alters the tx keys (c-ud).
  * 
- *   repeatable-reads: Read data will not change during the transaction (value = 1st read).
+ *   `REPEATABLE_READ`: Read data will not change during the transaction (value = 1st read).
  *     - Pros: Prevents non-repeatable reads.
  *     - Cons: Does not prevent phantoms.
- *     - Note: Invalidated if any new transaction alters the crud keys.
+ *     - Note: Invalidated if any new transaction alters the tx keys (crud).
  * 
- *   serializable: All read data will not change during the transaction (value = tx creation).
+ *   `SERIALIZABLE`: All read data will not change during the transaction (value = tx creation).
  *     - Pros: Prevents non-repeatable reads, and phantoms.
  *     - Cons: Higher overhead.
- *     - Note: Invalidated if any new transaction alters the crud keys.
+ *     - Note: Invalidated if any new transaction alters the tx keys (crud).
  * 
  * Dirty flag:
  * 
@@ -118,7 +118,7 @@ class transaction
     virtual void type(std::uint32_t type) = 0;
 
     /**
-     * Database revision. It value depends on the isolation level:
+     * Database revision. Its value depends on the isolation level:
      * - read-committed: Current database revision.
      * - repeatable-reads: Current database revision.
      * - serializable: Database revision at transaction creation time.
@@ -160,12 +160,43 @@ class transaction
      *                  Is equivalent to call 'ensure(key)'.
      * 
      * @return The value associated with the key,
-     *         empty if not found or previously deleted.
+     *         nullptr if not found or previously deleted.
      *         If the value was previously upsert, then its metadata is empty.
      * 
      * @exception nplex_exception tx-not-open, or invalid-key.
      */
     virtual value_ptr read(const char *key, bool check = false) = 0;
+
+    /**
+     * Read a key-value pair, or return a default value if not found.
+     * 
+     * If not found, the transaction is not updated with the default value, and the 
+     * returned value has empty metadata.
+     * 
+     * @param key The key to read.
+     * @param default_data The default data to return if the key is not found.
+     * @param check If true, checks at commit time that the key-value pair was not modified.
+     * 
+     * @return The value associated with the key, if the value was previously upsert, 
+     *         then its metadata is empty.
+     *         If key is not found, returns the default value with empty metadata.
+     */
+    value_ptr read_or(const char *key, const std::string_view &default_data, bool check = false)
+    {
+        try
+        {
+            auto value = read(key, check);
+
+            if (value == nullptr)
+                return std::make_shared<value_t>(gto::cstring(default_data), nullptr);
+
+            return value;
+        }
+        catch (const std::exception &)
+        {
+            return std::make_shared<value_t>(gto::cstring(default_data), nullptr);
+        }
+    }
 
     /**
      * Update a key-value or insert it if not exists.
@@ -187,22 +218,32 @@ class transaction
     /**
      * Remove a key-value pair.
      * 
+     * @param[in] key The key  to remove.
+     * 
+     * @return True = key removed, false = otherwise.
+     * 
+     * @exception nplex_exception tx-read-only, or tx-not-open, or invalid-key, or no-permissions.
+     */
+    virtual bool remove(const key_t &key) = 0;
+
+    /**
+     * Remove all keys matching a glob pattern.
+     * 
      * Glob patterns are supported (ex: '/users/\*\/error', '/users/jdoe/\**').
      * When using a pattern, the operation is applied to all matching keys.
      * 
      * Caution: Deletion using a pattern does not guarantee that all keys will be removed 
      * at commit time. For example, if you delete a range of values using a pattern, and 
-     * then a commit adds a key satisfying the pattern, this new key continue to exists 
-     * even if the current transaction is committed succesfully. Use ensure() to avoid 
+     * then a commit adds a key satisfying the pattern, this new key continues to exist 
+     * even if the current transaction is committed successfully. Use ensure() to avoid 
      * these cases.
      * 
-     * @param[in] pattern The key or pattern to remove.
+     * @param[in] pattern The pattern to remove (glob format).
      * 
-     * @return Number of removals.
+     * @return Number of keys marked for deletion.
      * 
      * @exception nplex_exception tx-read-only, or tx-not-open, or invalid-key, or no-permissions.
      */
-    virtual bool remove(const key_t &key) = 0;
     virtual std::size_t remove(const char *pattern) = 0;
 
     /**
@@ -283,8 +324,8 @@ class transaction
      * 
      * @return Number of iterated elements (0 if no matches or empty callback).
      * 
-     * @exception nplex_exception tx-read-only (if callback calls upsert or delete), 
-     *                            no-permissions (if callback calls upsert or delete).
+     * @exception nplex_exception tx-not-open, or tx-read-only (if callback calls upsert or remove),
+     *                            or no-permissions (if callback calls upsert or remove).
      */
     virtual std::size_t for_each(const callback_t &callback) { return for_each("**", callback); }
     virtual std::size_t for_each(const char *pattern, const callback_t &callback) = 0;

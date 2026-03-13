@@ -3,7 +3,6 @@
 #include <string>
 #include <chrono>
 #include <memory>
-#include <string>
 #include <cstddef>
 #include <cstdint>
 #include <charconv>
@@ -39,7 +38,16 @@ struct meta_t
 using meta_ptr = std::shared_ptr<meta_t>;
 using const_meta_ptr = std::shared_ptr<const meta_t>;
 
-//! Database value (immutable).
+/**
+ * Database value.
+ * 
+ * Includes the value data and its metadata.
+ * 
+ * The syntactic-sugar methods are not used internally; they are provided
+ * for convenience. Feel free to adapt or extend them as needed.
+ * 
+ * This class is immutable.
+ */
 class value_t
 {
   public:  // methods
@@ -53,18 +61,31 @@ class value_t
     millis_t timestamp() const { return (m_meta ? m_meta->timestamp : millis_t{0}); }
     std::uint32_t type() const { return (m_meta ? m_meta->type : 0); }
 
-    // Data accessors
+    // Data accessor
     const gto::cstring & data() const { return m_data; }
+
+    // Some syntactic sugar
     std::string_view as_string() const { return m_data.view(); }
     bool as_bool() const { return (m_data == "true" || m_data == "1"); }
     millis_t as_millis() const { return millis_t{as_number<std::int64_t>()}; }
     template<typename T> 
     T as_number() const {
-        T value;
-        auto result = std::from_chars(m_data.data(), m_data.data() + m_data.size(), value);
-        if (result.ec != std::errc())
-            throw std::invalid_argument("Invalid conversion to the requested type");
+        T value{};
+        const char* begin = m_data.data();
+        const char* end = begin + m_data.size();
+        auto result = std::from_chars(begin, end, value);
+        if (result.ec != std::errc() || result.ptr != end)
+            throw std::invalid_argument("Invalid numeric conversion");
         return value;
+    }
+    template<typename T>
+    T as_number_or(const T &default_value) const {
+        try {
+            return as_number<T>();
+        }
+        catch (const std::exception &) {
+            return default_value;
+        }
     }
 
   private:  // types
@@ -80,7 +101,9 @@ class value_t
 
 using value_ptr = std::shared_ptr<value_t>;
 
-// Database change.
+/**
+ * Struct used to report changes in the database content after an update.
+ */
 struct change_t
 {
     enum class action_e : std::uint8_t {

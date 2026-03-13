@@ -114,7 +114,7 @@ class manager
     virtual ~manager() = default;
 
     /**
-     * Callback function that is invoked when an established connection to server is lost.
+     * Callback invoked when an established connection to server is lost.
      * 
      * It returns true to try to reconnect, or false to close the nplex client.
      * 
@@ -133,7 +133,7 @@ class manager
     }
 
     /**
-     * Callback function that is invoked when nplex is not able to connect to ANY server.
+     * Callback invoked when nplex is not able to connect to any server.
      * 
      * It returns the number of milliseconds to wait before attempting a reconnection. 
      * If the return value is negative terminates the client.
@@ -173,7 +173,7 @@ class reactor
     virtual ~reactor() = default;
 
     /**
-     * Callback function that is called when a snapshot is received from the server.
+     * Callback invoked when a snapshot is received from the server.
      * 
      * When this method is called, the local database was just populated with the 
      * snapshot content. The user can now read the database content using a transaction 
@@ -189,7 +189,7 @@ class reactor
     virtual void on_snapshot([[maybe_unused]] client &cli) {}
 
     /**
-     * Callback function that is called when an update is received from the server.
+     * Callback invoked when an update is received from the server.
      * 
      * When this method is called, changes were already applied to the local database.
      * You can use this method to update your business objects or trigger actions.
@@ -261,9 +261,9 @@ class client
     /**
      * Constant methods.
      */
-    [[nodiscard]] virtual bool is_usable() const = 0;  //!< Initial data loaded (perhaps out-of-sync or connection-lost).
-    [[nodiscard]] virtual bool is_synced() const = 0;  //!< Client is connected to server and synced.
-    [[nodiscard]] virtual bool is_closed() const = 0;  //!< Client was closed.
+    [[nodiscard]] virtual bool is_populated() const = 0;  //!< Initial snapshot loaded; local reads are allowed (may be disconnected/out-of-sync).
+    [[nodiscard]] virtual bool is_synced() const = 0;     //!< Client is connected to server and synced.
+    [[nodiscard]] virtual bool is_closed() const = 0;     //!< Client was closed.
 
     /**
      * Register a logger to trace nplex messages.
@@ -295,7 +295,7 @@ class client
     /**
      * Register the reactors to handle the data events.
      * 
-     * Allows to manage the database in a reactive way.
+     * Allows users to manage the database in a reactive way.
      * By default, the client does nothing when receiving a snapshot and updates.
      * By registering a reactor, you can handle these events and implement your 
      * custom logic.
@@ -342,7 +342,8 @@ class client
     virtual void run(std::stop_token st) noexcept = 0;
 
     /**
-     * This method blocks until the client reaches the target state.
+     * Blocks until the client reaches the target state.
+     * 
      * This method is thread-safe.
      * 
      * @param[in] timeout Maximum time to wait for the target state. 
@@ -353,7 +354,7 @@ class client
      * 
      * @exception nplex_exception If closed, or closed while waiting for.
      */
-    virtual bool wait_for_usable(millis timeout = millis::max()) = 0;
+    virtual bool wait_for_populated(millis timeout = millis::max()) = 0;
     virtual bool wait_for_synced(millis timeout = millis::max()) = 0;
 
     /**
@@ -395,10 +396,10 @@ class client
     virtual std::future<usec> ping(const std::string &payload = "") = 0;
 
     /**
-     * Sends a delayed command to close/finish the client.
+     * Request asynchronous shutdown of the client.
      * 
      * The event loop is stopped and the run() task finishes.
-     * All pending commands and pending responses are discarded.
+     * Pending outgoing commands and unresolved responses are dropped.
      * 
      * @note This method is async and thread-safe, it can be called from a callback.
      * 

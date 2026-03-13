@@ -117,7 +117,7 @@ class client_impl final : public client, public loggable, public std::enable_sha
     client & set_manager(const std::shared_ptr<manager> &mngr) override;
     client & set_initial_rev(rev_t rev) override;
 
-    bool is_usable() const override { return m_initialized.load(); }
+    bool is_populated() const override { return m_initialized.load(); }
     bool is_synced() const override { return m_state.load() == state_e::SYNCED; }
     bool is_closed() const override { return m_state.load() == state_e::CLOSED; }
     bool is_running() const { return m_running.load(); }
@@ -127,7 +127,7 @@ class client_impl final : public client, public loggable, public std::enable_sha
     store_ptr store() const { return m_store; }
 
     void run(std::stop_token st) noexcept override;
-    bool wait_for_usable(millis timeout = millis::max()) override;
+    bool wait_for_populated(millis timeout = millis::max()) override;
     bool wait_for_synced(millis timeout = millis::max()) override;
     tx_ptr create_tx(transaction::isolation_e isolation, bool read_only) override;
     std::future<usec> ping(const std::string &payload) override;
@@ -177,11 +177,11 @@ class client_impl final : public client, public loggable, public std::enable_sha
     gto::cqueue<submit_ptr> m_accepted;             //!< Accepted submits pending to receive its update from the server.
 
     std::thread::id m_loop_thread_id;               //!< Thread id of the event loop thread.
-    std::unique_ptr<uv_loop_t> m_loop;              //!< Event loop.
-    std::unique_ptr<uv_timer_t> m_timer_con_lost;   //!< Connection-lost timer.
-    std::unique_ptr<uv_timer_t> m_timer_reconnect;  //!< Reconnect timer.
-    std::unique_ptr<uv_signal_t> m_signal_sigint;   //!< SIGINT handler (Ctrl-C).
-    std::unique_ptr<uv_async_t> m_async_command;    //!< Used to notify new pending commands
+    uv_loop_t m_loop;                               //!< Event loop.
+    uv_timer_t m_timer_con_lost;                    //!< Connection-lost timer.
+    uv_timer_t m_timer_reconnect;                   //!< Reconnect timer.
+    uv_signal_t m_signal_sigint;                    //!< SIGINT handler (Ctrl-C).
+    uv_async_t m_async_command;                     //!< Used to notify new pending commands
 
   private:  // methods
 
