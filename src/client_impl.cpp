@@ -7,7 +7,6 @@
 #include "messaging.hpp"
 #include "client_impl.hpp"
 
-#define MAX_PENDING_COMMANDS   256
 #define MAX_MILLIS_IN_REACTOR  250
 
 // ==========================================================
@@ -37,7 +36,7 @@ static std::unique_ptr<T> convert_ptr(std::unique_ptr<Q> &req)
     assert(obj);
     std::unique_ptr<T> ret{};
     ret.reset(obj);
-    req.release();
+    (void) req.release();
     return ret;
 }
 
@@ -228,6 +227,9 @@ void nplex::client_impl::run(std::stop_token st) noexcept
     // Close the event loop
     try
     {
+        set_state(state_e::CLOSED);
+        cancel_requests();
+
         for (auto &con : m_connections)
             con->disconnect(ERR_CLOSED_BY_LOCAL);
 
@@ -240,11 +242,35 @@ void nplex::client_impl::run(std::stop_token st) noexcept
         log_error("{}", e.what());
     }
 
+    // Reset containers
+    m_transactions.clear();
+    m_connections.clear();
+    m_commands.clear();
+    m_requests.clear();
+    m_accepted.clear();
+    m_con = nullptr;
+
     // Terminate the client
     log_debug("Event loop terminated");
-    set_state(state_e::CLOSED);
     m_loop_thread_id = std::thread::id{};
     m_running.store(false);
+}
+
+void nplex::client_impl::cancel_requests()
+{
+    assert(m_loop_thread_id == std::this_thread::get_id());
+
+    // cancel ongoing requests
+    while (!m_requests.empty()) {
+        auto req = m_requests.pop();
+        req->cancel();
+    }
+
+    // cancel ongoing transactions
+    while (!m_accepted.empty()) {
+        auto req = m_accepted.pop();
+        req->cancel();
+    }
 }
 
 void nplex::client_impl::set_state(state_e state)
@@ -499,17 +525,8 @@ void nplex::client_impl::on_connection_closed(connection *con)
     m_con = nullptr;
     m_data_cid = 0;
 
-    // cancel ongoing requests
-    while (!m_requests.empty()) {
-        auto req = m_requests.pop();
-        req->cancel();
-    }
-
-    // cancel ongoing transactions
-    while (!m_accepted.empty()) {
-        auto req = m_accepted.pop();
-        req->cancel();
-    }
+    // Cancel ongoing requests and transactions
+    cancel_requests();
 
     // close timers
     if (is_timer_active(&m_timer_con_lost)) {
@@ -559,7 +576,8 @@ void nplex::client_impl::push_command(command_ptr &&cmd)
 
     std::lock_guard<std::mutex> lock_commands(m_mutex_commands);
 
-    if (m_commands.size() >= MAX_PENDING_COMMANDS)
+    // worst scenario: max_active_txs + close + ping
+    if (m_commands.size() >= m_params.max_active_txs + 2)
         throw nplex_exception("command queue overflow");
 
     m_commands.push(std::move(cmd));
@@ -979,7 +997,7 @@ void nplex::client_impl::process_update(const nplex::msgs::Update *upd)
     // update current transactions and remove the closed ones
     {
         std::lock_guard<std::mutex> lock_transactions(m_mutex_transactions);
-        
+
         for (auto it = m_transactions.begin(); it != m_transactions.end(); )
         {
             auto &tx = *it;

@@ -25,11 +25,13 @@ static std::string to_iso8601(std::chrono::milliseconds ms_since_epoch)
 
 static void print_database_content(const nplex::client_ptr &cli)
 {
+    size_t counter = 0;
     auto tx = cli->create_tx();
 
     std::cout << "Nplex database content at rev " << tx->rev() << std::endl;
 
-    tx->for_each([](const nplex::key_t &key, const nplex::value_t &value) {
+    tx->for_each([&counter](const nplex::key_t &key, const nplex::value_t &value) {
+        std::cout << ++counter << ". ";
         std::cout << key << " = " << value.data() << std::endl;
         std::cout << "  rev: " << value.rev() << std::endl;
         std::cout << "  timestamp: " << to_iso8601(value.timestamp()) << std::endl;

@@ -189,6 +189,7 @@ class client_impl final : public client, public loggable, public std::enable_sha
     void send(flatbuffers::DetachedBuffer &&buf);
     void schedule_reconnect(std::uint32_t delay_ms);
     void purge_unused_txs();
+    void cancel_requests();
 
     void process_close_cmd(command_ptr &&cmd);
     void process_submit_cmd(command_ptr &&cmd);

@@ -214,6 +214,31 @@ target_link_libraries(
     nplex-cpp
 )
 
+add_executable(
+    flooder
+)
+
+target_sources(
+    flooder
+    PRIVATE
+    ${CMAKE_CURRENT_LIST_DIR}/examples/flooder.cpp
+)
+
+target_include_directories(
+    flooder
+    PRIVATE
+    ${PROJECT_SOURCE_DIR}/deps
+)
+
+target_link_libraries(
+    flooder
+    "$<$<STREQUAL:${ENABLE_SANITIZERS},ON>:-lasan>"
+    "$<$<STREQUAL:${ENABLE_SANITIZERS},ON>:-lubsan>"
+    "$<$<STREQUAL:${ENABLE_THREAD_SANITIZER},ON>:-ltsan>"
+    "$<$<STREQUAL:${ENABLE_COVERAGE},ON>:-lgcov>"
+    nplex-cpp
+)
+
 include(CTest)
 enable_testing()
 add_subdirectory(test)

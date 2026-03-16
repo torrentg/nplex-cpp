@@ -405,10 +405,8 @@ std::vector<std::pair<nplex::key_t, nplex::value_ptr>> nplex::transaction_impl::
 
 void nplex::transaction_impl::update(const std::vector<change_t> &changes)
 {
-    if (m_state != state_e::OPEN) {
-        assert(false);
+    if (m_state != state_e::OPEN)
         return;
-    }
 
     log_debug("Updating transaction {}", m_id);
 
@@ -550,6 +548,17 @@ void nplex::transaction_impl::set_submit_result(std::exception_ptr eptr)
     if (m_state != state_e::SUBMITTED)
         return;
 
+    try {
+        if (eptr)
+            std::rethrow_exception(eptr);
+    }
+    catch (const std::exception &e) {
+        log_debug("Tx {} submit error: {}", m_id, e.what());
+    }
+    catch (...) {
+        log_debug("Tx {} submit error: unknown exception", m_id);
+    }
+
     set_state(state_e::ABORTED);
     m_promise.set_exception(eptr);
 }
@@ -561,6 +570,8 @@ void nplex::transaction_impl::set_submit_result(msgs::SubmitCode code)
     if (m_state != state_e::SUBMITTED)
         return;
 
+    log_debug("Tx {} submit result: {}", m_id, msgs::EnumNameSubmitCode(code));
+    
     switch (code)
     {
         case msgs::SubmitCode::ACCEPTED:
