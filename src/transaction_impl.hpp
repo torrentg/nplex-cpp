@@ -29,6 +29,7 @@ class transaction_impl : public transaction, public loggable, public std::enable
 
     enum class action_e : std::uint8_t {
         READ,                                   //!< Read a key-value.
+        SNAPSHOT,                               //!< Key-value saved to preserve integrity.
         UPSERT,                                 //!< Update or insert a key-value.
         DELETE                                  //!< Remove a key-value.
     };
@@ -48,14 +49,15 @@ class transaction_impl : public transaction, public loggable, public std::enable
     virtual bool is_read_only() const override { return m_read_only; }
     virtual bool is_dirty() const override { return m_dirty; }
     virtual state_e state() const override { return m_state; }
-    virtual std::uint32_t type() const override { return m_type; }
-    virtual void type(std::uint32_t type) override { m_type = type; }
+    virtual std::uint32_t user_type() const override { return m_type; }
+    virtual void set_user_type(std::uint32_t type) override { m_type = type; }
     virtual rev_t rev() const override;
     virtual rev_t rev_creation() const { return m_rev_creation; }
 
     // non-const methods
-    virtual value_ptr read(const char *key, bool check = false) override;
-    virtual bool upsert(const char *key, const std::string_view &data, bool force = false) override;
+    virtual value_ptr read(const char *key, bool ensure = false) override;
+    virtual void upsert(const char *key, const std::string_view &data) override;
+    virtual bool upsert_if_changed(const char *key, const std::string_view &data) override;
     virtual bool remove(const key_t &key) override;
     virtual std::size_t remove(const char *pattern) override;
     virtual bool ensure(const char *pattern) override;
@@ -100,6 +102,7 @@ class transaction_impl : public transaction, public loggable, public std::enable
     void set_state(state_e state);
     void update_serializable(const std::vector<change_t> &changes);
     void update_default(const std::vector<change_t> &changes);
+    bool upsert_internal(const char *key, const std::string_view &data, bool force = true);
     std::vector<std::pair<key_t, value_ptr>> for_each_internal(const char *pattern);
 };
 

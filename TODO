@@ -3,6 +3,8 @@
 * Only a public header -> nplex-cpp.hpp
 * allow ssl connections (see project tlsuv)
 * README: explain nplex purpose
+* Add bool transaction::exists(const char *key) ?
+* Add size_t transaction::count(const char *pattern) ?
 
 ## Useful commands
 

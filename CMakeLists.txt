@@ -239,6 +239,31 @@ target_link_libraries(
     nplex-cpp
 )
 
+add_executable(
+    functests
+)
+
+target_sources(
+    functests
+    PRIVATE
+    ${CMAKE_CURRENT_LIST_DIR}/examples/functests.cpp
+)
+
+target_include_directories(
+    functests
+    PRIVATE
+    ${PROJECT_SOURCE_DIR}/deps
+)
+
+target_link_libraries(
+    functests
+    "$<$<STREQUAL:${ENABLE_SANITIZERS},ON>:-lasan>"
+    "$<$<STREQUAL:${ENABLE_SANITIZERS},ON>:-lubsan>"
+    "$<$<STREQUAL:${ENABLE_THREAD_SANITIZER},ON>:-ltsan>"
+    "$<$<STREQUAL:${ENABLE_COVERAGE},ON>:-lgcov>"
+    nplex-cpp
+)
+
 include(CTest)
 enable_testing()
 add_subdirectory(test)

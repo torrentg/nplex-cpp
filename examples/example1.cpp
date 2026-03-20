@@ -79,7 +79,7 @@ int main()
         int num = tx->read_or("rct.gates.3.open", "0")->as_number_or<int>(42);
         num++;
         tx->upsert("rct.gates.3.open", std::to_string(num));
-        tx->type(42);
+        tx->set_user_type(42);
         auto submit_result = tx->submit().get();
 
         // Close the database, alternatively you can call `cli->close();`

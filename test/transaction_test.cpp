@@ -115,9 +115,9 @@ void basic_step_1(std::shared_ptr<transaction_test> &tx)
     CHECK(!tx->is_read_only());
     CHECK(!tx->is_dirty());
 
-    CHECK(tx->type() == 0);
-    tx->type(17);
-    CHECK(tx->type() == 17);
+    CHECK(tx->user_type() == 0);
+    tx->set_user_type(17);
+    CHECK(tx->user_type() == 17);
 
     // read an existing key
     REQUIRE(tx->read("key1"));
@@ -140,6 +140,7 @@ void basic_step_1(std::shared_ptr<transaction_test> &tx)
     CHECK_NOTHROW(tx->upsert("key10", "yy"));
     CHECK(tx->read("key10")->data()[0] == 'y');
     CHECK(tx->read("key10")->rev() == 0);
+    CHECK(tx->upsert_if_changed("key10", "yy") == false);
 
     // delete a key
     REQUIRE(tx->read("key3"));
@@ -252,10 +253,8 @@ TEST_CASE("transaction_test")
         CHECK(tx->read("key7")->data()[0] == 73);
         CHECK(tx->read("key7")->rev() == 3);
 
-        // reading a new key
-        REQUIRE(tx->read("key99"));
-        CHECK(tx->read("key99")->data()[0] == 99);
-        CHECK(tx->read("key99")->rev() == 3);
+        // reading a previously read non-existing key updated externally
+        CHECK(tx->read("key99") == nullptr);
     }
 
     SUBCASE("serializable_basic")
@@ -304,10 +303,8 @@ TEST_CASE("transaction_test")
         CHECK(tx->read("key7")->data()[0] == 72);
         CHECK(tx->read("key7")->rev() == 2);
 
-        // reading a new key
-        REQUIRE(tx->read("key99"));
-        CHECK(tx->read("key99")->data()[0] == 99);
-        CHECK(tx->read("key99")->rev() == 3);
+        // reading a previously read non-existing key updated externally
+        CHECK(tx->read("key99") == nullptr);
     }
 
     SUBCASE("read_upsert_remove_exceptions")

@@ -50,7 +50,7 @@ struct submit_req_t : public request_t {
     }
     tx_impl_ptr tx;
     bool force = false;
-    rev_t rev = 0;
+    rev_t erev = 0;
 };
 
 struct ping_req_t : public request_t {

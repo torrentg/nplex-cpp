@@ -42,6 +42,11 @@ namespace nplex {
  *     - Cons: Higher overhead.
  *     - Note: Invalidated if any new transaction alters the tx keys (crud).
  * 
+ * Caution: `REPEATABLE_READ` is slightly different from the traditional definition of 
+ * repeatable reads, where the value is fixed at transaction creation time. In Nplex, 
+ * the value is fixed at the first read, which allows you to read the most recent value 
+ * if you don't read the key at transaction creation time.
+ * 
  * Dirty flag:
  * 
  *   A transaction is dirty if it was invalidated by an external commit.
@@ -114,8 +119,8 @@ class transaction
      * 
      * @param[in] type User-defined type of the transaction.
      */
-    virtual std::uint32_t type() const = 0;
-    virtual void type(std::uint32_t type) = 0;
+    virtual std::uint32_t user_type() const = 0;
+    virtual void set_user_type(std::uint32_t type) = 0;
 
     /**
      * Database revision. Its value depends on the isolation level:
@@ -145,19 +150,24 @@ class transaction
      *   - Consecutive calls with the same key will return the same value, 
      *     even if a commit modified the value in between.
      * 
-     * The 'check' flag is used to ensure that the key-value pair has not been updated or deleted
-     * since it was read. This flag applies even in 'force' mode. Use this flag to enforce
-     * serialization constraints on read keys. For example:
+     * The 'ensure' flag is used to ensure that an existing key-value pair has 
+     * not been updated or deleted since it was read. This flag applies even in 
+     * 'force' mode. Use this flag to enforce serialization constraints on read 
+     * keys. 
+     * 
+     * Example for the ensure flag:
      *   - You want to ensure that x = a + b.
      *   - You read a and b, then update x.
-     *   - If you don't mark 'a' and 'b' with 'check', a commit may have modified the value of 'a' or 'b' in between.
-     *   - If you mark 'a' and 'b' with 'check', the commit will fail if 'a' or 'b' was modified in between.
+     *   - If you don't mark 'a' and 'b' with 'ensure', a commit may have 
+     *     modified the value of 'a' or 'b' in between.
+     *   - If you mark 'a' and 'b' with 'ensure', the commit will fail 
+     *     if 'a' or 'b' was modified in between.
      * 
      * @see ensure()
      * 
      * @param[in] key The key to read.
-     * @param[in] check If true, checks at commit time that the key-value pair was not modified.
-     *                  Is equivalent to call 'ensure(key)'.
+     * @param[in] ensure If true, checks at commit time that the key-value pair 
+     *                   was not modified. It is equivalent to call 'ensure(key)'.
      * 
      * @return The value associated with the key,
      *         nullptr if not found or previously deleted.
@@ -165,13 +175,15 @@ class transaction
      * 
      * @exception nplex_exception tx-not-open, or invalid-key.
      */
-    virtual value_ptr read(const char *key, bool check = false) = 0;
+    virtual value_ptr read(const char *key, bool ensure = false) = 0;
 
     /**
      * Read a key-value pair, or return a default value if not found.
      * 
      * If not found, the transaction is not updated with the default value, and the 
      * returned value has empty metadata.
+     * 
+     * @see read()
      * 
      * @param key The key to read.
      * @param default_data The default data to return if the key is not found.
@@ -180,40 +192,49 @@ class transaction
      * @return The value associated with the key, if the value was previously upsert, 
      *         then its metadata is empty.
      *         If key is not found, returns the default value with empty metadata.
+     * 
+     * @exception nplex_exception tx-not-open, or invalid-key.
      */
     value_ptr read_or(const char *key, const std::string_view &default_data, bool check = false)
     {
-        try
-        {
-            auto value = read(key, check);
+        auto value = read(key, check);
 
-            if (value == nullptr)
-                return std::make_shared<value_t>(gto::cstring(default_data), nullptr);
-
-            return value;
-        }
-        catch (const std::exception &)
-        {
+        if (value == nullptr)
             return std::make_shared<value_t>(gto::cstring(default_data), nullptr);
-        }
+
+        return value;
     }
 
     /**
      * Update a key-value or insert it if not exists.
      * 
-     * By default does nothing if the value is unchanged.
-     * Use the 'force' flag to update the revision on the unchanged value case.
+     * If the value exists and has same value, metadata will be updated at commit.
      * 
-     * @param[in] key The key to update.
+     * @param[in] key The key to insert or update.
      * @param[in] data The new data associated with the key.
-     * @param[in] force Update entry revision even if value is unchanged.
-     * 
-     * @return true if key created or updated,
-     *         false if existing key has same value and force = false.
      * 
      * @exception nplex_exception tx-read-only, or tx-not-open, or invalid-key, or no-permissions.
      */
-    virtual bool upsert(const char *key, const std::string_view &data, bool force = false) = 0;
+    virtual void upsert(const char *key, const std::string_view &data) = 0;
+
+    /**
+     * Update a key-value or insert it if not exists.
+     * 
+     * This method is similar to upsert(), but it only updates the value if the 
+     * new value is different from the existing value. This method is useful to avoid 
+     * unnecessary updates and to reduce the number of commits.
+     * 
+     * @see upsert()
+     * 
+     * @param[in] key The key to insert or update.
+     * @param[in] data The new data associated with the key.
+     * 
+     * @return true if key created or updated,
+     *         false if exist the key with same value.
+     * 
+     * @exception nplex_exception tx-read-only, or tx-not-open, or invalid-key, or no-permissions.
+     */
+    virtual bool upsert_if_changed(const char *key, const std::string_view &data) = 0;
 
     /**
      * Remove a key-value pair.

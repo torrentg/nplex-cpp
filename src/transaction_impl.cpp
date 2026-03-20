@@ -92,7 +92,7 @@ nplex::rev_t nplex::transaction_impl::rev() const
     }
 }
 
-nplex::value_ptr nplex::transaction_impl::read(const char *key, bool check)
+nplex::value_ptr nplex::transaction_impl::read(const char *key, bool ensure)
 {
     if (!is_valid_key(key))
         throw nplex_exception("Trying to read an invalid key: {}", key);
@@ -111,8 +111,16 @@ nplex::value_ptr nplex::transaction_impl::read(const char *key, bool check)
         if (std::get<action_e>(it_tx->second) == action_e::DELETE)
             return {};
 
-        if (check)
-            ensure(key);
+        if (std::get<value_ptr>(it_tx->second) == nullptr)
+            return {};
+
+        if (std::get<action_e>(it_tx->second) == action_e::SNAPSHOT) {
+            std::get<action_e>(it_tx->second) = action_e::READ;
+            m_dirty = true;
+        }
+
+        if (ensure)
+            this->ensure(key);
 
         return std::get<value_ptr>(it_tx->second);
     }
@@ -123,20 +131,33 @@ nplex::value_ptr nplex::transaction_impl::read(const char *key, bool check)
     auto it_store = m_store->m_data.find(key);
 
     // Case: key does not exist in the database
-    if (it_store == m_store->m_data.end())
+    if (it_store == m_store->m_data.end()) {
+        if (m_isolation_level != transaction::isolation_e::READ_COMMITTED)
+            m_items.emplace(key, std::make_tuple(action_e::READ, nullptr));
         return {};
+    }
 
     // Case: key exists in the database
     if (m_isolation_level != transaction::isolation_e::READ_COMMITTED)
         m_items.emplace(it_store->first, std::make_tuple(action_e::READ, it_store->second));
 
-    if (check)
-        ensure(key);
+    if (ensure)
+        this->ensure(key);
 
     return it_store->second;
 }
 
-bool nplex::transaction_impl::upsert(const char *key, const std::string_view &data, bool force)
+void nplex::transaction_impl::upsert(const char *key, const std::string_view &data)
+{
+    upsert_internal(key, data, true);
+}
+
+bool nplex::transaction_impl::upsert_if_changed(const char *key, const std::string_view &data)
+{
+    return upsert_internal(key, data, false);
+}
+
+bool nplex::transaction_impl::upsert_internal(const char *key, const std::string_view &data, bool force)
 {
     if (!is_valid_key(key) || data.empty())
         throw std::invalid_argument("Invalid key or invalid data");
@@ -163,9 +184,13 @@ bool nplex::transaction_impl::upsert(const char *key, const std::string_view &da
         if (m_user && !m_user->is_authorized(CRUD_UPDATE, it_tx->first))
             throw nplex_exception("not authorized to update key {}", it_tx->first);
 
-        // Case: Same value and not forced
+        if (std::get<action_e>(it_tx->second) == action_e::SNAPSHOT)
+            m_dirty = true;
+
+        // Case: Same value and not force
         if (!force && 
             std::get<action_e>(it_tx->second) != action_e::DELETE && 
+            std::get<value_ptr>(it_tx->second) &&
             std::get<value_ptr>(it_tx->second)->data() == value->data())
             return false;
 
@@ -195,7 +220,12 @@ bool nplex::transaction_impl::upsert(const char *key, const std::string_view &da
 
     // Case: key exists in database AND has the same value
     if (!force && it_store->second->data() == value->data())
+    {
+        if (m_isolation_level == transaction::isolation_e::REPEATABLE_READ)
+            m_items.emplace(it_store->first, std::make_tuple(action_e::READ, it_store->second));
+
         return false;
+    }
 
     // Case: key exists in the database with distinct value (or force mode)
     m_items.emplace(it_store->first, std::make_tuple(action_e::UPSERT, value));
@@ -222,9 +252,15 @@ bool nplex::transaction_impl::remove(const key_t &key)
     // Search for the key in the transaction
     auto it_tx = m_items.find(key);
 
-    // Case: key was previously read, upserted or deleted in this transaction
+    // Case: key was previously read/snapshot, upserted or deleted in this transaction
     if (it_tx != m_items.end())
     {
+        // Case: Previously read/snapshot and not found
+        if ((std::get<action_e>(it_tx->second) == action_e::READ ||
+             std::get<action_e>(it_tx->second) == action_e::SNAPSHOT) && 
+            std::get<value_ptr>(it_tx->second) == nullptr)
+            return false;
+
         // Case: Previously removed
         if (std::get<action_e>(it_tx->second) == action_e::DELETE)
             return false;
@@ -354,8 +390,13 @@ std::vector<std::pair<nplex::key_t, nplex::value_ptr>> nplex::transaction_impl::
         {
             if (it_tx->first < it_store->first) // key in transaction
             {
-                if (std::get<action_e>(it_tx->second) != action_e::DELETE)
+                if (std::get<action_e>(it_tx->second) != action_e::DELETE && std::get<value_ptr>(it_tx->second))
                     ret.emplace_back(it_tx->first, std::get<value_ptr>(it_tx->second));
+
+                if (std::get<action_e>(it_tx->second) == action_e::SNAPSHOT) {
+                    std::get<action_e>(it_tx->second) = action_e::READ;
+                    m_dirty = true;
+                }
 
                 it_tx++;
             }
@@ -370,8 +411,13 @@ std::vector<std::pair<nplex::key_t, nplex::value_ptr>> nplex::transaction_impl::
             }
             else  // key in both places
             {
-                if (std::get<action_e>(it_tx->second) != action_e::DELETE)
+                if (std::get<action_e>(it_tx->second) != action_e::DELETE && std::get<value_ptr>(it_tx->second))
                     ret.emplace_back(it_tx->first, std::get<value_ptr>(it_tx->second));
+
+                if (std::get<action_e>(it_tx->second) == action_e::SNAPSHOT) {
+                    std::get<action_e>(it_tx->second) = action_e::READ;
+                    m_dirty = true;
+                }
 
                 it_tx++;
                 it_store++;
@@ -379,8 +425,13 @@ std::vector<std::pair<nplex::key_t, nplex::value_ptr>> nplex::transaction_impl::
         }
         else if (it_tx != it_tx_end)  // key only in transaction
         {
-            if (std::get<action_e>(it_tx->second) != action_e::DELETE)
+            if (std::get<action_e>(it_tx->second) != action_e::DELETE && std::get<value_ptr>(it_tx->second))
                 ret.emplace_back(it_tx->first, std::get<value_ptr>(it_tx->second));
+
+            if (std::get<action_e>(it_tx->second) == action_e::SNAPSHOT) {
+                std::get<action_e>(it_tx->second) = action_e::READ;
+                m_dirty = true;
+            }
 
             it_tx++;
         }
@@ -471,11 +522,11 @@ void nplex::transaction_impl::update_serializable(const std::vector<change_t> &c
             switch (change.action)
             {
                 case change_t::action_e::CREATE:
-                    m_items.emplace(change.key, std::make_tuple(action_e::READ, change.new_value));
+                    m_items.emplace(change.key, std::make_tuple(action_e::SNAPSHOT, nullptr));
                     break;
                 case change_t::action_e::UPDATE:
                 case change_t::action_e::DELETE:
-                    m_items.emplace(change.key, std::make_tuple(action_e::READ, change.old_value));
+                    m_items.emplace(change.key, std::make_tuple(action_e::SNAPSHOT, change.old_value));
                     break;
             }
 
@@ -506,7 +557,8 @@ std::future<nplex::transaction::submit_e> nplex::transaction_impl::submit(bool f
         bool has_modifications = false;
 
         for (const auto &[key, entry] : m_items) {
-            if (std::get<action_e>(entry) != action_e::READ) {
+            if (std::get<action_e>(entry) != action_e::READ && 
+                std::get<action_e>(entry) != action_e::SNAPSHOT) {
                 has_modifications = true;
                 break;
             }

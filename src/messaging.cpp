@@ -164,7 +164,7 @@ flatbuffers::DetachedBuffer nplex::create_submit_msg(std::size_t cid, rev_t crev
         CreateSubmitRequest(builder, 
             cid,
             (tx->isolation() == transaction::isolation_e::SERIALIZABLE ? tx->rev_creation() : crev),
-            tx->type(),
+            tx->user_type(),
             builder.CreateVector(upserts),
             builder.CreateVector(deletes),
             builder.CreateVector(ensures),

@@ -941,7 +941,7 @@ void nplex::client_impl::process_submit_resp(const nplex::msgs::SubmitResponse *
     if (resp->code() != msgs::SubmitCode::ACCEPTED)
         return;
 
-    req->rev = resp->erev();
+    req->erev = resp->erev();
 
     m_accepted.push(convert_ptr<submit_req_t>(ptr));
 }
@@ -979,14 +979,14 @@ void nplex::client_impl::process_update(const nplex::msgs::Update *upd)
     log_debug("Store updated to rev {} with {} changes", meta->rev, changes.size());
 
     // check accepted commits with pending update
-    while (!m_accepted.empty() && m_accepted.front()->rev < meta->rev) {
-        log_error("Discarding accepted tx with rev {} at rev {}", m_accepted.front()->rev, meta->rev);
+    while (!m_accepted.empty() && m_accepted.front()->erev < meta->rev) {
+        log_error("Discarding accepted tx with erev {} at rev {}", m_accepted.front()->erev, meta->rev);
         auto req = m_accepted.pop();
         req->tx->set_submit_result(std::make_exception_ptr(nplex_exception("unexpected update received")));
         assert(false);
     }
 
-    if (!m_accepted.empty() && m_accepted.front()->rev == meta->rev) {
+    if (!m_accepted.empty() && m_accepted.front()->erev == meta->rev) {
         auto req = m_accepted.pop();
         req->tx->confirm_commit(meta->rev);
         log_debug("Tx committed in {} usec", std::chrono::duration_cast<usec>(clock::now() - req->t0).count());
