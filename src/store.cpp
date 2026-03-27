@@ -40,7 +40,7 @@ nplex::meta_ptr nplex::store_t::create_meta(const msgs::Update *updmsg)
 
     millis_t timestamp = std::chrono::milliseconds{updmsg->timestamp()};
 
-    return std::make_shared<meta_t>(meta_t{rev, user, timestamp, updmsg->type(), 0});
+    return std::make_shared<meta_t>(meta_t{rev, user, timestamp, updmsg->tx_type(), 0});
 }
 
 void nplex::store_t::release_meta(const meta_ptr &meta)

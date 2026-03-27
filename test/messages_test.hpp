@@ -19,13 +19,13 @@ namespace tests {
         return result;
     }
 
-    inline nplex::msgs::UpdateT make_update(std::size_t rev, const char *user, std::uint64_t timestamp, std::uint32_t type, const std::vector<nplex::msgs::KeyValueT> &upserts = {}, const std::vector<std::string> &deletes = {})
+    inline nplex::msgs::UpdateT make_update(std::size_t rev, const char *user, std::uint64_t timestamp, std::uint32_t tx_type, const std::vector<nplex::msgs::KeyValueT> &upserts = {}, const std::vector<std::string> &deletes = {})
     {
         nplex::msgs::UpdateT tx;
         tx.rev = rev;
         tx.user = user;
         tx.timestamp = timestamp;
-        tx.type = type;
+        tx.tx_type = tx_type;
         tx.upserts = make_vector_unique_ptr(upserts);
         tx.deletes = deletes;
         return tx;
@@ -63,12 +63,12 @@ namespace tests {
         return push;
     }
 
-    inline nplex::msgs::SubmitRequestT make_submit_request(std::size_t cid, std::size_t crev, std::uint32_t type, const std::vector<nplex::msgs::KeyValueT> &upserts, const std::vector<std::string> &deletes, const std::vector<std::string> &ensures)
+    inline nplex::msgs::SubmitRequestT make_submit_request(std::size_t cid, std::size_t crev, std::uint32_t tx_type, const std::vector<nplex::msgs::KeyValueT> &upserts, const std::vector<std::string> &deletes, const std::vector<std::string> &ensures)
     {
         nplex::msgs::SubmitRequestT req;
         req.cid = cid;
         req.crev = crev;
-        req.type = type;
+        req.tx_type = tx_type;
         req.upserts = make_vector_unique_ptr(upserts);
         req.deletes = deletes;
         req.ensures = ensures;

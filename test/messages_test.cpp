@@ -187,7 +187,7 @@ TEST_CASE("SnapshotResponse")
         CHECK(tx->rev() == resp.snapshot->updates[i]->rev);
         CHECK(tx->user()->str() == resp.snapshot->updates[i]->user);
         CHECK(tx->timestamp() == resp.snapshot->updates[i]->timestamp);
-        CHECK(tx->type() == resp.snapshot->updates[i]->type);
+        CHECK(tx->tx_type() == resp.snapshot->updates[i]->tx_type);
 
         REQUIRE(tx->upserts());
         REQUIRE(tx->upserts()->size() == resp.snapshot->updates[i]->upserts.size());
@@ -275,7 +275,7 @@ TEST_CASE("UpdatesPush")
     CHECK(update->rev() == push.updates[0]->rev);
     CHECK(update->user()->str() == push.updates[0]->user);
     CHECK(update->timestamp() == push.updates[0]->timestamp);
-    CHECK(update->type() == push.updates[0]->type);
+    CHECK(update->tx_type() == push.updates[0]->tx_type);
 
     REQUIRE(update->upserts());
     REQUIRE(update->upserts()->size() == push.updates[0]->upserts.size());
@@ -307,7 +307,7 @@ TEST_CASE("SubmitRequest")
     SubmitRequestT req = make_submit_request(
         4,          // cid
         2048,       // crev
-        1,          // type
+        1,          // tx_type
         {
             { .key = "key1", .value = {1, 2, 3}},
             { .key = "key2", .value = {4, 5, 6}}
@@ -328,7 +328,7 @@ TEST_CASE("SubmitRequest")
     REQUIRE(ptr);
     CHECK(ptr->cid() == 4);
     CHECK(ptr->crev() == 2048);
-    CHECK(ptr->type() == 1);
+    CHECK(ptr->tx_type() == 1);
 
     REQUIRE(ptr->upserts());
     REQUIRE(ptr->upserts()->size() == req.upserts.size());
@@ -401,7 +401,7 @@ TEST_CASE("SubmitRequest-hard")
         CreateSubmitRequest(builder, 
             4,          // cid
             2048,       // crev
-            1,          // type
+            1,          // tx_type
             builder.CreateVector(upserts),
             builder.CreateVector(deletes),
             builder.CreateVector(ensures),
@@ -423,7 +423,7 @@ TEST_CASE("SubmitRequest-hard")
     REQUIRE(submit);
     CHECK(submit->cid() == 4);
     CHECK(submit->crev() == 2048);
-    CHECK(submit->type() == 1);
+    CHECK(submit->tx_type() == 1);
     REQUIRE(submit->upserts());
     CHECK(submit->upserts()->size() == 2);
     REQUIRE(submit->deletes());

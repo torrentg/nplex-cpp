@@ -36,7 +36,7 @@ static void print_database_content(const nplex::client_ptr &cli)
         std::cout << "  rev: " << value.rev() << std::endl;
         std::cout << "  timestamp: " << to_iso8601(value.timestamp()) << std::endl;
         std::cout << "  user: " << value.user() << std::endl;
-        std::cout << "  type: " << value.type() << std::endl;
+        std::cout << "  tx_type: " << value.tx_type() << std::endl;
         return true;
     });
 
@@ -79,7 +79,7 @@ int main()
         int num = tx->read_or("rct.gates.3.open", "0")->as_number_or<int>(42);
         num++;
         tx->upsert("rct.gates.3.open", std::to_string(num));
-        tx->set_user_type(42);
+        tx->set_type(42);
         auto submit_result = tx->submit().get();
 
         // Close the database, alternatively you can call `cli->close();`

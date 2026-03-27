@@ -52,11 +52,20 @@ const char * to_str(transaction::isolation_e val);
 /**
  * Check if a key is valid.
  * 
+ * A valid key:
+ * - must not be empty, 
+ * - must not start with a space,
+ * - must not end with a space,
+ * - must not contain "//",
+ * - must not contain '\0' in the middle, 
+ * - must not contain control characters,
+ * - and must be valid UTF-8.
+ * 
  * @param[in] key Key to check.
  * 
- * @return true = valid, false = invalid.
+ * @return true or false.
  */
-inline bool is_valid_key(const std::string_view &key) { return !key.empty(); }
+bool is_valid_key(const std::string_view &key);
 inline bool is_valid_key(const char *key) { return (key && is_valid_key(std::string_view{key})); }
 inline bool is_valid_key(const key_t &key) { return is_valid_key(key.view()); }
 

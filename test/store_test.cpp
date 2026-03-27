@@ -49,14 +49,14 @@ TEST_CASE("store_load")
     REQUIRE(metas_it != store.m_metas.end());
     CHECK(metas_it->second->rev == 42);
     CHECK(metas_it->second->timestamp == millis_t{1234567890});
-    CHECK(metas_it->second->type == 15);
+    CHECK(metas_it->second->tx_type == 15);
     CHECK(metas_it->second->user == "jdoe");
 
     metas_it = store.m_metas.find(546);
     REQUIRE(metas_it != store.m_metas.end());
     CHECK(metas_it->second->rev == 546);
     CHECK(metas_it->second->timestamp == millis_t{1234567999});
-    CHECK(metas_it->second->type == 7);
+    CHECK(metas_it->second->tx_type == 7);
     CHECK(metas_it->second->user == "ljohnson");
 
     CHECK(store.m_data.size() == 4);

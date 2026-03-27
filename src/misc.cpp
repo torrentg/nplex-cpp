@@ -4,6 +4,7 @@
 #include <arpa/inet.h>
 #include <fmt/format.h>
 #include <uv.h>
+#include "utf8.h"
 #include "nplex-cpp/types.hpp"
 #include "user.hpp"
 #include "misc.hpp"
@@ -13,6 +14,40 @@ const gto::cstring nplex::value_t::EMPTY = "";
 std::uint32_t nplex::ntohl_ptr(const char *ptr)
 {
     return ntohl(*reinterpret_cast<const std::uint32_t *>(ptr));
+}
+
+bool nplex::is_valid_key(const std::string_view &key)
+{
+    const auto *ptr = reinterpret_cast<const utf8_int8_t *>(key.data());
+    const auto *end = ptr + key.length();
+
+    if (key.empty())
+        return false;
+
+    if (key.front() == ' ' || key.back() == ' ')
+        return false;
+
+    if (key.find("//") != std::string_view::npos)
+        return false;
+
+    if (key.find('\0') != std::string_view::npos)
+        return false;
+
+    if (utf8nvalid(ptr, key.length()) != 0)
+        return false;
+
+    // Check for control characters (C0, DEL, C1)
+    while (ptr < end)
+    {
+        utf8_int32_t cp = 0;
+
+        ptr = utf8codepoint(ptr, &cp);
+
+        if ((cp >= 0x00 && cp <= 0x1F) || (cp >= 0x7F && cp <= 0x9F))
+            return false;
+    }
+
+    return true;
 }
 
 const char * nplex::to_str(transaction::state_e state)

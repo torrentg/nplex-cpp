@@ -973,12 +973,12 @@ void nplex::client_impl::process_update(const nplex::msgs::Update *upd)
 {
     assert(m_loop_thread_id == std::this_thread::get_id());
 
-    // update the local database
+    // update the store and get the list of changes
     auto [changes, meta] = m_store->update(upd);
     assert(meta && meta->rev == upd->rev());
     log_debug("Store updated to rev {} with {} changes", meta->rev, changes.size());
 
-    // check accepted commits with pending update
+    // discard accepted transactions with erev < meta->rev
     while (!m_accepted.empty() && m_accepted.front()->erev < meta->rev) {
         log_error("Discarding accepted tx with erev {} at rev {}", m_accepted.front()->erev, meta->rev);
         auto req = m_accepted.pop();
@@ -986,15 +986,9 @@ void nplex::client_impl::process_update(const nplex::msgs::Update *upd)
         assert(false);
     }
 
-    if (!m_accepted.empty() && m_accepted.front()->erev == meta->rev) {
-        auto req = m_accepted.pop();
-        req->tx->confirm_commit(meta->rev);
-        log_debug("Tx committed in {} usec", std::chrono::duration_cast<usec>(clock::now() - req->t0).count());
-    }
-
     std::size_t num_unused_txs = 0;
 
-    // update current transactions and remove the closed ones
+    // update current transactions
     {
         std::lock_guard<std::mutex> lock_transactions(m_mutex_transactions);
 
@@ -1030,8 +1024,16 @@ void nplex::client_impl::process_update(const nplex::msgs::Update *upd)
         }
     }
 
+    // remove unused transactions
     if (num_unused_txs > 0)
         purge_unused_txs();
+
+    // confirm committed transaction (if any)
+    if (!m_accepted.empty() && m_accepted.front()->erev == meta->rev) {
+        auto req = m_accepted.pop();
+        req->tx->confirm_commit(meta->rev);
+        log_debug("Tx committed in {} usec", std::chrono::duration_cast<usec>(clock::now() - req->t0).count());
+    }
 
     // update business objects and trigger actions through the reactor
     if (m_reactor)

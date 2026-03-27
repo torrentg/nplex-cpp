@@ -31,7 +31,7 @@ struct meta_t
     rev_t rev;                      //!< Revision at transaction creation.
     gto::cstring user;              //!< Transaction creator.
     millis_t timestamp;             //!< Timestamp at transaction creation.
-    std::uint32_t type;             //!< Transaction type (user-defined).
+    std::uint32_t tx_type;          //!< Transaction type (user-defined).
     std::uint32_t nrefs;            //!< Number of references in the store (internal use).
 };
 
@@ -59,7 +59,7 @@ class value_t
     rev_t rev() const { return (m_meta ? m_meta->rev : 0); }
     const gto::cstring & user() const { return (m_meta ? m_meta->user : EMPTY); }
     millis_t timestamp() const { return (m_meta ? m_meta->timestamp : millis_t{0}); }
-    std::uint32_t type() const { return (m_meta ? m_meta->type : 0); }
+    std::uint32_t tx_type() const { return (m_meta ? m_meta->tx_type : 0); }
 
     // Data accessor
     const gto::cstring & data() const { return m_data; }

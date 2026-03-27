@@ -115,9 +115,9 @@ void basic_step_1(std::shared_ptr<transaction_test> &tx)
     CHECK(!tx->is_read_only());
     CHECK(!tx->is_dirty());
 
-    CHECK(tx->user_type() == 0);
-    tx->set_user_type(17);
-    CHECK(tx->user_type() == 17);
+    CHECK(tx->type() == 0);
+    tx->set_type(17);
+    CHECK(tx->type() == 17);
 
     // read an existing key
     REQUIRE(tx->read("key1"));

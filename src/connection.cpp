@@ -312,10 +312,12 @@ void nplex::connection_impl::disconnect(int rc)
 void nplex::connection_impl::send(flatbuffers::DetachedBuffer &&buf)
 {
     int rc = 0;
-    auto len = get_msg_length(buf);
 
     if (m_state != state_e::CONNECTED)
         throw nplex_exception("Connection is not established");
+
+    auto msg = new output_msg_t(std::move(buf));
+    auto len = msg->length();
 
     if (m_stats.unack_msgs >= m_params.max_unack_msgs) {
         disconnect(ERR_QUEUE_EXCEEDED);
@@ -326,9 +328,6 @@ void nplex::connection_impl::send(flatbuffers::DetachedBuffer &&buf)
         disconnect(ERR_QUEUE_EXCEEDED);
         return;
     }
-
-    auto msg = new output_msg_t(std::move(buf));
-    assert(len == msg->length());
 
     if ((rc = uv_write(&msg->req, get_stream(&m_tcp), msg->buf.data(), static_cast<unsigned int>(msg->buf.size()), ::cb_tcp_write)) != 0) {
         delete msg;

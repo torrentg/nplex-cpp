@@ -119,8 +119,8 @@ class transaction
      * 
      * @param[in] type User-defined type of the transaction.
      */
-    virtual std::uint32_t user_type() const = 0;
-    virtual void set_user_type(std::uint32_t type) = 0;
+    virtual std::uint32_t type() const = 0;
+    virtual void set_type(std::uint32_t type) = 0;
 
     /**
      * Database revision. Its value depends on the isolation level:

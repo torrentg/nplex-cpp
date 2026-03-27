@@ -1,3 +1,5 @@
+#include <cassert>
+#include "utf8.h"
 #include "cppcrc.h"
 #include "nplex-cpp/exception.hpp"
 #include "transaction_impl.hpp"
@@ -8,6 +10,10 @@
 
 using namespace nplex::msgs;
 using namespace flatbuffers;
+
+// ==========================================================
+// nplex functions
+// ==========================================================
 
 nplex::output_msg_t::output_msg_t(DetachedBuffer &&msg) : content(std::move(msg))
 {
@@ -36,7 +42,6 @@ const nplex::msgs::Message * nplex::parse_network_msg(const char *ptr, size_t le
         return nullptr;
 
     std::uint32_t metadata = ntohl_ptr(ptr + sizeof(std::uint32_t));
-    // TODO: uncompress if (metadata & LZ4)
     UNUSED(metadata);
 
     std::uint32_t checksum = ntohl_ptr(ptr + len - sizeof(std::uint32_t));
@@ -164,7 +169,7 @@ flatbuffers::DetachedBuffer nplex::create_submit_msg(std::size_t cid, rev_t crev
         CreateSubmitRequest(builder, 
             cid,
             (tx->isolation() == transaction::isolation_e::SERIALIZABLE ? tx->rev_creation() : crev),
-            tx->user_type(),
+            tx->type(),
             builder.CreateVector(upserts),
             builder.CreateVector(deletes),
             builder.CreateVector(ensures),

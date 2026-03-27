@@ -49,8 +49,8 @@ class transaction_impl : public transaction, public loggable, public std::enable
     virtual bool is_read_only() const override { return m_read_only; }
     virtual bool is_dirty() const override { return m_dirty; }
     virtual state_e state() const override { return m_state; }
-    virtual std::uint32_t user_type() const override { return m_type; }
-    virtual void set_user_type(std::uint32_t type) override { m_type = type; }
+    virtual std::uint32_t type() const override { return m_type; }
+    virtual void set_type(std::uint32_t type) override { m_type = type; }
     virtual rev_t rev() const override;
     virtual rev_t rev_creation() const { return m_rev_creation; }
 
@@ -92,7 +92,7 @@ class transaction_impl : public transaction, public loggable, public std::enable
     items_t m_items;                            //!< Transaction items (depends on isolation level).
     ensures_t m_ensures;                        //!< Transaction ensures.
     isolation_e m_isolation_level;              //!< Transaction isolation level.
-    std::atomic<std::uint32_t> m_type = 0;      //!< Transaction type (user-defined value).
+    std::uint32_t m_type = 0;                   //!< Transaction type (user-defined value).
     std::atomic<state_e> m_state;               //!< Transaction state.
     std::atomic<bool> m_dirty = false;          //!< Current tx conflicts with a commit.
     bool m_read_only = true;                    //!< Transaction read-only flag.

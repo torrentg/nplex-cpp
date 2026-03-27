@@ -1,6 +1,7 @@
 #include <cstdlib>
 #include <cstring>
 #include <getopt.h>
+#include <initializer_list>
 #include <iostream>
 #include <stop_token>
 #include <string>
@@ -84,29 +85,52 @@ static void clean_db(const client_ptr &cli)
         throw std::runtime_error("clean_db: submit failed");
 }
 
-/// Insert key=value using a forced read-committed transaction and commit.
-static void external_upsert(const client_ptr &cli, const char *key, const std::string_view &value)
+struct external_upsert_change_t
 {
+    const char *key;
+    std::string_view value;
+};
+
+static void external_upsert(const client_ptr &cli, std::initializer_list<external_upsert_change_t> changes)
+{
+    if (changes.size() == 0)
+        return;
+
     auto tx = cli->create_tx(transaction::isolation_e::READ_COMMITTED, false);
 
-    tx->upsert(key, value);
+    for (const auto &change : changes)
+        tx->upsert(change.key, change.value);
 
     auto rc = tx->submit(true).get();
 
     if (rc != transaction::submit_e::COMMITTED)
-        throw std::runtime_error(std::string("external_upsert: submit failed for key=") + key);
+        throw std::runtime_error("external_upsert(batch): submit failed");
 }
 
-static void external_remove(const client_ptr &cli, const char *key)
+static void external_upsert(const client_ptr &cli, const char *key, const std::string_view &value)
 {
+    external_upsert(cli, {{key, value}});
+}
+
+static void external_remove(const client_ptr &cli, std::initializer_list<const char *> keys)
+{
+    if (keys.size() == 0)
+        return;
+
     auto tx = cli->create_tx(transaction::isolation_e::READ_COMMITTED, false);
 
-    tx->remove(key);
+    for (const auto *key : keys)
+        tx->remove(key);
 
     auto rc = tx->submit(true).get();
 
     if (rc != transaction::submit_e::COMMITTED && rc != transaction::submit_e::NO_MODIFICATIONS)
-        throw std::runtime_error(std::string("external_remove: submit failed for key=") + key);
+        throw std::runtime_error("external_remove(batch): submit failed");
+}
+
+static void external_remove(const client_ptr &cli, const char *key)
+{
+    external_remove(cli, {key});
 }
 
 // ---------------------------------------------------------------------------
@@ -414,17 +438,21 @@ static void test_ser_snapshot_read(const client_ptr &cli)
     TEST_STARTS("ser_snapshot_read");
     clean_db(cli);
 
-    external_upsert(cli, "test/x", "1");
-    external_upsert(cli, "test/y", "2");
+    external_upsert(cli, {
+        {"test/x", "1"},
+        {"test/y", "2"}
+    });
 
     auto tx1 = cli->create_tx(transaction::isolation_e::SERIALIZABLE, true);
 
     // external commit: update both keys
-    external_upsert(cli, "test/x", "10");
-    external_upsert(cli, "test/y", "20");
-    external_upsert(cli, "test/z", "30");
+    external_upsert(cli, {
+        {"test/x", "10"},
+        {"test/y", "20"},
+        {"test/z", "30"}
+    });
 
-    CHECK(tx1->is_dirty() == false);
+    CHECK(tx1->is_dirty() == false);  // we haven't read them yet
 
     auto val_x = tx1->read("test/x");
     auto val_y = tx1->read("test/y");
@@ -433,7 +461,7 @@ static void test_ser_snapshot_read(const client_ptr &cli)
     CHECK(val_y != nullptr && val_y->data() == "2");
     CHECK(val_z == nullptr);
 
-    CHECK(tx1->is_dirty() == true);
+    CHECK(tx1->is_dirty() == true);   // they have been read
 
     auto rc = tx1->submit(false).get();
     CHECK(rc == transaction::submit_e::NO_MODIFICATIONS);
@@ -464,14 +492,22 @@ static void test_ser_delete_not_visible(const client_ptr &cli)
     TEST_STARTS("ser_delete_not_visible");
     clean_db(cli);
 
-    external_upsert(cli, "test/x", "alive");
+    external_upsert(cli, {
+        {"test/x", "alive1"},
+        {"test/y", "alive2"}
+    });
 
     auto tx1 = cli->create_tx(transaction::isolation_e::SERIALIZABLE, true);
 
-    external_remove(cli, "test/x");
+    external_remove(cli, {
+        "test/x", 
+        "test/y"
+    });
 
-    auto val = tx1->read("test/x");
-    CHECK(val != nullptr && val->data() == "alive");
+    auto val_x = tx1->read("test/x");
+    auto val_y = tx1->read("test/y");
+    CHECK(val_x != nullptr && val_x->data() == "alive1");
+    CHECK(val_y != nullptr && val_y->data() == "alive2");
 
     tx1->discard();
     TEST_FINISH();

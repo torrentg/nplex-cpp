@@ -12,7 +12,7 @@ TODO
 cd build
 
 # Normal compilation
-cmake ..
+cmake -DCMAKE_BUILD_TYPE=Release ..
 valgrind --tool=helgrind --read-var-info=yes ./example1
 
 # AddressSanitizer + UndefinedBehaviorSanitizer
@@ -41,11 +41,11 @@ cmake -DENABLE_COVERAGE=ON ..
 * [cqueue](https://github.com/torrentg/cqueue). A C++20 header-only circular queue container. LGPL-3.0 license.
 * [doctest](https://github.com/doctest/doctest). The fastest feature-rich C++11/14/17/20/23 single-header testing framework. MIT license.
 * [FastGlobbing](https://github.com/Robert-van-Engelen/FastGlobbing). Wildcard string matching and globbing library. CPOL license.
+* [utf8.h](https://github.com/sheredom/utf8.h). Utf8 string functions for C and C++. Unlicense license.
 
 ### Shared
 
 * [{fmt}](https://github.com/fmtlib/fmt). A string formatting library. MIT license.
-* [lz4](https://github.com/lz4/lz4). Extremely fast compression. BSD-2-Clause license.
 * [libuv](https://github.com/libuv/libuv). Cross-platform asynchronous I/O. MIT license.
 * [flatbuffers](https://github.com/google/flatbuffers). Memory efficient serialization library. Apache-2.0 license .
 
