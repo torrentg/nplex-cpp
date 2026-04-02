@@ -301,7 +301,7 @@ static std::string create_random_key()
     std::uniform_int_distribution<std::size_t> suffix_dist(0, entry.suffixes.size() - 1);
     const char *suffix = entry.suffixes[suffix_dist(g_rng)];
 
-    return std::string(entry.prefix) + "t" + std::to_string(++counter) + "." + suffix;
+    return std::string(entry.prefix) + ".t" + std::to_string(++counter) + "." + suffix;
 }
 
 static std::vector<std::string> complete_keys(const std::vector<std::string> &existing_keys, std::uint32_t num)
