@@ -2,11 +2,5 @@
 
 * Only a public header -> nplex-cpp.hpp
 * allow ssl connections (see project tlsuv)
-* README: explain nplex purpose
 * Add bool transaction::exists(const char *key) ?
 * Add size_t transaction::count(const char *pattern) ?
-
-## Useful commands
-
-* cloc --exclude-content="automatically generated" include src test
-* cppcheck --enable=all --inconclusive --std=c++20 --force --suppress=missingIncludeSystem --suppress=unusedFunction --suppress=useInitializationList --suppress=noExplicitConstructor --suppress=cstyleCast -Ideps -Isrc -Iinclude src &> removeme.txt
