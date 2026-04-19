@@ -27,6 +27,7 @@ struct user_t
     std::string password;                   //!< User password.
     std::vector<acl_t> permissions;         //!< User permissions (fixed by server at login).
     bool can_force = false;                 //!< User can force transactions (fixed by server at login).
+    bool can_monitor = false;               //!< User can monitor active sessions (fixed by server at login).
 
     /**
      * Check if the user is authorized to perform all the requested

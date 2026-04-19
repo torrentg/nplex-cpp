@@ -5,8 +5,7 @@
 #include "transaction_impl.hpp"
 #include "messaging.hpp"
 #include "misc.hpp"
-
-#define API_VERSION 10
+#include "buildinfo.hpp"
 
 using namespace nplex::msgs;
 using namespace flatbuffers;
@@ -84,7 +83,7 @@ flatbuffers::DetachedBuffer nplex::create_login_msg(std::size_t cid, const std::
         MsgContent::LOGIN_REQUEST, 
         CreateLoginRequest(builder, 
             cid, 
-            API_VERSION,
+            FBS_HASH,
             builder.CreateString(user), 
             builder.CreateString(password)
         ).Union()
@@ -174,6 +173,22 @@ flatbuffers::DetachedBuffer nplex::create_submit_msg(std::size_t cid, rev_t crev
             builder.CreateVector(deletes),
             builder.CreateVector(ensures),
             force
+        ).Union()
+    );
+
+    builder.Finish(msg);
+    return builder.Release();
+}
+
+flatbuffers::DetachedBuffer nplex::create_sessions_msg(std::size_t cid, bool stream)
+{
+    FlatBufferBuilder builder;
+
+    auto msg = CreateMessage(builder,
+        MsgContent::SESSIONS_REQUEST,
+        CreateSessionsRequest(builder,
+            cid,
+            stream
         ).Union()
     );
 

@@ -2,7 +2,7 @@ cmake_minimum_required(VERSION 3.20)
 
 project(
     nplex-cpp
-    VERSION 0.5.0
+    VERSION 0.6.0
     LANGUAGES C CXX
 )
 
@@ -23,16 +23,45 @@ find_package(
     Threads REQUIRED
 )
 
+# Requires libuv >= 1.35
 find_package(
     libuv REQUIRED
 )
 
 find_package(
-    fmt 7 REQUIRED
+    fmt 8 REQUIRED
 )
 
 find_package(
-    flatbuffers REQUIRED
+    flatbuffers 22.01.01 REQUIRED
+)
+
+# Re-configure when messages.fbs changes (to recompute schema hash)
+set_property(DIRECTORY APPEND PROPERTY CMAKE_CONFIGURE_DEPENDS
+    ${PROJECT_SOURCE_DIR}/src/messages.fbs
+)
+
+# Compute SHA-256 hash of the schema source, truncated to 32 bits
+file(SHA256 "${PROJECT_SOURCE_DIR}/src/messages.fbs" FBS_HASH_FULL)
+string(SUBSTRING "${FBS_HASH_FULL}" 0 8 FBS_HASH)
+message(STATUS "Schema hash: 0x${FBS_HASH}")
+
+# Generate buildinfo.hpp
+configure_file(
+    ${CMAKE_CURRENT_SOURCE_DIR}/src/buildinfo.hpp.in
+    ${CMAKE_CURRENT_BINARY_DIR}/buildinfo.hpp
+    @ONLY
+)
+
+# Copy buildinfo.hpp to src/buildinfo.hpp
+add_custom_command(
+    OUTPUT "${PROJECT_SOURCE_DIR}/src/buildinfo.hpp"
+    COMMAND ${CMAKE_COMMAND} -E copy
+        "${CMAKE_CURRENT_BINARY_DIR}/buildinfo.hpp"
+        "${PROJECT_SOURCE_DIR}/src/buildinfo.hpp"
+    DEPENDS 
+        "${CMAKE_CURRENT_BINARY_DIR}/buildinfo.hpp"
+    COMMENT "Copying buildinfo.hpp to src directory"
 )
 
 # Create messages_generated.hpp from schema (src/messages.fbs)
@@ -51,7 +80,16 @@ add_custom_command(
     DEPENDS
         GENERATE_flatbuffers_generated
         ${PROJECT_SOURCE_DIR}/src/messages.fbs
-    COMMENT "Copying generated messages.hpp to src directory"
+    COMMENT "Copying messages.hpp to src directory"
+)
+
+# Copy generated files to src/ directory
+add_custom_target(
+    copy_generated
+    ALL
+    DEPENDS
+        "${PROJECT_SOURCE_DIR}/src/buildinfo.hpp"
+        "${PROJECT_SOURCE_DIR}/src/messages.hpp"
 )
 
 add_compile_options(
@@ -121,6 +159,11 @@ set(CMAKE_INTERPROCEDURAL_OPTIMIZATION_RELEASE ON)
 add_library(
     nplex-cpp
     STATIC
+)
+
+add_dependencies(
+    nplex-cpp
+    copy_generated
 )
 
 target_sources(

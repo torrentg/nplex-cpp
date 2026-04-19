@@ -75,6 +75,24 @@ namespace tests {
         return req;
     }
 
+    inline nplex::msgs::SessionsResponseT make_sessions_response(std::size_t cid, std::size_t crev, const std::vector<nplex::msgs::SessionT> &sessions)
+    {
+        nplex::msgs::SessionsResponseT resp;
+        resp.cid = cid;
+        resp.crev = crev;
+        resp.sessions = make_vector_unique_ptr(sessions);
+        return resp;
+    }
+
+    inline nplex::msgs::SessionsPushT make_sessions_push(std::size_t cid, std::size_t crev, const nplex::msgs::SessionT &session)
+    {
+        nplex::msgs::SessionsPushT push;
+        push.cid = cid;
+        push.crev = crev;
+        push.session = std::make_unique<nplex::msgs::SessionT>(session);
+        return push;
+    }
+
     template<typename T>
     inline nplex::msgs::MessageT make_message(T &&val)
     {

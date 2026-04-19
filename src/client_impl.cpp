@@ -737,6 +737,12 @@ void nplex::client_impl::on_msg_received(connection *con, const msgs::Message *m
             process_ping_resp(msg->content_as_PING_RESPONSE());
             break;
 
+        case MsgContent::SESSIONS_RESPONSE:
+            break;
+
+        case MsgContent::SESSIONS_PUSH:
+            break;
+
         default:
             con->disconnect(ERR_MSG_ERROR);
     }
@@ -762,6 +768,7 @@ void nplex::client_impl::process_login_resp(connection *con, const nplex::msgs::
     auto usr = std::make_shared<user_t>();
     usr->name = m_params.user;
     usr->can_force = resp->can_force();
+    usr->can_monitor = resp->can_monitor();
     usr->permissions.clear();
 
     if (resp->permissions())
@@ -783,7 +790,7 @@ void nplex::client_impl::process_login_resp(connection *con, const nplex::msgs::
 
     log_info("Login successful on server {}", m_con->addr().str());
     log_debug("Server info: rev = {}, min-rev = {}, keepalive = {}ms", resp->crev(), resp->rev0(), resp->keepalive());
-    log_debug("User info: can-force = {}, permissions = [{}]", m_user.load()->can_force, fmt::join(m_user.load()->permissions, ", "));
+    log_debug("User info: can-force = {}, can-monitor = {}, permissions = [{}]", m_user.load()->can_force, m_user.load()->can_monitor, fmt::join(m_user.load()->permissions, ", "));
 
     if (resp->keepalive())
     {

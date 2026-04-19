@@ -66,5 +66,6 @@ flatbuffers::DetachedBuffer create_login_msg(std::size_t cid, const std::string 
 flatbuffers::DetachedBuffer create_snapshot_msg(std::size_t cid, rev_t rev);
 flatbuffers::DetachedBuffer create_updates_msg(std::size_t cid, rev_t rev);
 flatbuffers::DetachedBuffer create_submit_msg(std::size_t cid, rev_t crev, bool force, const tx_impl_ptr &tx);
+flatbuffers::DetachedBuffer create_sessions_msg(std::size_t cid, bool stream);
 
 } // namespace nplex

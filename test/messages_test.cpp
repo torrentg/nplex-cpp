@@ -1,6 +1,7 @@
 #include <doctest.h>
 #include "messages_test.hpp"
 #include "messages.hpp"
+#include "buildinfo.hpp"
 
 using namespace std;
 using namespace nplex;
@@ -16,7 +17,7 @@ TEST_CASE("LoginRequest")
 
         auto req = CreateLoginRequest(builder, 
             1, 
-            10,
+            FBS_HASH,
             builder.CreateString("jdoe"), 
             builder.CreateString("password"));
 
@@ -29,7 +30,7 @@ TEST_CASE("LoginRequest")
         auto *ptr = ::GetRoot<nplex::msgs::LoginRequest>(buf.data());
         REQUIRE(ptr);
         CHECK(ptr->cid() == 1);
-        CHECK(ptr->api_version() == 10);
+        CHECK(ptr->fbs_hash() == FBS_HASH);
         CHECK(ptr->user()->str() == "jdoe");
         CHECK(ptr->password()->str() == "password");
     }
@@ -39,7 +40,7 @@ TEST_CASE("LoginRequest")
         LoginRequestT req = {
             {},         // Native table
             1,          // cid
-            10,         // api-version
+            FBS_HASH,   // fbs_hash
             "jdoe",     // user
             "password"  // password
         };
@@ -49,7 +50,7 @@ TEST_CASE("LoginRequest")
 
         REQUIRE(ptr);
         CHECK(ptr->cid() == 1);
-        CHECK(ptr->api_version() == 10);
+        CHECK(ptr->fbs_hash() == FBS_HASH);
         CHECK(ptr->user()->str() == "jdoe");
         CHECK(ptr->password()->str() == "password");
     }
@@ -64,6 +65,7 @@ TEST_CASE("LoginResponse")
     resp.rev0 = 456;
     resp.crev = 2048;
     resp.can_force = false;
+    resp.can_monitor = true;
     resp.keepalive = 3000;
     resp.permissions.push_back(std::make_unique<msgs::AclT>(AclT{{}, "/devices/**"s, 15}));
     resp.permissions.push_back(std::make_unique<msgs::AclT>(AclT{{}, "/user/jdoe/**"s, 6}));
@@ -78,6 +80,7 @@ TEST_CASE("LoginResponse")
     CHECK(ptr->rev0() == 456);
     CHECK(ptr->crev() == 2048);
     CHECK(ptr->can_force() == false);
+    CHECK(ptr->can_monitor() == true);
     CHECK(ptr->keepalive() == 3000);
     CHECK(ptr->permissions());
     CHECK(ptr->permissions()->size() == 3);
@@ -477,7 +480,7 @@ TEST_CASE("Message")
             MsgContent::LOGIN_REQUEST, 
             CreateLoginRequest(builder, 
                 1, 
-                10, 
+                FBS_HASH, 
                 builder.CreateString("jdoe"), 
                 builder.CreateString("password")
             ).Union()
@@ -496,7 +499,7 @@ TEST_CASE("Message")
         auto *login = ptr->content_as_LOGIN_REQUEST();
         REQUIRE(login);
         CHECK(login->cid() == 1);
-        CHECK(login->api_version() == 10);
+        CHECK(login->fbs_hash() == FBS_HASH);
         CHECK(login->user()->str() == "jdoe");
         CHECK(login->password()->str() == "password");
     }
@@ -507,7 +510,7 @@ TEST_CASE("Message")
             LoginRequestT{
                 {},         // Native table
                 1,          // cid
-                10,         // api-version
+                FBS_HASH,   // fbs_hash
                 "jdoe",     // user
                 "password"  // password
             });
@@ -521,8 +524,67 @@ TEST_CASE("Message")
         auto *login = ptr->content_as_LOGIN_REQUEST();
         REQUIRE(login);
         CHECK(login->cid() == 1);
-        CHECK(login->api_version() == 10);
+        CHECK(login->fbs_hash() == FBS_HASH);
         CHECK(login->user()->str() == "jdoe");
         CHECK(login->password()->str() == "password");
     }
+}
+
+TEST_CASE("SessionsRequest")
+{
+    SessionsRequestT req = {
+        {},         // Native table
+        5,          // cid
+        true        // stream
+    };
+
+    auto buf = serialize(req);
+    auto *ptr = ::GetRoot<nplex::msgs::SessionsRequest>(buf.data());
+
+    REQUIRE(ptr);
+    CHECK(ptr->cid() == 5);
+    CHECK(ptr->stream() == true);
+}
+
+TEST_CASE("SessionsResponse")
+{
+    SessionsResponseT resp = nplex::tests::make_sessions_response(
+        5,          // cid
+        2048,       // crev
+        {
+            { .user = "jdoe", .ip = "192.168.1.1", .code = msgs::ExitCode::CONNECTED, .time0 = 1000, .time1 = 0 },
+            { .user = "akay", .ip = "192.168.1.2", .code = msgs::ExitCode::CONNECTED, .time0 = 2000, .time1 = 0 }
+        }
+    );
+
+    auto buf = serialize(resp);
+    auto *ptr = ::GetRoot<nplex::msgs::SessionsResponse>(buf.data());
+
+    REQUIRE(ptr);
+    CHECK(ptr->cid() == 5);
+    CHECK(ptr->crev() == 2048);
+    REQUIRE(ptr->sessions());
+    CHECK(ptr->sessions()->size() == 2);
+    CHECK(ptr->sessions()->Get(0)->user()->str() == "jdoe");
+    CHECK(ptr->sessions()->Get(1)->user()->str() == "akay");
+}
+
+TEST_CASE("SessionsPush")
+{
+    SessionsPushT push = nplex::tests::make_sessions_push(
+        5,          // cid
+        2048,       // crev
+        { .user = "jdoe", .ip = "10.0.0.1", .code = msgs::ExitCode::CLOSED_BY_USER, .time0 = 1000, .time1 = 9999 }
+    );
+
+    auto buf = serialize(push);
+    auto *ptr = ::GetRoot<nplex::msgs::SessionsPush>(buf.data());
+
+    REQUIRE(ptr);
+    CHECK(ptr->cid() == 5);
+    CHECK(ptr->crev() == 2048);
+    REQUIRE(ptr->session());
+    CHECK(ptr->session()->user()->str() == "jdoe");
+    CHECK(ptr->session()->code() == msgs::ExitCode::CLOSED_BY_USER);
+    CHECK(ptr->session()->time1() == 9999);
 }
