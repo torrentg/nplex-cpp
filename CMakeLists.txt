@@ -36,15 +36,34 @@ find_package(
     flatbuffers 22.01.01 REQUIRED
 )
 
-# Re-configure when messages.fbs changes (to recompute schema hash)
+# Re-configure when any .fbs file changes (to recompute schema hash)
 set_property(DIRECTORY APPEND PROPERTY CMAKE_CONFIGURE_DEPENDS
-    ${PROJECT_SOURCE_DIR}/src/messages.fbs
+    ${PROJECT_SOURCE_DIR}/src/schema1.fbs
+    ${PROJECT_SOURCE_DIR}/src/schema2.fbs
+    ${PROJECT_SOURCE_DIR}/src/schema3.fbs
 )
 
-# Compute SHA-256 hash of the schema source, truncated to 32 bits
-file(SHA256 "${PROJECT_SOURCE_DIR}/src/messages.fbs" FBS_HASH_FULL)
-string(SUBSTRING "${FBS_HASH_FULL}" 0 8 FBS_HASH)
-message(STATUS "Schema hash: 0x${FBS_HASH}")
+# Find flatc executable
+find_program(FLATC_EXECUTABLE NAMES flatc REQUIRED)
+
+# Generate binary schema at configure time and compute the hash
+execute_process(
+    COMMAND ${FLATC_EXECUTABLE}
+        -b --schema
+        -o ${CMAKE_CURRENT_BINARY_DIR}
+        ${PROJECT_SOURCE_DIR}/src/schema3.fbs
+    RESULT_VARIABLE FLATC_BFBS_RESULT
+    ERROR_VARIABLE  FLATC_BFBS_ERROR
+    WORKING_DIRECTORY ${PROJECT_SOURCE_DIR}/src
+)
+if(NOT FLATC_BFBS_RESULT EQUAL 0)
+    message(FATAL_ERROR "flatc -b --schema schema3.fbs failed: ${FLATC_BFBS_ERROR}")
+endif()
+
+# Compute SHA-256 hash of the binary schema3, truncated to 32 bits
+file(SHA256 "${CMAKE_CURRENT_BINARY_DIR}/schema3.bfbs" _HASH_FULL)
+string(SUBSTRING "${_HASH_FULL}" 0 8 SCHEMA3_HASH)
+message(STATUS "Schema hash: 0x${SCHEMA3_HASH}")
 
 # Generate buildinfo.hpp
 configure_file(
@@ -64,23 +83,39 @@ add_custom_command(
     COMMENT "Copying buildinfo.hpp to src directory"
 )
 
-# Create messages_generated.hpp from schema (src/messages.fbs)
-flatbuffers_generate_headers(
-    TARGET flatbuffers_generated
-    SCHEMAS ${PROJECT_SOURCE_DIR}/src/messages.fbs
-    FLAGS --cpp --filename-ext hpp --cpp-std c++17 --scoped-enums --gen-object-api
+# Create schema3_generated.hpp from binary schema
+set(SCHEMA_GENERATED_HPP "${CMAKE_BINARY_DIR}/flatbuffers_generated/schema3_generated.hpp")
+file(MAKE_DIRECTORY "${CMAKE_BINARY_DIR}/flatbuffers_generated")
+
+add_custom_command(
+    OUTPUT ${SCHEMA_GENERATED_HPP}
+    COMMAND ${FLATC_EXECUTABLE}
+        --cpp
+        --filename-ext hpp
+        --cpp-std c++17
+        --scoped-enums
+        --gen-object-api
+        -o "${CMAKE_BINARY_DIR}/flatbuffers_generated"
+        "${CMAKE_CURRENT_BINARY_DIR}/schema3.bfbs"
+    DEPENDS "${CMAKE_CURRENT_BINARY_DIR}/schema3.bfbs"
+    COMMENT "Generating schema3_generated.hpp from schema3.bfbs"
 )
 
-# Copy messages_generated.hpp to src/messages.hpp
+add_custom_target(
+    GENERATE_flatbuffers_generated ALL
+    DEPENDS ${SCHEMA_GENERATED_HPP}
+)
+
+# Copy schema3_generated.hpp to src/schema.hpp
 add_custom_command(
-    OUTPUT "${PROJECT_SOURCE_DIR}/src/messages.hpp"
+    OUTPUT "${PROJECT_SOURCE_DIR}/src/schema.hpp"
     COMMAND ${CMAKE_COMMAND} -E copy
-        "${CMAKE_BINARY_DIR}/flatbuffers_generated/messages_generated.hpp"
-        "${PROJECT_SOURCE_DIR}/src/messages.hpp"
+        "${CMAKE_BINARY_DIR}/flatbuffers_generated/schema3_generated.hpp"
+        "${PROJECT_SOURCE_DIR}/src/schema.hpp"
     DEPENDS
         GENERATE_flatbuffers_generated
-        ${PROJECT_SOURCE_DIR}/src/messages.fbs
-    COMMENT "Copying messages.hpp to src directory"
+        "${CMAKE_CURRENT_BINARY_DIR}/schema3.bfbs"
+    COMMENT "Copying schema.hpp to src directory"
 )
 
 # Copy generated files to src/ directory
@@ -89,7 +124,7 @@ add_custom_target(
     ALL
     DEPENDS
         "${PROJECT_SOURCE_DIR}/src/buildinfo.hpp"
-        "${PROJECT_SOURCE_DIR}/src/messages.hpp"
+        "${PROJECT_SOURCE_DIR}/src/schema.hpp"
 )
 
 add_compile_options(
@@ -179,8 +214,7 @@ target_sources(
     ${CMAKE_CURRENT_LIST_DIR}/src/connection.hpp
     ${CMAKE_CURRENT_LIST_DIR}/src/connection.cpp
     ${CMAKE_CURRENT_LIST_DIR}/src/loggable.hpp
-    ${CMAKE_CURRENT_LIST_DIR}/src/messages.fbs
-    ${CMAKE_CURRENT_LIST_DIR}/src/messages.hpp
+    ${CMAKE_CURRENT_LIST_DIR}/src/schema.hpp
     ${CMAKE_CURRENT_LIST_DIR}/src/messaging.hpp
     ${CMAKE_CURRENT_LIST_DIR}/src/messaging.cpp
     ${CMAKE_CURRENT_LIST_DIR}/src/misc.hpp

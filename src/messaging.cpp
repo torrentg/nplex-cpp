@@ -83,7 +83,7 @@ flatbuffers::DetachedBuffer nplex::create_login_msg(std::size_t cid, const std::
         MsgContent::LOGIN_REQUEST, 
         CreateLoginRequest(builder, 
             cid, 
-            FBS_HASH,
+            SCHEMA3_HASH,
             builder.CreateString(user), 
             builder.CreateString(password)
         ).Union()

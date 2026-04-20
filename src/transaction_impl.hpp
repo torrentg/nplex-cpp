@@ -9,7 +9,7 @@
 #include "flatbuffers/flatbuffers.h"
 #include "nplex-cpp/transaction.hpp"
 #include "loggable.hpp"
-#include "messages.hpp"
+#include "schema.hpp"
 #include "store.hpp"
 #include "user.hpp"
 

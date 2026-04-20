@@ -3,7 +3,7 @@
 #include <vector>
 #include <memory>
 #include <doctest.h>
-#include "messages.hpp"
+#include "schema.hpp"
 
 namespace nplex {
 namespace tests {

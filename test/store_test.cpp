@@ -1,6 +1,6 @@
 #include <doctest.h>
 #include "nplex-cpp/exception.hpp"
-#include "messages_test.hpp"
+#include "schema_test.hpp"
 #include "store.hpp"
 
 using namespace std;

@@ -1,6 +1,5 @@
 #include <doctest.h>
-#include "messages_test.hpp"
-#include "messages.hpp"
+#include "schema_test.hpp"
 #include "buildinfo.hpp"
 
 using namespace std;
@@ -17,7 +16,7 @@ TEST_CASE("LoginRequest")
 
         auto req = CreateLoginRequest(builder, 
             1, 
-            FBS_HASH,
+            SCHEMA3_HASH,
             builder.CreateString("jdoe"), 
             builder.CreateString("password"));
 
@@ -30,7 +29,7 @@ TEST_CASE("LoginRequest")
         auto *ptr = ::GetRoot<nplex::msgs::LoginRequest>(buf.data());
         REQUIRE(ptr);
         CHECK(ptr->cid() == 1);
-        CHECK(ptr->fbs_hash() == FBS_HASH);
+        CHECK(ptr->schema() == SCHEMA3_HASH);
         CHECK(ptr->user()->str() == "jdoe");
         CHECK(ptr->password()->str() == "password");
     }
@@ -38,11 +37,11 @@ TEST_CASE("LoginRequest")
     SUBCASE("easy-way")
     {
         LoginRequestT req = {
-            {},         // Native table
-            1,          // cid
-            FBS_HASH,   // fbs_hash
-            "jdoe",     // user
-            "password"  // password
+            {},            // Native table
+            1,             // cid
+            SCHEMA3_HASH,  // schema
+            "jdoe",        // user
+            "password"     // password
         };
 
         auto buf = serialize(req);
@@ -50,7 +49,7 @@ TEST_CASE("LoginRequest")
 
         REQUIRE(ptr);
         CHECK(ptr->cid() == 1);
-        CHECK(ptr->fbs_hash() == FBS_HASH);
+        CHECK(ptr->schema() == SCHEMA3_HASH);
         CHECK(ptr->user()->str() == "jdoe");
         CHECK(ptr->password()->str() == "password");
     }
@@ -480,7 +479,7 @@ TEST_CASE("Message")
             MsgContent::LOGIN_REQUEST, 
             CreateLoginRequest(builder, 
                 1, 
-                FBS_HASH, 
+                SCHEMA3_HASH, 
                 builder.CreateString("jdoe"), 
                 builder.CreateString("password")
             ).Union()
@@ -499,7 +498,7 @@ TEST_CASE("Message")
         auto *login = ptr->content_as_LOGIN_REQUEST();
         REQUIRE(login);
         CHECK(login->cid() == 1);
-        CHECK(login->fbs_hash() == FBS_HASH);
+        CHECK(login->schema() == SCHEMA3_HASH);
         CHECK(login->user()->str() == "jdoe");
         CHECK(login->password()->str() == "password");
     }
@@ -508,11 +507,11 @@ TEST_CASE("Message")
     {
         MessageT msg = make_message(
             LoginRequestT{
-                {},         // Native table
-                1,          // cid
-                FBS_HASH,   // fbs_hash
-                "jdoe",     // user
-                "password"  // password
+                {},            // Native table
+                1,             // cid
+                SCHEMA3_HASH,  // schema
+                "jdoe",        // user
+                "password"     // password
             });
 
         auto buf = serialize(msg);
@@ -524,7 +523,7 @@ TEST_CASE("Message")
         auto *login = ptr->content_as_LOGIN_REQUEST();
         REQUIRE(login);
         CHECK(login->cid() == 1);
-        CHECK(login->fbs_hash() == FBS_HASH);
+        CHECK(login->schema() == SCHEMA3_HASH);
         CHECK(login->user()->str() == "jdoe");
         CHECK(login->password()->str() == "password");
     }

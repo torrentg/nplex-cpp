@@ -1,8 +1,8 @@
 #include <doctest.h>
-#include "messages_test.hpp"
 #include "nplex-cpp/exception.hpp"
 #include "nplex-cpp/transaction.hpp"
 #include "transaction_impl.hpp"
+#include "schema_test.hpp"
 #include "store.hpp"
 
 using namespace std;

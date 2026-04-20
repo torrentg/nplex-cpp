@@ -21,8 +21,8 @@ target_sources(
     ${CMAKE_CURRENT_LIST_DIR}/messaging_test.cpp
     ${CMAKE_CURRENT_LIST_DIR}/transaction_test.cpp
     ${CMAKE_CURRENT_LIST_DIR}/exception_test.cpp
-    ${CMAKE_CURRENT_LIST_DIR}/messages_test.hpp
-    ${CMAKE_CURRENT_LIST_DIR}/messages_test.cpp
+    ${CMAKE_CURRENT_LIST_DIR}/schema_test.hpp
+    ${CMAKE_CURRENT_LIST_DIR}/schema_test.cpp
     ${CMAKE_CURRENT_LIST_DIR}/store_test.cpp
     ${CMAKE_CURRENT_LIST_DIR}/match_test.cpp
     ${CMAKE_CURRENT_LIST_DIR}/addr_test.cpp

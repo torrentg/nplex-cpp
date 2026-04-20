@@ -1,7 +1,7 @@
 #include <chrono>
 #include <cassert>
 #include "nplex-cpp/exception.hpp"
-#include "messages.hpp"
+#include "schema.hpp"
 #include "misc.hpp"
 #include "store.hpp"
 
