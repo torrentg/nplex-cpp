@@ -4,7 +4,7 @@
 #include "nplex-cpp/exception.hpp"
 #include "transaction_impl.hpp"
 #include "messaging.hpp"
-#include "misc.hpp"
+#include "utils.hpp"
 #include "buildinfo.hpp"
 
 using namespace nplex::msgs;

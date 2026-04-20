@@ -2,12 +2,12 @@
 #include <sstream>
 #include <iomanip>
 #include <arpa/inet.h>
-#include <fmt/format.h>
-#include <uv.h>
+#include <fmt/core.h>
 #include "utf8.h"
+#include <uv.h>
 #include "nplex-cpp/types.hpp"
 #include "user.hpp"
-#include "misc.hpp"
+#include "utils.hpp"
 
 const gto::cstring nplex::value_t::EMPTY = "";
 
@@ -50,58 +50,13 @@ bool nplex::is_valid_key(const std::string_view &key)
     return true;
 }
 
-const char * nplex::to_str(transaction::state_e state)
-{
-    switch (state)
-    {
-        case transaction::state_e::OPEN:                return "OPEN";
-        case transaction::state_e::SUBMITTED:           return "SUBMITTED";
-        case transaction::state_e::ACCEPTED:            return "ACCEPTED";
-        case transaction::state_e::REJECTED:            return "REJECTED";
-        case transaction::state_e::COMMITTED:           return "COMMITTED";
-        case transaction::state_e::DISCARDED:           return "DISCARDED";
-        case transaction::state_e::ABORTED:             return "ABORTED";
-        default:                                        return "UNKNOWN";
-    }
-}
-
-const char * nplex::to_str(transaction::isolation_e isolation)
-{
-    switch (isolation)
-    {
-        case transaction::isolation_e::READ_COMMITTED:  return "READ_COMMITTED";
-        case transaction::isolation_e::REPEATABLE_READ: return "REPEATABLE_READ";
-        case transaction::isolation_e::SERIALIZABLE:    return "SERIALIZABLE";
-        default:                                        return "UNKNOWN";
-    }
-}
-
-std::string nplex::to_iso8601(std::chrono::milliseconds ms_since_epoch)
-{
-    using namespace std::chrono;
-
-    auto secs = duration_cast<seconds>(ms_since_epoch); 
-    auto millis = duration_cast<milliseconds>(ms_since_epoch - secs).count(); 
-
-    std::ostringstream oss; 
-    std::time_t t = secs.count(); 
-    std::tm tm_utc; 
-
-    gmtime_r(&t, &tm_utc);
-
-    oss << std::put_time(&tm_utc, "%Y-%m-%dT%H:%M:%S"); 
-    oss << '.' << std::setw(3) << std::setfill('0') << millis << 'Z'; 
-
-    return oss.str();
-}
-
-std::string nplex::crud_to_string(std::uint8_t mode)
+std::string nplex::crud_to_string(std::uint8_t crud)
 {
     return std::string{
-        ((mode & CRUD_CREATE) ? 'c' : '-'),
-        ((mode & CRUD_READ)   ? 'r' : '-'),
-        ((mode & CRUD_UPDATE) ? 'u' : '-'),
-        ((mode & CRUD_DELETE) ? 'd' : '-')
+        ((crud & CRUD_CREATE) ? 'c' : '-'),
+        ((crud & CRUD_READ)   ? 'r' : '-'),
+        ((crud & CRUD_UPDATE) ? 'u' : '-'),
+        ((crud & CRUD_DELETE) ? 'd' : '-')
     };
 }
 
@@ -131,6 +86,51 @@ std::uint8_t nplex::parse_crud(const std::string_view &str)
     }
 
     return crud;
+}
+
+std::string nplex::to_iso8601(std::chrono::milliseconds ms_since_epoch)
+{
+    using namespace std::chrono;
+
+    auto secs = duration_cast<seconds>(ms_since_epoch); 
+    auto millis = duration_cast<milliseconds>(ms_since_epoch - secs).count(); 
+
+    std::ostringstream oss; 
+    std::time_t t = secs.count(); 
+    std::tm tm_utc; 
+
+    gmtime_r(&t, &tm_utc);
+
+    oss << std::put_time(&tm_utc, "%Y-%m-%dT%H:%M:%S"); 
+    oss << '.' << std::setw(3) << std::setfill('0') << millis << 'Z'; 
+
+    return oss.str();
+}
+
+const char * nplex::to_str(transaction::state_e state)
+{
+    switch (state)
+    {
+        case transaction::state_e::OPEN:                return "OPEN";
+        case transaction::state_e::SUBMITTED:           return "SUBMITTED";
+        case transaction::state_e::ACCEPTED:            return "ACCEPTED";
+        case transaction::state_e::REJECTED:            return "REJECTED";
+        case transaction::state_e::COMMITTED:           return "COMMITTED";
+        case transaction::state_e::DISCARDED:           return "DISCARDED";
+        case transaction::state_e::ABORTED:             return "ABORTED";
+        default:                                        return "UNKNOWN";
+    }
+}
+
+const char * nplex::to_str(transaction::isolation_e isolation)
+{
+    switch (isolation)
+    {
+        case transaction::isolation_e::READ_COMMITTED:  return "READ_COMMITTED";
+        case transaction::isolation_e::REPEATABLE_READ: return "REPEATABLE_READ";
+        case transaction::isolation_e::SERIALIZABLE:    return "SERIALIZABLE";
+        default:                                        return "UNKNOWN";
+    }
 }
 
 const char * nplex::strerror(int error)

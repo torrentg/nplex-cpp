@@ -2,7 +2,7 @@
 #include <cassert>
 #include "nplex-cpp/exception.hpp"
 #include "schema.hpp"
-#include "misc.hpp"
+#include "utils.hpp"
 #include "store.hpp"
 
 namespace {

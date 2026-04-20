@@ -63,7 +63,7 @@ endif()
 # Compute SHA-256 hash of the binary schema3, truncated to 32 bits
 file(SHA256 "${CMAKE_CURRENT_BINARY_DIR}/schema3.bfbs" _HASH_FULL)
 string(SUBSTRING "${_HASH_FULL}" 0 8 SCHEMA3_HASH)
-message(STATUS "Schema hash: 0x${SCHEMA3_HASH}")
+message(STATUS "SCHEMA3_HASH hash (bfbs): 0x${SCHEMA3_HASH}")
 
 # Generate buildinfo.hpp
 configure_file(
@@ -205,27 +205,37 @@ target_sources(
     nplex-cpp
     PRIVATE
     ${CMAKE_CURRENT_LIST_DIR}/deps/cppcrc.h
+    ${CMAKE_CURRENT_LIST_DIR}/deps/cqueue.hpp
+    ${CMAKE_CURRENT_LIST_DIR}/deps/cstring.hpp
     ${CMAKE_CURRENT_LIST_DIR}/deps/match.c
+    ${CMAKE_CURRENT_LIST_DIR}/deps/match.h
+    ${CMAKE_CURRENT_LIST_DIR}/deps/utf8.h
     ${CMAKE_CURRENT_LIST_DIR}/src/addr.hpp
     ${CMAKE_CURRENT_LIST_DIR}/src/addr.cpp
+    ${CMAKE_CURRENT_LIST_DIR}/src/buildinfo.hpp
     ${CMAKE_CURRENT_LIST_DIR}/src/client_impl.hpp
     ${CMAKE_CURRENT_LIST_DIR}/src/client_impl.cpp
     ${CMAKE_CURRENT_LIST_DIR}/src/client.cpp
     ${CMAKE_CURRENT_LIST_DIR}/src/connection.hpp
     ${CMAKE_CURRENT_LIST_DIR}/src/connection.cpp
+    ${CMAKE_CURRENT_LIST_DIR}/src/json.cpp
+    ${CMAKE_CURRENT_LIST_DIR}/src/json.hpp
     ${CMAKE_CURRENT_LIST_DIR}/src/loggable.hpp
-    ${CMAKE_CURRENT_LIST_DIR}/src/schema.hpp
     ${CMAKE_CURRENT_LIST_DIR}/src/messaging.hpp
     ${CMAKE_CURRENT_LIST_DIR}/src/messaging.cpp
-    ${CMAKE_CURRENT_LIST_DIR}/src/misc.hpp
-    ${CMAKE_CURRENT_LIST_DIR}/src/misc.cpp
     ${CMAKE_CURRENT_LIST_DIR}/src/params.hpp
+    ${CMAKE_CURRENT_LIST_DIR}/src/schema1.fbs
+    ${CMAKE_CURRENT_LIST_DIR}/src/schema2.fbs
+    ${CMAKE_CURRENT_LIST_DIR}/src/schema3.fbs
+    ${CMAKE_CURRENT_LIST_DIR}/src/schema.hpp
     ${CMAKE_CURRENT_LIST_DIR}/src/store.hpp
     ${CMAKE_CURRENT_LIST_DIR}/src/store.cpp
     ${CMAKE_CURRENT_LIST_DIR}/src/transaction_impl.hpp
     ${CMAKE_CURRENT_LIST_DIR}/src/transaction_impl.cpp
     ${CMAKE_CURRENT_LIST_DIR}/src/user.hpp
     ${CMAKE_CURRENT_LIST_DIR}/src/user.cpp
+    ${CMAKE_CURRENT_LIST_DIR}/src/utils.hpp
+    ${CMAKE_CURRENT_LIST_DIR}/src/utils.cpp
     PUBLIC
     ${CMAKE_CURRENT_LIST_DIR}/include/nplex-cpp/client.hpp
     ${CMAKE_CURRENT_LIST_DIR}/include/nplex-cpp/exception.hpp

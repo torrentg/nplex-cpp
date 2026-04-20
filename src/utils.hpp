@@ -31,15 +31,6 @@ namespace nplex {
 const char * strerror(int error);
 
 /**
- * Same as ntohl but receiving a pointer to uint32_t instead of a uint32_t.
- * 
- * @param[in] ptr Pointer to uint32_t in network byte order.
- * 
- * @return Value in host byte order.
- */
-std::uint32_t ntohl_ptr(const char *ptr);
-
-/**
  * Convert enum value to string.
  * 
  * @param[in] val Enum value.
@@ -48,6 +39,15 @@ std::uint32_t ntohl_ptr(const char *ptr);
  */
 const char * to_str(transaction::state_e val);
 const char * to_str(transaction::isolation_e val);
+
+/**
+ * Same as ntohl but receiving a pointer to uint32_t instead of a uint32_t.
+ * 
+ * @param[in] ptr Pointer to uint32_t in network byte order.
+ * 
+ * @return Value in host byte order.
+ */
+std::uint32_t ntohl_ptr(const char *ptr);
 
 /**
  * Check if a key is valid.
@@ -85,13 +85,13 @@ std::string to_iso8601(std::chrono::milliseconds ms_since_epoch);
  * 'c', 'r', 'u' or 'd' if the corresponding permission is present, 
  * or '-' if not.
  * 
- * Example: mode 0b1101 (create, read and delete permissions) will be serialized as "cr-d".
+ * Example: crud 0b1101 (create, read and delete permissions) will be serialized as "cr-d".
  * 
- * @param mode ACL mode.
+ * @param crud ACL mode.
  * 
  * @return std::string Serialized ACL mode.
  */
-std::string crud_to_string(std::uint8_t mode);
+std::string crud_to_string(std::uint8_t crud);
 
 /**
  * Parse a string to an ACL mode.

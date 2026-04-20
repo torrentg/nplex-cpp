@@ -2,7 +2,7 @@
 #include <cstring>
 #include "match.h"
 #include "nplex-cpp/exception.hpp"
-#include "misc.hpp"
+#include "utils.hpp"
 #include "client_impl.hpp"
 #include "transaction_impl.hpp"
 

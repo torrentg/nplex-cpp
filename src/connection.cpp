@@ -6,7 +6,7 @@
 #include "client_impl.hpp"
 #include "messaging.hpp"
 #include "params.hpp"
-#include "misc.hpp"
+#include "utils.hpp"
 #include "connection.hpp"
 
 template <typename T>
