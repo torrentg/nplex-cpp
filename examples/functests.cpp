@@ -668,9 +668,9 @@ static void test_rr_not_dirty_unrelated_key(const client_ptr &cli)
     TEST_FINISH();
 }
 
-static void test_ser_dirty_on_snapshot_key(const client_ptr &cli)
+static void test_ser_dirty_on_updated_key(const client_ptr &cli)
 {
-    TEST_STARTS("ser_dirty_on_snapshot_key");
+    TEST_STARTS("ser_dirty_on_updated_key");
     clean_db(cli);
 
     external_upsert(cli, "test/x", "1");
@@ -792,7 +792,7 @@ int main(int argc, char *argv[])
         test_rc_not_dirty_unrelated_key(cli);
         test_rr_dirty_on_read_key(cli);
         test_rr_not_dirty_unrelated_key(cli);
-        test_ser_dirty_on_snapshot_key(cli);
+        test_ser_dirty_on_updated_key(cli);
         test_ser_dirty_phantom_key(cli);
         test_dirty_forced_submit(cli);
 

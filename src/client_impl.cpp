@@ -29,6 +29,19 @@ static const char * to_str(nplex::client_impl::state_e state)
     }
 }
 
+static nplex::session_t to_session_t(const nplex::msgs::Session *session)
+{
+    assert(session != nullptr);
+
+    return nplex::session_t{
+        session->user() ? session->user()->str() : std::string{},
+        session->ip() ? session->ip()->str() : std::string{},
+        static_cast<nplex::session_t::code_e>(session->code()),
+        nplex::millis_t{static_cast<nplex::millis_t::rep>(session->time0())},
+        nplex::millis_t{static_cast<nplex::millis_t::rep>(session->time1())}
+    };
+}
+
 template<typename T, typename Q>
 static std::unique_ptr<T> convert_ptr(std::unique_ptr<Q> &req)
 {
@@ -284,27 +297,30 @@ void nplex::client_impl::set_state(state_e state)
 
     m_state = state;
 
+    decltype(m_transactions) txs;
+
     if (m_state == state_e::CLOSED)
     {
         std::lock_guard<std::mutex> lock_transactions(m_mutex_transactions);
         std::lock_guard<std::mutex> lock_commands(m_mutex_commands);
-
-        m_transactions.clear();
+        txs = std::move(m_transactions);
         m_commands.clear();
         m_requests.clear();
         m_accepted.clear();
     }
 
+    txs.clear();
+
     m_cv.notify_all();
 }
 
-bool nplex::client_impl::wait_for_populated(millis timeout)
+bool nplex::client_impl::wait_for_populated(millis_t timeout)
 {
     if (is_closed())
         throw nplex_exception("client is closed");
 
     if (timeout.count() > UINT32_MAX)
-        timeout = millis{UINT32_MAX};
+        timeout = millis_t{UINT32_MAX};
 
     std::unique_lock<std::mutex> lock(m_mutex_commands);
 
@@ -320,13 +336,13 @@ bool nplex::client_impl::wait_for_populated(millis timeout)
     return true;
 }
 
-bool nplex::client_impl::wait_for_synced(millis timeout)
+bool nplex::client_impl::wait_for_synced(millis_t timeout)
 {
     if (is_closed())
         throw nplex_exception("client is closed");
 
     if (timeout.count() > UINT32_MAX)
-        timeout = millis{UINT32_MAX};
+        timeout = millis_t{UINT32_MAX};
 
     std::unique_lock<std::mutex> lock(m_mutex_commands);
 
@@ -365,6 +381,7 @@ void nplex::client_impl::abort(const std::string &msg)
     m_error = std::make_exception_ptr(nplex_exception(msg));
     m_con = nullptr;
     m_data_cid = 0;
+    m_sessions_cid = 0;
 
     for (auto &con : m_connections)
         con->disconnect(ERR_CLOSED_BY_LOCAL);
@@ -524,6 +541,7 @@ void nplex::client_impl::on_connection_closed(connection *con)
     set_state(state_e::OFFLINE);
     m_con = nullptr;
     m_data_cid = 0;
+    m_sessions_cid = 0;
 
     // Cancel ongoing requests and transactions
     cancel_requests();
@@ -576,8 +594,8 @@ void nplex::client_impl::push_command(command_ptr &&cmd)
 
     std::lock_guard<std::mutex> lock_commands(m_mutex_commands);
 
-    // worst scenario: max_active_txs + close + ping
-    if (m_commands.size() >= m_params.max_active_txs + 2)
+    // worst scenario: max_active_txs + close + ping + fetch_sessions
+    if (m_commands.size() >= m_params.max_active_txs + 3)
         throw nplex_exception("command queue overflow");
 
     m_commands.push(std::move(cmd));
@@ -613,6 +631,8 @@ void nplex::client_impl::process_commands()
             process_submit_cmd(std::move(cmd));
         else if (dynamic_cast<ping_req_t*>(cmd.get()))
             process_ping_cmd(std::move(cmd));
+        else if (dynamic_cast<sessions_req_t*>(cmd.get()))
+            process_sessions_cmd(std::move(cmd));
         else {
             log_error("Unknown command type");
             assert(false);
@@ -668,6 +688,29 @@ void nplex::client_impl::process_ping_cmd(command_ptr &&cmd)
         create_ping_msg(
             req->cid,
             req->payload
+        )
+    );
+
+    m_requests.push(convert_ptr<request_t>(cmd));
+}
+
+void nplex::client_impl::process_sessions_cmd(command_ptr &&cmd)
+{
+    assert(m_loop_thread_id == std::this_thread::get_id());
+
+    auto *req = dynamic_cast<sessions_req_t*>(cmd.get());
+
+    if (!m_con) {
+        req->promise.set_exception(std::make_exception_ptr(nplex_exception("client is not connected")));
+        return;
+    }
+
+    req->cid = m_correlation++;
+
+    send(
+        create_sessions_msg(
+            req->cid,
+            req->enable_stream
         )
     );
 
@@ -738,9 +781,11 @@ void nplex::client_impl::on_msg_received(connection *con, const msgs::Message *m
             break;
 
         case MsgContent::SESSIONS_RESPONSE:
+            process_sessions_resp(msg->content_as_SESSIONS_RESPONSE());
             break;
 
         case MsgContent::SESSIONS_PUSH:
+            process_sessions_push(msg->content_as_SESSIONS_PUSH());
             break;
 
         default:
@@ -789,8 +834,19 @@ void nplex::client_impl::process_login_resp(connection *con, const nplex::msgs::
     set_state(state_e::AUTHENTICATED);
 
     log_info("Login successful on server {}", m_con->addr().str());
+
     log_debug("Server info: rev = {}, min-rev = {}, keepalive = {}ms", resp->crev(), resp->rev0(), resp->keepalive());
     log_debug("User info: can-force = {}, can-monitor = {}, permissions = [{}]", m_user.load()->can_force, m_user.load()->can_monitor, fmt::join(m_user.load()->permissions, ", "));
+
+    try {
+        m_manager->on_connection_established(*this, m_con->addr().str());
+    } catch (const std::exception &e) {
+        log_error("Exception in on_connection_established callback: {}", e.what());
+        abort("Manager threw an exception");
+    } catch (...) {
+        log_error("Unknown exception in on_connection_established callback");
+        abort("Manager threw an exception");
+    }
 
     if (resp->keepalive())
     {
@@ -870,16 +926,16 @@ void nplex::client_impl::process_snapshot_resp(const nplex::msgs::SnapshotRespon
     if (m_reactor)
     {
         try {
-            m_reactor->on_snapshot(*this);
+            m_reactor->on_initial_data(*this);
         } catch (const std::exception &e) {
-            log_error("Error in reactor on_snapshot: {}", e.what());
+            log_error("Error in reactor on_initial_data: {}", e.what());
             m_con->disconnect(ERR_CLOSED_BY_LOCAL);
-            abort("Error in on_snapshot");
+            abort("Error in on_initial_data");
             return;
         } catch (...) {
-            log_error("Error in reactor on_snapshot");
+            log_error("Error in reactor on_initial_data");
             m_con->disconnect(ERR_CLOSED_BY_LOCAL);
-            abort("Error in on_snapshot");
+            abort("Error in on_initial_data");
             return;
         }
     }
@@ -953,6 +1009,54 @@ void nplex::client_impl::process_submit_resp(const nplex::msgs::SubmitResponse *
     m_accepted.push(convert_ptr<submit_req_t>(ptr));
 }
 
+void nplex::client_impl::process_sessions_resp(const nplex::msgs::SessionsResponse *resp)
+{
+    assert(m_loop_thread_id == std::this_thread::get_id());
+
+    if (m_requests.empty())
+        return;
+
+    if (m_requests.front()->cid != resp->cid())
+        return;
+
+    auto ptr = m_requests.pop();
+    auto req = dynamic_cast<sessions_req_t*>(ptr.get());
+
+    if (!req) {
+        m_con->disconnect(ERR_MSG_UNEXPECTED);
+        return;
+    }
+
+    std::vector<session_t> sessions;
+
+    if (resp->sessions()) {
+        sessions.reserve(resp->sessions()->size());
+
+        for (auto session : *resp->sessions()) {
+            if (!session) {
+                m_con->disconnect(ERR_MSG_ERROR);
+                return;
+            }
+
+            sessions.push_back(to_session_t(session));
+        }
+    }
+
+    m_sessions_cid = (req->enable_stream ? req->cid : 0);
+    req->promise.set_value(sessions);
+
+    if (m_reactor)
+    {
+        try {
+            m_reactor->on_initial_sessions(*this, sessions);
+        } catch (const std::exception &e) {
+            log_error("Error in reactor on_initial_sessions: {}", e.what());
+        } catch (...) {
+            log_error("Unknown error in reactor on_initial_sessions");
+        }
+    }
+}
+
 void nplex::client_impl::process_updates_push(const nplex::msgs::UpdatesPush *resp)
 {
     assert(m_loop_thread_id == std::this_thread::get_id());
@@ -972,6 +1076,33 @@ void nplex::client_impl::process_updates_push(const nplex::msgs::UpdatesPush *re
 
             if (m_state == state_e::SYNCING && upd->rev() == resp->crev())
                 set_state(state_e::SYNCED);
+        }
+    }
+}
+
+void nplex::client_impl::process_sessions_push(const nplex::msgs::SessionsPush *resp)
+{
+    assert(m_loop_thread_id == std::this_thread::get_id());
+
+    if (resp->cid() == 0 || resp->cid() != m_sessions_cid) {
+        m_con->disconnect(ERR_MSG_UNEXPECTED);
+        return;
+    }
+
+    if (!resp->session()) {
+        m_con->disconnect(ERR_MSG_ERROR);
+        return;
+    }
+
+    if (m_reactor)
+    {
+        try {
+            auto session = to_session_t(resp->session());
+            m_reactor->on_event_session(*this, session);
+        } catch (const std::exception &e) {
+            log_error("Error in reactor on_event_session: {}", e.what());
+        } catch (...) {
+            log_error("Unknown error in reactor on_event_session");
         }
     }
 }
@@ -1048,16 +1179,16 @@ void nplex::client_impl::process_update(const nplex::msgs::Update *upd)
         auto t0 = clock::now();
 
         try {
-            m_reactor->on_update(*this, meta, changes);
+            m_reactor->on_event_data(*this, meta, changes);
         } catch (const std::exception &e) {
-            log_error("Error in reactor on_update: {}", e.what());
+            log_error("Error in reactor on_event_data: {}", e.what());
         } catch (...) {
-            log_error("Unknown error in reactor on_update");
+            log_error("Unknown error in reactor on_event_data");
         }
 
-        auto duration = std::chrono::duration_cast<millis>(clock::now() - t0);
-        if (duration > millis{MAX_MILLIS_IN_REACTOR})
-            log_warn("on_update(r{}) too slow ({} usec)", upd->rev(), duration.count());
+        auto duration = std::chrono::duration_cast<millis_t>(clock::now() - t0);
+        if (duration > millis_t{MAX_MILLIS_IN_REACTOR})
+            log_warn("on_event_data(r{}) too slow ({} usec)", upd->rev(), duration.count());
     }
 }
 
@@ -1118,6 +1249,27 @@ std::future<nplex::client::usec> nplex::client_impl::ping(const std::string &pay
 
     if (m_loop_thread_id == std::this_thread::get_id())
         process_ping_cmd(std::move(req));
+    else
+        push_command(std::move(req));
+
+    return future;
+}
+
+std::future<std::vector<nplex::session_t>> nplex::client_impl::fetch_sessions(bool enable_stream)
+{
+    auto state = m_state.load();
+    if (state == state_e::OFFLINE || state == state_e::CONNECTING || state == state_e::CLOSED)
+        throw nplex_exception("client is not connected");
+
+    auto usr = m_user.load();
+    if (!usr || !usr->can_monitor)
+        throw nplex_exception("user has no permission to monitor sessions");
+
+    auto req = std::make_unique<sessions_req_t>(enable_stream);
+    auto future = req->promise.get_future();
+
+    if (m_loop_thread_id == std::this_thread::get_id())
+        process_sessions_cmd(std::move(req));
     else
         push_command(std::move(req));
 

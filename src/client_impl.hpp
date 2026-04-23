@@ -63,6 +63,16 @@ struct ping_req_t : public request_t {
     std::promise<usec> promise;
 };
 
+struct sessions_req_t : public request_t {
+    sessions_req_t(bool stream) : enable_stream(stream) {}
+    virtual ~sessions_req_t() override = default;
+    void cancel() override {
+        promise.set_exception(std::make_exception_ptr(nplex_exception("request canceled")));
+    }
+    bool enable_stream = false;
+    std::promise<std::vector<session_t>> promise;
+};
+
 struct tx_comparator
 {
     using is_transparent = std::true_type;
@@ -127,9 +137,10 @@ class client_impl final : public client, public loggable, public std::enable_sha
     store_ptr store() const { return m_store; }
 
     void run(std::stop_token st) noexcept override;
-    bool wait_for_populated(millis timeout = millis::max()) override;
-    bool wait_for_synced(millis timeout = millis::max()) override;
+    bool wait_for_populated(millis_t timeout = millis_t::max()) override;
+    bool wait_for_synced(millis_t timeout = millis_t::max()) override;
     tx_ptr create_tx(transaction::isolation_e isolation, bool read_only) override;
+    std::future<std::vector<session_t>> fetch_sessions(bool enable_stream) override;
     std::future<usec> ping(const std::string &payload) override;
     void close() override { push_command(std::make_unique<close_cmd_t>()); }
 
@@ -164,6 +175,7 @@ class client_impl final : public client, public loggable, public std::enable_sha
     connection *m_con = nullptr;                    //!< Current connection (established).
     std::size_t m_correlation = 0;                  //!< Last correlation id.
     std::size_t m_data_cid = 0;                     //!< Correlation id of last snapshot/updates sent.
+    std::size_t m_sessions_cid = 0;                 //!< Correlation id of last sessions stream request (0 = disabled).
 
     std::mutex m_mutex_commands;                    //!< Mutex to protect m_commands, m_async, m_cv.
     std::mutex m_mutex_transactions;                //!< Mutex to protect m_transactions.
@@ -194,12 +206,15 @@ class client_impl final : public client, public loggable, public std::enable_sha
     void process_close_cmd(command_ptr &&cmd);
     void process_submit_cmd(command_ptr &&cmd);
     void process_ping_cmd(command_ptr &&cmd);
+    void process_sessions_cmd(command_ptr &&cmd);
 
     void process_login_resp(connection *con, const msgs::LoginResponse *resp);
     void process_snapshot_resp(const msgs::SnapshotResponse *resp);
     void process_updates_resp(const msgs::UpdatesResponse *resp);
     void process_submit_resp(const msgs::SubmitResponse *resp);
+    void process_sessions_resp(const msgs::SessionsResponse *resp);
     void process_updates_push(const msgs::UpdatesPush *resp);
+    void process_sessions_push(const msgs::SessionsPush *resp);
     void process_keepalive_push(const msgs::KeepAlivePush *resp);
     void process_ping_resp(const msgs::PingResponse *resp);
     void process_update(const msgs::Update *upd);

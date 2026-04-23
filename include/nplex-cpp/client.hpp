@@ -31,8 +31,11 @@ struct params_t
 /**
  * Logger interface.
  * 
- * By default, this class logs no message. To enable logging, 
- * extend this class and override the log() method,
+ * Extending this interface allows you to:
+ *   - Handle log messages from the Nplex client.
+ * 
+ * By default, the Nplex client will:
+ *   - Not log any message.
  * 
  * Important notes:
  *   - The log method is executed in the event loop thread.
@@ -114,6 +117,22 @@ class manager
     virtual ~manager() = default;
 
     /**
+     * Callback invoked when a connection to server is established.
+     * 
+     * This method is called just after a successful login. At this point, 
+     * the client is connected to the server, but the data‑retrieval 
+     * negotiation hasn’t happened yet.
+     * 
+     * This function is executed in the event loop thread. Do not block it.
+     * If an exception is thrown, the client will terminate.
+     * 
+     * @param[in] cli Nplex instance.
+     * @param[in] srv Server identifier (host:port).
+     */
+    virtual void on_connection_established([[maybe_unused]] client &cli, 
+                                           [[maybe_unused]] const std::string &srv) {}
+
+    /**
      * Callback invoked when an established connection to server is lost.
      * 
      * It returns true to try to reconnect, or false to close the nplex client.
@@ -157,8 +176,10 @@ class manager
  * This interface provides callback methods to handle the Nplex data events.
  * 
  * Extending this interface allows you to:
- *   - Handle snapshot (initial data loading).
+ *   - Handle initial data loading.
  *   - Handle each new update.
+ *   - Handle initial sessions list.
+ *   - Handle each new or closed session event.
  * 
  * Important notes:
  *   - All these methods are executed in the event loop thread.
@@ -173,11 +194,11 @@ class reactor
     virtual ~reactor() = default;
 
     /**
-     * Callback invoked when a snapshot is received from the server.
+     * Callback invoked when the initial snapshot is received from the server.
      * 
      * When this method is called, the local database was just populated with the 
      * snapshot content. The user can now read the database content using a transaction 
-     * (READ_COMMITTED level suffices).
+     * (READ_COMMITTED suffices because no updates are granted during the function call).
      * 
      * This function is executed in the event loop thread. Do not block it.
      * If an exception is thrown, the client will terminate.
@@ -186,7 +207,7 @@ class reactor
      * 
      * @param[in] cli Nplex instance.
      */
-    virtual void on_snapshot([[maybe_unused]] client &cli) {}
+    virtual void on_initial_data([[maybe_unused]] client &cli) {}
 
     /**
      * Callback invoked when an update is received from the server.
@@ -201,9 +222,40 @@ class reactor
      * @param[in] meta Transaction metadata.
      * @param[in] changes List of changes.
      */
-    virtual void on_update([[maybe_unused]] client &cli, 
-                           [[maybe_unused]] const const_meta_ptr &meta, 
-                           [[maybe_unused]] const std::vector<change_t> &changes) {}
+    virtual void on_event_data([[maybe_unused]] client &cli, 
+                               [[maybe_unused]] const const_meta_ptr &meta, 
+                               [[maybe_unused]] const std::vector<change_t> &changes) {}
+
+    /**
+     * Callback invoked when the initial sessions list is received from the server.
+     * 
+     * This method is triggered by the fetch_sessions() method.
+     * 
+     * The nplex-client does not track session state. This callback is purely
+     * informational; the session list is not stored or maintained locally.
+     * 
+     * This function is executed in the event loop thread. Do not block it.
+    * If an exception is thrown, it is logged and ignored.
+     *
+     * @param[in] cli Nplex instance.
+     * @param[in] sessions List of server active sessions.
+     */
+    virtual void on_initial_sessions([[maybe_unused]] client &cli, 
+                                     [[maybe_unused]] const std::vector<session_t> &sessions) {}
+
+    /**
+     * Callback invoked when a session event is received from the server.
+     * 
+     * This method is triggered by the fetch_sessions(true) method.
+     * 
+     * This function is executed in the event loop thread. Do not block it.
+    * If an exception is thrown, it is logged and ignored.
+     * 
+     * @param[in] cli Nplex instance.
+     * @param[in] session Session information.
+     */
+    virtual void on_event_session([[maybe_unused]] client &cli, 
+                                  [[maybe_unused]] const session_t &session) {}
 };
 
 /**
@@ -242,7 +294,6 @@ class client
 {
   public:  // types
 
-    using millis = std::chrono::milliseconds;
     using usec = std::chrono::microseconds;
 
   public:  // methods
@@ -261,7 +312,7 @@ class client
     /**
      * Constant methods.
      */
-    [[nodiscard]] virtual bool is_populated() const = 0;  //!< Initial snapshot loaded; local reads are allowed (may be disconnected/out-of-sync).
+    [[nodiscard]] virtual bool is_populated() const = 0;  //!< Initial data loaded; local reads are allowed (may be disconnected/out-of-sync).
     [[nodiscard]] virtual bool is_synced() const = 0;     //!< Client is connected to server and synced.
     [[nodiscard]] virtual bool is_closed() const = 0;     //!< Client was closed.
 
@@ -270,10 +321,13 @@ class client
      * 
      * By default, the Nplex client will not log any message.
      * 
+     * This method must be called before run() and cannot be changed while running. 
+     * If the client is already running, calling this method will throw an exception.
+     * 
      * @param[in] log Logger to trace nplex messages.
      * 
      * @return Reference to the client.
-     * @exception nplex_exception Nplex client already connected.
+     * @exception nplex_exception client-is-running.
      */
     virtual client & set_logger(const std::shared_ptr<logger> &log) = 0;
 
@@ -285,10 +339,13 @@ class client
      *  - If no server is available, it will close.
      *  - After connection, if the connection is lost, it will close.
      * 
+     * This method must be called before run() and cannot be changed while running. 
+     * If the client is already running, calling this method will throw an exception.
+     *
      * @param[in] mngr Lifecycle manager to handle nplex lifecycle events.
      * 
      * @return Reference to the client.
-     * @exception nplex_exception Nplex client already connected.
+     * @exception nplex_exception client-is-running.
      */
     virtual client & set_manager(const std::shared_ptr<manager> &mngr) = 0;
 
@@ -296,14 +353,16 @@ class client
      * Register the reactors to handle the data events.
      * 
      * Allows users to manage the database in a reactive way.
-     * By default, the client does nothing when receiving a snapshot and updates.
      * By registering a reactor, you can handle these events and implement your 
      * custom logic.
+     * 
+     * This method must be called before run() and cannot be changed while running. 
+     * If the client is already running, calling this method will throw an exception.
      * 
      * @param[in] rct Reactor to handle data events.
      * 
      * @return Reference to the client.
-     * @exception nplex_exception Nplex client already connected.
+     * @exception nplex_exception client-is-running.
      */
     virtual client & set_reactor(const std::shared_ptr<reactor> &rct) = 0;
 
@@ -312,10 +371,13 @@ class client
      * 
      * By default, the client loads the latest revision available on the server.
      * 
+     * This method must be called before run() and cannot be changed while running. 
+     * If the client is already running, calling this method will throw an exception.
+     * 
      * @param[in] rev Initial revision.
      * 
      * @return Reference to the client.
-     * @exception nplex_exception Nplex client receiving updates.
+     * @exception nplex_exception client-is-running.
      */
     virtual client & set_initial_rev(rev_t rev) = 0;
 
@@ -333,7 +395,7 @@ class client
      * another thread, keep a shared_ptr copy in that thread.
      * 
      * Example:
-     *   auto cli = client::create(params);
+     *   auto cli = nplex::client::create(params);
      *   std::thread t([cli]() mutable { cli->run(stop_token); });
      *   // The lambda captures a copy of the shared_ptr
      * 
@@ -344,8 +406,6 @@ class client
     /**
      * Blocks until the client reaches the target state.
      * 
-     * This method is thread-safe.
-     * 
      * @param[in] timeout Maximum time to wait for the target state. 
      *                    If the timeout is reached, returns false.
      * 
@@ -354,8 +414,8 @@ class client
      * 
      * @exception nplex_exception If closed, or closed while waiting for.
      */
-    virtual bool wait_for_populated(millis timeout = millis::max()) = 0;
-    virtual bool wait_for_synced(millis timeout = millis::max()) = 0;
+    virtual bool wait_for_populated(millis_t timeout = millis_t::max()) = 0;
+    virtual bool wait_for_synced(millis_t timeout = millis_t::max()) = 0;
 
     /**
      * Create a new transaction.
@@ -369,8 +429,6 @@ class client
      * Use transaction methods to read/alter the local data. Use the tx::submit() 
      * method to try to commit the transaction, or tx::discard() to abort it.
      * 
-     * @note This method is thread-safe, it can be called from a callback.
-     * 
      * @param[in] isolation Isolation level.
      * @param[in] read_only Read-only flag.
      * 
@@ -381,9 +439,21 @@ class client
     [[nodiscard]] virtual tx_ptr create_tx(transaction::isolation_e isolation = transaction::isolation_e::READ_COMMITTED, bool read_only = false) = 0;
 
     /**
-     * Sends a ping command to the server.
+     * Fetch the list of active sessions from the server.
      * 
-     * @note This method is thread-safe, it can be called from a callback.
+     * @param[in] enable_stream If true, the client will also receive the stream 
+     *                  of session events after the initial list. This stream can 
+     *                  be read using the on_event_session() reactor method. 
+     * 
+     * @return The list of active sessions at the time of the request, 
+     *         or an exception if there is a problem.
+     * 
+     * @exception nplex_exception Not-connected, too-many-requests, no-permissions.
+     */
+    virtual std::future<std::vector<session_t>> fetch_sessions(bool enable_stream = false) = 0;
+
+    /**
+     * Sends a ping command to the server.
      * 
      * @param[in] payload Payload to send with the ping command.
      * 

@@ -4,3 +4,5 @@
 * allow ssl connections (see project tlsuv)
 * Add bool transaction::exists(const char *key) ?
 * Add size_t transaction::count(const char *pattern) ?
+* Implement retry on TRY_LATER
+* Create the watcher tool

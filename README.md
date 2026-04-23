@@ -57,6 +57,12 @@ cmake -DENABLE_SANITIZERS=OFF -DENABLE_THREAD_SANITIZER=ON ..
 make -j$(nproc)
 ctest -V
 
+# Profiling
+cmake -DENABLE_PROFILER=ON ..
+make -j$(nproc)
+./example1
+gprof ./example1 gmon.out
+
 # Coverage
 cmake -DENABLE_COVERAGE=ON ..
 make -j$(nproc)

@@ -118,4 +118,26 @@ struct change_t
     value_ptr old_value;    // CREATE = nullptr
 };
 
+/**
+ * Struct used to report session information when a client connects 
+ * or disconnects from the server.
+ */
+struct session_t
+{
+    enum class code_e : std::uint8_t {
+        CONNECTED,
+        CLOSED_BY_SERVER,
+        CLOSED_BY_USER,
+        COMM_ERROR,
+        CON_LOST,
+        EXCD_LIMITS
+    };
+
+    std::string user;       //!< User name
+    std::string ip;         //!< Peer IP address
+    code_e code;            //!< Exit code (0 means connected)
+    millis_t time0;         //!< Connection start (UTC millis since epoch)
+    millis_t time1;         //!< Disconnection time (0 if still active)
+};
+
 } // namespace nplex

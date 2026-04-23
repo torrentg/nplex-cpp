@@ -18,12 +18,12 @@ namespace nplex {
  * Transactions can only be created by the client. 
  * @see client::create_tx().
  * 
- * There is no rollback method. If you want to discard a transaction, just destroy it 
- * without submitting it.
+ * There is no rollback method because server is not aware of ongoing transactions. 
+ * If you want to discard a transaction, just destroy it without submitting it.
  * 
  * Transactions are automatically updated on each database commit. If a transaction is 
- * invalidated by an external commit, it is marked as dirty. Destroy unused transactions 
- * to reduce resources consumption and to avoid confusion.
+ * invalidated by an external commit, it is marked as dirty. Destroy or discard unused 
+ * transactions to reduce resources consumption and to avoid confusion.
  * 
  * Isolation levels:
  *
@@ -185,9 +185,9 @@ class transaction
      * 
      * @see read()
      * 
-     * @param key The key to read.
-     * @param default_data The default data to return if the key is not found.
-     * @param check If true, checks at commit time that the key-value pair was not modified.
+     * @param[in] key The key to read.
+     * @param[in] default_data The default data to return if the key is not found.
+     * @param[in] check If true, checks at commit time that the key-value pair was not modified.
      * 
      * @return The value associated with the key, if the value was previously upsert, 
      *         then its metadata is empty.
@@ -354,8 +354,6 @@ class transaction
     /**
      * Submit transaction to the server to be committed.
      * 
-     * @note This method is thread-safe, it can be called from a callback.
-     * 
      * @param[in] force Override data integrity (only allowed if user has sufficient privileges).
      * 
      * @return Future with the transaction return code, or the exception if there is a problem.
@@ -369,8 +367,6 @@ class transaction
      * 
      * Mark this transaction as discarded. The transaction is removed from the 
      * client transaction list and is not updated on each commit.
-     * 
-     * This method is thread-safe, it can be called from a callback.
      */
     virtual void discard() = 0;
 

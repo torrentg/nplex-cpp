@@ -28,7 +28,9 @@ static void print_database_content(const nplex::client_ptr &cli)
     size_t counter = 0;
     auto tx = cli->create_tx();
 
+    std::cout << std::endl;
     std::cout << "Nplex database content at rev " << tx->rev() << std::endl;
+    std::cout << "-------------------------------------------" << std::endl;
 
     tx->for_each([&counter](const nplex::key_t &key, const nplex::value_t &value) {
         std::cout << ++counter << ". ";
@@ -47,6 +49,66 @@ static void measure_latency(const nplex::client_ptr &cli)
 {
     auto ping = cli->ping("Hello Nplex!");
     std::cout << "Ping response received in " << ping.get().count() << " microseconds" << std::endl;
+}
+
+static const char *to_str(nplex::session_t::code_e code)
+{
+    switch (code)
+    {
+        case nplex::session_t::code_e::CONNECTED:        return "CONNECTED";
+        case nplex::session_t::code_e::CLOSED_BY_SERVER: return "CLOSED_BY_SERVER";
+        case nplex::session_t::code_e::CLOSED_BY_USER:   return "CLOSED_BY_USER";
+        case nplex::session_t::code_e::COMM_ERROR:       return "COMM_ERROR";
+        case nplex::session_t::code_e::CON_LOST:         return "CON_LOST";
+        case nplex::session_t::code_e::EXCD_LIMITS:      return "EXCD_LIMITS";
+        default:                                         return "UNKNOWN";
+    }
+}
+
+static void print_active_sessions(const nplex::client_ptr &cli)
+{
+    auto future = cli->fetch_sessions(false);
+    auto sessions = future.get();
+
+    std::cout << std::endl;
+    std::cout << "List of active sessions" << std::endl;
+    std::cout << "-----------------------" << std::endl;
+
+    std::size_t index = 0;
+
+    for (const auto &session : sessions)
+    {
+        std::cout << ++index << ". ";
+        std::cout << "user: " << session.user << std::endl;
+        std::cout << "  ip: " << session.ip << std::endl;
+        std::cout << "  code: " << to_str(session.code) << std::endl;
+        std::cout << "  time0: " << to_iso8601(session.time0) << std::endl;
+        std::cout << "  time1: " << (session.time1.count() ? to_iso8601(session.time1) : std::string{"-"}) << std::endl;
+    }
+}
+
+static void update_content(const nplex::client_ptr &cli)
+{
+
+    auto tx = cli->create_tx(nplex::transaction::isolation_e::SERIALIZABLE, false);
+
+    int num = tx->read_or("rct.gates.3.open", "0")->as_number_or<int>(42);
+
+    num++;
+    tx->upsert("rct.gates.3.open", std::to_string(num));
+    tx->set_type(42);
+
+    try {
+        auto submit_result = tx->submit().get();
+
+        if (submit_result == nplex::transaction::submit_e::COMMITTED)
+            std::cout << "Transaction committed successfully" << std::endl;
+        else
+            std::cout << "Transaction rejected: " << static_cast<int>(submit_result) << std::endl;
+
+    } catch (const std::exception &e) {
+        std::cerr << "Transaction failed: " << e.what() << std::endl;
+    }
 }
 
 int main()
@@ -72,18 +134,13 @@ int main()
         });
 
         cli->wait_for_synced();
+        print_active_sessions(cli);
         print_database_content(cli);
         measure_latency(cli);
-
-        auto tx = cli->create_tx(nplex::transaction::isolation_e::SERIALIZABLE, false);
-        int num = tx->read_or("rct.gates.3.open", "0")->as_number_or<int>(42);
-        num++;
-        tx->upsert("rct.gates.3.open", std::to_string(num));
-        tx->set_type(42);
-        auto submit_result = tx->submit().get();
+        update_content(cli);
 
         // Close the database, alternatively you can call `cli->close();`
-        worker.request_stop();
+        //worker.request_stop();
 
         return EXIT_SUCCESS;
     }

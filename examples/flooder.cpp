@@ -71,7 +71,7 @@ class flooder_reactor final : public nplex::reactor
 {
   public:
 
-    void on_snapshot(nplex::client &cli) override
+    void on_initial_data(nplex::client &cli) override
     {
         auto tx = cli.create_tx(nplex::transaction::isolation_e::READ_COMMITTED, true);
 
@@ -85,9 +85,9 @@ class flooder_reactor final : public nplex::reactor
         });
     }
 
-    void on_update(nplex::client &,
-                   const nplex::const_meta_ptr &,
-                   const std::vector<nplex::change_t> &changes) override
+    void on_event_data(nplex::client &,
+                       const nplex::const_meta_ptr &,
+                       const std::vector<nplex::change_t> &changes) override
     {
         std::lock_guard lock(m_mutex);
 

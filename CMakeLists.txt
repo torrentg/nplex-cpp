@@ -182,6 +182,17 @@ if(ENABLE_COVERAGE)
     )
 endif()
 
+option(ENABLE_PROFILER "Compile and link code for gprof profiling" OFF)
+if(ENABLE_PROFILER)
+    add_compile_options(
+        -O2
+        -pg
+    )
+    add_link_options(
+        -pg
+    )
+endif()
+
 set(CMAKE_INTERPROCEDURAL_OPTIMIZATION OFF)
 set(CMAKE_INTERPROCEDURAL_OPTIMIZATION_RELEASE ON)
 
