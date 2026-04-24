@@ -139,6 +139,7 @@ class client_impl final : public client, public loggable, public std::enable_sha
     void run(std::stop_token st) noexcept override;
     bool wait_for_populated(millis_t timeout = millis_t::max()) override;
     bool wait_for_synced(millis_t timeout = millis_t::max()) override;
+    bool wait_for_closed(millis_t timeout = millis_t::max()) override;
     tx_ptr create_tx(transaction::isolation_e isolation, bool read_only) override;
     std::future<std::vector<session_t>> fetch_sessions(bool enable_stream) override;
     std::future<usec> ping(const std::string &payload) override;

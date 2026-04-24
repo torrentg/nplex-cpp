@@ -134,10 +134,10 @@ struct session_t
     };
 
     std::string user;       //!< User name
-    std::string ip;         //!< Peer IP address
+    std::string address;    //!< Peer address (IP)
     code_e code;            //!< Exit code (0 means connected)
-    millis_t time0;         //!< Connection start (UTC millis since epoch)
-    millis_t time1;         //!< Disconnection time (0 if still active)
+    millis_t since;         //!< Connection start (UTC millis since epoch)
+    millis_t until;         //!< Disconnection time (0 if still active)
 };
 
 } // namespace nplex

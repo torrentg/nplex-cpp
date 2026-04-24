@@ -8,12 +8,12 @@ real-time change notifications, and minimal resource consumption matter.
 
 * **High performance** — A single client can sustain >40,000 commits/s on modest hardware (NUC7i7BNH).
 * **Blazing-fast reads** — Data lives in client memory; reads never hit the server.
-* **Multi-thread support** — Thread-safe client with a dedicated event-loop thread. Multiple threads can create and submit transactions concurrently.
-* **Three isolation levels** — `READ_COMMITTED`, `REPEATABLE_READ`, and `SERIALIZABLE`, covering the full spectrum from maximum performance to full consistency.
-* **Reactor pattern** — Register a reactor to receive real-time change notifications on every commit, enabling event-driven architectures.
-* **ACID transactions** — Atomic, consistent, isolated, and durable. Forced mode available for privileged users.
-* **Flexible connection** — Comma-separated server list with automatic reconnection and configurable timeout/back-pressure parameters.
-* **Comprehensive tests** — Unit tests powered by [doctest](https://github.com/doctest/doctest), covering messaging, transactions, storage, address parsing, and more.
+* **Multi-thread support** — Multiple threads can create and submit transactions concurrently.
+* **Three isolation levels** — `READ_COMMITTED`, `REPEATABLE_READ`, and `SERIALIZABLE`.
+* **Reactor pattern** — Register a reactor to receive real-time change notifications on every commit.
+* **ACID transactions** — Atomic, Consistent, Isolated, and Durable.
+* **Flexible connection** — Automatic reconnection and configurable timeout/back-pressure parameters.
+* **Comprehensive tests** — Unit tests, covering messaging, transactions, storage, address parsing, and more.
 
 ## Building
 
@@ -37,7 +37,7 @@ cmake -DCMAKE_BUILD_TYPE=Release ..
 make -j$(nproc)
 ```
 
-### Quality assurance
+### Other Targets
 
 ```bash
 # Debug build (default)
@@ -88,87 +88,38 @@ cmake ..
 make -j$(nproc)
 ```
 
-## Running example1
+## Examples & Tools
 
-`example1` is a minimal demonstration that connects to an nplex server, prints the database
-contents, measures round-trip latency with a ping, and submits a single transaction.
+| Binary | Type | Purpose |
+|--------|------|---------|
+| [`example1`](examples/example1.cpp) | Example | Minimal connection, read, ping and submit demo |
+| [`functests`](examples/functests.cpp) | Tool | Functional tests for isolation levels |
+| [`flooder`](examples/flooder.cpp) | Tool | Performance/load generator for write traffic |
+| [`watcher`](examples/watcher.cpp) | Tool | Prints DB/session snapshots and streams updates in JSON |
 
-Edit the connection parameters at the top of `examples/example1.cpp` before building:
-
-```cpp
-nplex::params_t params = {
-    .servers  = "localhost:14022",
-    .user     = "admin",
-    .password = "s3cr3t"
-};
-```
-
-Start an nplex instance, then run:
-
-```bash
-./build/example1
-```
-
-## Running functests
-
-`functests` exercises the three transaction isolation levels against a live nplex server and
-reports any violations found.
-
-```bash
-./build/functests --user USER --password PWD --servers HOST:PORT
-```
-
-Options:
-
-| Flag | Description |
-|------|-------------|
-| `-u`, `--user USER` | User identifier (mandatory) |
-| `-p`, `--password PWD` | User password (mandatory) |
-| `-s`, `--servers LIST` | Comma-separated server list, e.g. `localhost:14022` (mandatory) |
-| `-h`, `--help` | Show help and exit |
-
-## Running flooder
-
-`flooder` is a performance-testing tool that hammers an nplex server with write transactions
-and reports throughput statistics at regular intervals.
-
-```bash
-./build/flooder --user USER --password PWD --servers HOST:PORT [options]
-```
-
-Options:
-
-| Flag | Description | Default |
-|------|-------------|---------|
-| `-u`, `--user USER` | User identifier (mandatory) | — |
-| `-p`, `--password PWD` | User password (mandatory) | — |
-| `-s`, `--servers LIST` | Comma-separated server list (mandatory) | — |
-| `-n`, `--tx-per-second N` | Target transactions per second | 1 |
-| `-m`, `--max-active-tx N` | Maximum concurrent in-flight transactions | 100 |
-| `-k`, `--num-keys N` | Approximate number of managed keys | 100 |
-| `-b`, `--data-size BYTES` | Average value size in bytes | 25 |
-| `-r`, `--refresh SECS` | Statistics refresh interval in seconds | 1 |
-| `-h`, `--help` | Show help and exit | — |
-
-Output columns (one line per refresh interval): `TIME`, `#submits`, `#commits`, `#rejects`,
-`avgtime` (µs), `#updates`, `#updkeys`, `#updbytes`.
+All binaries support `-h` / `--help`, where the available parameters are documented.
 
 ## Dependencies
 
 ### Static
 
-* [cppcrc](https://github.com/DarrenLevine/cppcrc). A very small, fast, header-only, C++ library for generating CRCs. MIT license.
-* [cstring](https://github.com/torrentg/cstring). A C++ immutable C-string with reference counting. LGPL-3.0 license.
-* [cqueue](https://github.com/torrentg/cqueue). A C++20 header-only circular queue container. LGPL-3.0 license.
-* [doctest](https://github.com/doctest/doctest). The fastest feature-rich C++11/14/17/20/23 single-header testing framework. MIT license.
-* [FastGlobbing](https://github.com/Robert-van-Engelen/FastGlobbing). Wildcard string matching and globbing library. CPOL license.
-* [utf8.h](https://github.com/sheredom/utf8.h). Utf8 string functions for C and C++. Unlicense license.
+| Library | Description | License |
+|---------|-------------|---------|
+| [FastGlobbing](https://github.com/Robert-van-Engelen/FastGlobbing) | Wildcard pattern matching | CPOL |
+| [cppcrc](https://github.com/DarrenLevine/cppcrc) | Header-only CRC generation | MIT |
+| [cstring](https://github.com/torrentg/cstring) | Immutable C-string with reference counting | LGPL-3.0 |
+| [cqueue](https://github.com/torrentg/cqueue) | Circular queue | LGPL-3.0 |
+| [utf8.h](https://github.com/sheredom/utf8.h) | UTF-8 string functions | Unlicense |
+| [doctest](https://github.com/doctest/doctest) | Testing framework | MIT license |
+
 
 ### Shared
 
-* [{fmt}](https://github.com/fmtlib/fmt). A string formatting library. MIT license.
-* [libuv](https://github.com/libuv/libuv). Cross-platform asynchronous I/O. MIT license.
-* [flatbuffers](https://github.com/google/flatbuffers). Memory efficient serialization library. Apache-2.0 license.
+| Library | Description | License |
+|---------|-------------|---------|
+| [{fmt}](https://github.com/fmtlib/fmt) | String formatting | MIT |
+| [libuv](https://github.com/libuv/libuv) | Cross-platform async I/O | MIT |
+| [flatbuffers](https://github.com/google/flatbuffers) | Efficient binary serialization | Apache-2.0 |
 
 ## Maintainers
 

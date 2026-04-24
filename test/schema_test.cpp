@@ -551,8 +551,8 @@ TEST_CASE("SessionsResponse")
         5,          // cid
         2048,       // crev
         {
-            { .user = "jdoe", .ip = "192.168.1.1", .code = msgs::ExitCode::CONNECTED, .time0 = 1000, .time1 = 0 },
-            { .user = "akay", .ip = "192.168.1.2", .code = msgs::ExitCode::CONNECTED, .time0 = 2000, .time1 = 0 }
+            { .user = "jdoe", .address = "192.168.1.1:40314", .code = msgs::ExitCode::CONNECTED, .since = 1000, .until = 0 },
+            { .user = "akay", .address = "192.168.1.2:40315", .code = msgs::ExitCode::CONNECTED, .since = 2000, .until = 0 }
         }
     );
 
@@ -573,7 +573,7 @@ TEST_CASE("SessionsPush")
     SessionsPushT push = nplex::tests::make_sessions_push(
         5,          // cid
         2048,       // crev
-        { .user = "jdoe", .ip = "10.0.0.1", .code = msgs::ExitCode::CLOSED_BY_USER, .time0 = 1000, .time1 = 9999 }
+        { .user = "jdoe", .address = "10.0.0.1:55531", .code = msgs::ExitCode::CLOSED_BY_USER, .since = 1000, .until = 9999 }
     );
 
     auto buf = serialize(push);
@@ -585,5 +585,6 @@ TEST_CASE("SessionsPush")
     REQUIRE(ptr->session());
     CHECK(ptr->session()->user()->str() == "jdoe");
     CHECK(ptr->session()->code() == msgs::ExitCode::CLOSED_BY_USER);
-    CHECK(ptr->session()->time1() == 9999);
+    CHECK(ptr->session()->since() == 1000);
+    CHECK(ptr->session()->until() == 9999);
 }

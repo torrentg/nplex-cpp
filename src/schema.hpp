@@ -1443,10 +1443,10 @@ inline ::flatbuffers::Offset<PingResponse> CreatePingResponseDirect(
 struct SessionT : public ::flatbuffers::NativeTable {
   typedef Session TableType;
   std::string user{};
-  std::string ip{};
+  std::string address{};
   nplex::msgs::ExitCode code = nplex::msgs::ExitCode::CONNECTED;
-  uint64_t time0 = 0;
-  uint64_t time1 = 0;
+  uint64_t since = 0;
+  uint64_t until = 0;
 };
 
 struct Session FLATBUFFERS_FINAL_CLASS : private ::flatbuffers::Table {
@@ -1455,35 +1455,35 @@ struct Session FLATBUFFERS_FINAL_CLASS : private ::flatbuffers::Table {
   struct Traits;
   enum FlatBuffersVTableOffset FLATBUFFERS_VTABLE_UNDERLYING_TYPE {
     VT_USER = 4,
-    VT_IP = 6,
+    VT_ADDRESS = 6,
     VT_CODE = 8,
-    VT_TIME0 = 10,
-    VT_TIME1 = 12
+    VT_SINCE = 10,
+    VT_UNTIL = 12
   };
   const ::flatbuffers::String *user() const {
     return GetPointer<const ::flatbuffers::String *>(VT_USER);
   }
-  const ::flatbuffers::String *ip() const {
-    return GetPointer<const ::flatbuffers::String *>(VT_IP);
+  const ::flatbuffers::String *address() const {
+    return GetPointer<const ::flatbuffers::String *>(VT_ADDRESS);
   }
   nplex::msgs::ExitCode code() const {
     return static_cast<nplex::msgs::ExitCode>(GetField<int8_t>(VT_CODE, 0));
   }
-  uint64_t time0() const {
-    return GetField<uint64_t>(VT_TIME0, 0);
+  uint64_t since() const {
+    return GetField<uint64_t>(VT_SINCE, 0);
   }
-  uint64_t time1() const {
-    return GetField<uint64_t>(VT_TIME1, 0);
+  uint64_t until() const {
+    return GetField<uint64_t>(VT_UNTIL, 0);
   }
   bool Verify(::flatbuffers::Verifier &verifier) const {
     return VerifyTableStart(verifier) &&
            VerifyOffsetRequired(verifier, VT_USER) &&
            verifier.VerifyString(user()) &&
-           VerifyOffsetRequired(verifier, VT_IP) &&
-           verifier.VerifyString(ip()) &&
+           VerifyOffsetRequired(verifier, VT_ADDRESS) &&
+           verifier.VerifyString(address()) &&
            VerifyField<int8_t>(verifier, VT_CODE, 1) &&
-           VerifyField<uint64_t>(verifier, VT_TIME0, 8) &&
-           VerifyField<uint64_t>(verifier, VT_TIME1, 8) &&
+           VerifyField<uint64_t>(verifier, VT_SINCE, 8) &&
+           VerifyField<uint64_t>(verifier, VT_UNTIL, 8) &&
            verifier.EndTable();
   }
   SessionT *UnPack(const ::flatbuffers::resolver_function_t *_resolver = nullptr) const;
@@ -1498,17 +1498,17 @@ struct SessionBuilder {
   void add_user(::flatbuffers::Offset<::flatbuffers::String> user) {
     fbb_.AddOffset(Session::VT_USER, user);
   }
-  void add_ip(::flatbuffers::Offset<::flatbuffers::String> ip) {
-    fbb_.AddOffset(Session::VT_IP, ip);
+  void add_address(::flatbuffers::Offset<::flatbuffers::String> address) {
+    fbb_.AddOffset(Session::VT_ADDRESS, address);
   }
   void add_code(nplex::msgs::ExitCode code) {
     fbb_.AddElement<int8_t>(Session::VT_CODE, static_cast<int8_t>(code), 0);
   }
-  void add_time0(uint64_t time0) {
-    fbb_.AddElement<uint64_t>(Session::VT_TIME0, time0, 0);
+  void add_since(uint64_t since) {
+    fbb_.AddElement<uint64_t>(Session::VT_SINCE, since, 0);
   }
-  void add_time1(uint64_t time1) {
-    fbb_.AddElement<uint64_t>(Session::VT_TIME1, time1, 0);
+  void add_until(uint64_t until) {
+    fbb_.AddElement<uint64_t>(Session::VT_UNTIL, until, 0);
   }
   explicit SessionBuilder(::flatbuffers::FlatBufferBuilder &_fbb)
         : fbb_(_fbb) {
@@ -1518,7 +1518,7 @@ struct SessionBuilder {
     const auto end = fbb_.EndTable(start_);
     auto o = ::flatbuffers::Offset<Session>(end);
     fbb_.Required(o, Session::VT_USER);
-    fbb_.Required(o, Session::VT_IP);
+    fbb_.Required(o, Session::VT_ADDRESS);
     return o;
   }
 };
@@ -1526,14 +1526,14 @@ struct SessionBuilder {
 inline ::flatbuffers::Offset<Session> CreateSession(
     ::flatbuffers::FlatBufferBuilder &_fbb,
     ::flatbuffers::Offset<::flatbuffers::String> user = 0,
-    ::flatbuffers::Offset<::flatbuffers::String> ip = 0,
+    ::flatbuffers::Offset<::flatbuffers::String> address = 0,
     nplex::msgs::ExitCode code = nplex::msgs::ExitCode::CONNECTED,
-    uint64_t time0 = 0,
-    uint64_t time1 = 0) {
+    uint64_t since = 0,
+    uint64_t until = 0) {
   SessionBuilder builder_(_fbb);
-  builder_.add_time1(time1);
-  builder_.add_time0(time0);
-  builder_.add_ip(ip);
+  builder_.add_until(until);
+  builder_.add_since(since);
+  builder_.add_address(address);
   builder_.add_user(user);
   builder_.add_code(code);
   return builder_.Finish();
@@ -1547,19 +1547,19 @@ struct Session::Traits {
 inline ::flatbuffers::Offset<Session> CreateSessionDirect(
     ::flatbuffers::FlatBufferBuilder &_fbb,
     const char *user = nullptr,
-    const char *ip = nullptr,
+    const char *address = nullptr,
     nplex::msgs::ExitCode code = nplex::msgs::ExitCode::CONNECTED,
-    uint64_t time0 = 0,
-    uint64_t time1 = 0) {
+    uint64_t since = 0,
+    uint64_t until = 0) {
   auto user__ = user ? _fbb.CreateString(user) : 0;
-  auto ip__ = ip ? _fbb.CreateString(ip) : 0;
+  auto address__ = address ? _fbb.CreateString(address) : 0;
   return nplex::msgs::CreateSession(
       _fbb,
       user__,
-      ip__,
+      address__,
       code,
-      time0,
-      time1);
+      since,
+      until);
 }
 
 ::flatbuffers::Offset<Session> CreateSession(::flatbuffers::FlatBufferBuilder &_fbb, const SessionT *_o, const ::flatbuffers::rehasher_function_t *_rehasher = nullptr);
@@ -3021,10 +3021,10 @@ inline void Session::UnPackTo(SessionT *_o, const ::flatbuffers::resolver_functi
   (void)_o;
   (void)_resolver;
   { auto _e = user(); if (_e) _o->user = _e->str(); }
-  { auto _e = ip(); if (_e) _o->ip = _e->str(); }
+  { auto _e = address(); if (_e) _o->address = _e->str(); }
   { auto _e = code(); _o->code = _e; }
-  { auto _e = time0(); _o->time0 = _e; }
-  { auto _e = time1(); _o->time1 = _e; }
+  { auto _e = since(); _o->since = _e; }
+  { auto _e = until(); _o->until = _e; }
 }
 
 inline ::flatbuffers::Offset<Session> Session::Pack(::flatbuffers::FlatBufferBuilder &_fbb, const SessionT* _o, const ::flatbuffers::rehasher_function_t *_rehasher) {
@@ -3036,17 +3036,17 @@ inline ::flatbuffers::Offset<Session> CreateSession(::flatbuffers::FlatBufferBui
   (void)_o;
   struct _VectorArgs { ::flatbuffers::FlatBufferBuilder *__fbb; const SessionT* __o; const ::flatbuffers::rehasher_function_t *__rehasher; } _va = { &_fbb, _o, _rehasher}; (void)_va;
   auto _user = _fbb.CreateString(_o->user);
-  auto _ip = _fbb.CreateString(_o->ip);
+  auto _address = _fbb.CreateString(_o->address);
   auto _code = _o->code;
-  auto _time0 = _o->time0;
-  auto _time1 = _o->time1;
+  auto _since = _o->since;
+  auto _until = _o->until;
   return nplex::msgs::CreateSession(
       _fbb,
       _user,
-      _ip,
+      _address,
       _code,
-      _time0,
-      _time1);
+      _since,
+      _until);
 }
 
 inline SessionsPushT::SessionsPushT(const SessionsPushT &o)

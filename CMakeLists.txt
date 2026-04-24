@@ -362,6 +362,32 @@ target_link_libraries(
     nplex-cpp
 )
 
+add_executable(
+    watcher
+)
+
+target_sources(
+    watcher
+    PRIVATE
+    ${CMAKE_CURRENT_LIST_DIR}/examples/watcher.cpp
+)
+
+target_include_directories(
+    watcher
+    PRIVATE
+    ${PROJECT_SOURCE_DIR}/deps
+    ${PROJECT_SOURCE_DIR}/src
+)
+
+target_link_libraries(
+    watcher
+    "$<$<STREQUAL:${ENABLE_SANITIZERS},ON>:-lasan>"
+    "$<$<STREQUAL:${ENABLE_SANITIZERS},ON>:-lubsan>"
+    "$<$<STREQUAL:${ENABLE_THREAD_SANITIZER},ON>:-ltsan>"
+    "$<$<STREQUAL:${ENABLE_COVERAGE},ON>:-lgcov>"
+    nplex-cpp
+)
+
 include(CTest)
 enable_testing()
 add_subdirectory(test)

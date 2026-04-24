@@ -35,10 +35,10 @@ static nplex::session_t to_session_t(const nplex::msgs::Session *session)
 
     return nplex::session_t{
         session->user() ? session->user()->str() : std::string{},
-        session->ip() ? session->ip()->str() : std::string{},
+        session->address() ? session->address()->str() : std::string{},
         static_cast<nplex::session_t::code_e>(session->code()),
-        nplex::millis_t{static_cast<nplex::millis_t::rep>(session->time0())},
-        nplex::millis_t{static_cast<nplex::millis_t::rep>(session->time1())}
+        nplex::millis_t{static_cast<nplex::millis_t::rep>(session->since())},
+        nplex::millis_t{static_cast<nplex::millis_t::rep>(session->until())}
     };
 }
 
@@ -350,7 +350,26 @@ bool nplex::client_impl::wait_for_synced(millis_t timeout)
         auto s = m_state.load();
         if (s == state_e::CLOSED)
             throw nplex_exception("client is closed");
-        return (m_state.load() == state_e::SYNCED);
+        return (s == state_e::SYNCED);
+    })) {
+        return false;
+    }
+
+    return true;
+}
+
+bool nplex::client_impl::wait_for_closed(millis_t timeout)
+{
+    if (is_closed())
+        return true;
+
+    if (timeout.count() > UINT32_MAX)
+        timeout = millis_t{UINT32_MAX};
+
+    std::unique_lock<std::mutex> lock(m_mutex_commands);
+
+    if (!m_cv.wait_for(lock, timeout, [this] {
+        return (m_state.load() == state_e::CLOSED);
     })) {
         return false;
     }

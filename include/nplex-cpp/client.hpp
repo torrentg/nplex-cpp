@@ -416,6 +416,7 @@ class client
      */
     virtual bool wait_for_populated(millis_t timeout = millis_t::max()) = 0;
     virtual bool wait_for_synced(millis_t timeout = millis_t::max()) = 0;
+    virtual bool wait_for_closed(millis_t timeout = millis_t::max()) = 0;
 
     /**
      * Create a new transaction.

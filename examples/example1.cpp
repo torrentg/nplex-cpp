@@ -80,10 +80,10 @@ static void print_active_sessions(const nplex::client_ptr &cli)
     {
         std::cout << ++index << ". ";
         std::cout << "user: " << session.user << std::endl;
-        std::cout << "  ip: " << session.ip << std::endl;
+        std::cout << "  address: " << session.address << std::endl;
         std::cout << "  code: " << to_str(session.code) << std::endl;
-        std::cout << "  time0: " << to_iso8601(session.time0) << std::endl;
-        std::cout << "  time1: " << (session.time1.count() ? to_iso8601(session.time1) : std::string{"-"}) << std::endl;
+        std::cout << "  since: " << to_iso8601(session.since) << std::endl;
+        std::cout << "  until: " << (session.until.count() ? to_iso8601(session.until) : std::string{"-"}) << std::endl;
     }
 }
 
