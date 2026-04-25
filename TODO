@@ -5,4 +5,3 @@
 * Add bool transaction::exists(const char *key) ?
 * Add size_t transaction::count(const char *pattern) ?
 * Implement retry on TRY_LATER
-* JSON output always in ndjson (remove indent support)
