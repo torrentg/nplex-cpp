@@ -1,9 +1,8 @@
 #include <fmt/core.h>
 #include "utf8.h"
+#include "base64.hpp"
 #include "utils.hpp"
 #include "json.hpp"
-
-static constexpr size_t k_max_binary_preview = 12;
 
 // ==========================================================
 // Internal (static) functions
@@ -26,47 +25,46 @@ static void json_append_escaped_text(std::string_view text, std::string &out)
 {
     out.push_back('"');
 
-    for (char c : text)
+    const char *p = text.data();
+    const char *end = p + text.size();
+    const char *start = p;
+
+    while (p < end)
     {
+        unsigned char c = static_cast<unsigned char>(*p);
+
+        if (c >= 0x20 && c != '"' && c != '\\') {
+            ++p;
+            continue;
+        }
+
+        if (p > start)
+            out.append(start, p);
+
         switch (c)
         {
-            case '\"': out += "\\\""; break;
-            case '\\': out += "\\\\"; break;
-            case '\b': out += "\\b";  break;
-            case '\f': out += "\\f";  break;
-            case '\n': out += "\\n";  break;
-            case '\r': out += "\\r";  break;
-            case '\t': out += "\\t";  break;
-            default:   out += c;      break;  // assume valid utf8
+            case '"':  out.append("\\\""); break;
+            case '\\': out.append("\\\\"); break;
+            case '\b': out.append("\\b");  break;
+            case '\f': out.append("\\f");  break;
+            case '\n': out.append("\\n");  break;
+            case '\r': out.append("\\r");  break;
+            case '\t': out.append("\\t");  break;
+            default: {
+                char buf[7];
+                snprintf(buf, sizeof(buf), "\\u%04x", static_cast<int>(c));
+                out.append(buf);
+                break;
+            }
         }
+
+        start = ++p;
     }
+
+    if (p > start)
+        out.append(start, p);
 
     out.push_back('"');
-}
-
-static void json_append_raw_bytes(const char *content, size_t length, std::string &out, size_t max_preview)
-{
-    if (content == nullptr) {
-        out += "null";
-        return;
-    }
-
-    bool is_utf8 = !(utf8nvalid(reinterpret_cast<const utf8_int8_t *>(content), length));
-
-    if (is_utf8) {
-        json_append_escaped_text({content, length}, out);
-        return;
-    }
-
-    out += "\"<";
-
-    for (size_t i = 0; i < std::min(length, max_preview); ++i)
-        out += fmt::format("\\x{:02x}", static_cast<unsigned char>(content[i]));
-
-    if (length > max_preview)
-        out += "...";
-
-    out += ">\"";
 }
 
 static const char *to_string(nplex::change_t::action_e action)
@@ -96,6 +94,41 @@ static const char *to_string(nplex::session_t::code_e code)
     return "UNKNOWN";
 }
 
+static void json_append_value(const nplex::value_t &value, std::string &out)
+{
+    const char *content = value.data().data();
+    size_t length = value.data().size();
+    bool is_utf8 = !utf8nvalid(reinterpret_cast<const utf8_int8_t *>(content), length);
+
+    out += "{";
+
+    json_append_text("data", out);
+    out += ":";
+
+    if (is_utf8)
+    {
+        json_append_escaped_text({content, length}, out);
+        out += ",";
+        json_append_text("encoding", out);
+        out += ":";
+        json_append_text("text", out);
+    }
+    else
+    {
+        json_append_text(base64::to_base64({content, length}), out);
+        out += ",";
+        json_append_text("encoding", out);
+        out += ":";
+        json_append_text("base64", out);
+    }
+
+    out += ",";
+    json_append_text("rev", out);
+    out += ":";
+    json_append_number(value.rev(), out);
+    out += "}";
+}
+
 static void json_append_change(const nplex::change_t &change, std::string &out)
 {
     out += "{";
@@ -113,7 +146,7 @@ static void json_append_change(const nplex::change_t &change, std::string &out)
         out += ",";
         json_append_text("new_value", out);
         out += ":";
-        json_append_raw_bytes(change.new_value->data().data(), change.new_value->data().size(), out, k_max_binary_preview);
+        json_append_value(*change.new_value, out);
     }
 
     if (change.action != nplex::change_t::action_e::CREATE)
@@ -121,7 +154,7 @@ static void json_append_change(const nplex::change_t &change, std::string &out)
         out += ",";
         json_append_text("old_value", out);
         out += ":";
-        json_append_raw_bytes(change.old_value->data().data(), change.old_value->data().size(), out, k_max_binary_preview);
+        json_append_value(*change.old_value, out);
     }
 
     out += "}";
@@ -137,12 +170,7 @@ static void json_append_keyval(const nplex::key_t &key, const nplex::value_t &va
 
     json_append_text("value", out);
     out += ":";
-    json_append_raw_bytes(value.data().data(), value.data().size(), out, k_max_binary_preview);
-    out += ",";
-
-    json_append_text("rev", out);
-    out += ":";
-    json_append_number(value.rev(), out);
+    json_append_value(value, out);
     out += "}";
 }
 

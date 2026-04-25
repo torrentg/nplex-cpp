@@ -109,6 +109,7 @@ All binaries support `-h` / `--help`, where the available parameters are documen
 | [cppcrc](https://github.com/DarrenLevine/cppcrc) | Header-only CRC generation | MIT |
 | [cstring](https://github.com/torrentg/cstring) | Immutable C-string with reference counting | LGPL-3.0 |
 | [cqueue](https://github.com/torrentg/cqueue) | Circular queue | LGPL-3.0 |
+| [base64](https://github.com/tobiaslocker/base64) | Base64 encoder / decoder | MIT |
 | [utf8.h](https://github.com/sheredom/utf8.h) | UTF-8 string functions | Unlicense |
 | [doctest](https://github.com/doctest/doctest) | Testing framework | MIT license |
 

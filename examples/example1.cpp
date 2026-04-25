@@ -95,7 +95,8 @@ static void update_content(const nplex::client_ptr &cli)
     int num = tx->read_or("rct.gates.3.open", "0")->as_number_or<int>(42);
 
     num++;
-    tx->upsert("rct.gates.3.open", std::to_string(num));
+    tx->upsert("rct.gates.3.open", std::to_string(num));                          // text content
+    tx->upsert("rct.gates.3.num", {reinterpret_cast<char*>(&num), sizeof(num)});  // binary content
     tx->set_type(42);
 
     try {
