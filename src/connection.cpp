@@ -279,8 +279,6 @@ void nplex::connection_impl::connect()
     m_stats = {};
     m_error = 0;
 
-    struct sockaddr_storage addr_in = ::get_sockaddr(m_tcp.loop, m_addr);
-
     if ((rc = uv_tcp_init(m_tcp.loop, &m_tcp)) != 0)
         throw nplex_exception(uv_strerror(rc));
 
@@ -289,6 +287,7 @@ void nplex::connection_impl::connect()
 
     m_tcp.data = this;
 
+    struct sockaddr_storage addr_in = ::get_sockaddr(m_tcp.loop, m_addr);
     uv_connect_t* connect = new uv_connect_t();
 
     if ((rc = uv_tcp_connect(connect, &m_tcp, reinterpret_cast<struct sockaddr*>(&addr_in), ::cb_tcp_connect)) != 0) {

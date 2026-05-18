@@ -48,12 +48,12 @@ make -j$(nproc)
 ctest -V
 
 # AddressSanitizer + UndefinedBehaviorSanitizer
-cmake -DENABLE_SANITIZERS=ON -DENABLE_THREAD_SANITIZER=OFF ..
+cmake -DENABLE_SANITIZERS=ON ..
 make -j$(nproc)
 ctest -V
 
 # ThreadSanitizer
-cmake -DENABLE_SANITIZERS=OFF -DENABLE_THREAD_SANITIZER=ON ..
+cmake -DENABLE_THREAD_SANITIZER=ON ..
 make -j$(nproc)
 ctest -V
 
