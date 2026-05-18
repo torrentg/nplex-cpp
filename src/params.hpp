@@ -1,8 +1,8 @@
 #pragma once
 
-#include <vector>
 #include "nplex-cpp/types.hpp"
 #include "addr.hpp"
+#include <vector>
 
 namespace nplex {
 

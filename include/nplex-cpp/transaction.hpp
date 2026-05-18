@@ -1,8 +1,8 @@
 #pragma once
 
+#include "types.hpp"
 #include <functional>
 #include <future>
-#include "types.hpp"
 
 namespace nplex {
 

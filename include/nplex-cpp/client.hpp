@@ -1,12 +1,12 @@
 #pragma once
 
-#include <memory>
-#include <future>
-#include <chrono>
-#include <stop_token>
 #include "types.hpp"
 #include "exception.hpp"
 #include "transaction.hpp"
+#include <stop_token>
+#include <memory>
+#include <future>
+#include <chrono>
 
 namespace nplex {
 

@@ -1,9 +1,9 @@
-#include <chrono>
-#include <cassert>
 #include "nplex-cpp/exception.hpp"
+#include "store.hpp"
 #include "schema.hpp"
 #include "utils.hpp"
-#include "store.hpp"
+#include <cassert>
+#include <chrono>
 
 namespace {
 

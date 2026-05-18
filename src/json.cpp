@@ -1,8 +1,8 @@
-#include <fmt/core.h>
+#include "json.hpp"
+#include "utils.hpp"
 #include "utf8.h"
 #include "base64.hpp"
-#include "utils.hpp"
-#include "json.hpp"
+#include <fmt/core.h>
 
 // ==========================================================
 // Internal (static) functions

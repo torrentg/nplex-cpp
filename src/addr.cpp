@@ -1,7 +1,8 @@
-#include <regex>
-#include <charconv>
-#include "nplex-cpp/exception.hpp"
 #include "addr.hpp"
+#include <fmt/core.h>
+#include <exception>
+#include <charconv>
+#include <regex>
 
 // IPv4 address (see https://digitalfortress.tech/tricks/top-15-commonly-used-regex/)
 #define IPV4_PATTERN "^(([0-9]|[1-9][0-9]|1[0-9]{2}|2[0-4][0-9]|25[0-5])\\.){3}([0-9]|[1-9][0-9]|1[0-9]{2}|2[0-4][0-9]|25[0-5])$"
@@ -20,20 +21,20 @@ nplex::addr_t::addr_t(const std::string_view &str)
 {
     auto pos = str.find_last_of(':');
     if (pos == str.npos)
-        throw nplex_exception("'{}' is an invalid address (port not found)", str);
+        throw std::invalid_argument(fmt::format("'{}' is an invalid address (port not found)", str));
 
     if (str.size() - pos > 6)
-        throw nplex_exception("'{}' is an invalid address (port too long)", str);
+        throw std::invalid_argument(fmt::format("'{}' is an invalid address (port too long)", str));
 
     for (size_t i = pos + 1; i < str.size(); i++) {
         if (!std::isdigit(str[i]))
-            throw nplex_exception("'{}' is an invalid address (invalid port)", str);
+            throw std::invalid_argument(fmt::format("'{}' is an invalid address (invalid port)", str));
     }
 
     int num = 0;
     auto [ptr, ec] = std::from_chars(str.begin() + pos + 1, str.end(), num);
     if (ec != std::errc() || ptr != str.end() || num <= 0 || num > 65535)
-        throw nplex_exception("'{}' is an invalid address (invalid port)", str);
+        throw std::invalid_argument(fmt::format("'{}' is an invalid address (invalid port)", str));
 
     m_port = static_cast<std::uint16_t>(num);
     m_host = str.substr(0, pos);
@@ -43,7 +44,7 @@ nplex::addr_t::addr_t(const std::string_view &str)
         m_host = m_host.substr(1, m_host.size() - 2);
 
         if (!std::regex_match(m_host, ipv6_regex))
-            throw nplex_exception("'{}' is an invalid IP6 address", str);
+            throw std::invalid_argument(fmt::format("'{}' is an invalid IP6 address", str));
 
         m_family = AF_INET6;
     }
@@ -57,7 +58,7 @@ nplex::addr_t::addr_t(const std::string_view &str)
     }
     else
     {
-        throw nplex_exception("'{}' is an invalid address (invalid host)", str);
+        throw std::invalid_argument(fmt::format("'{}' is an invalid address (invalid host)", str));
     }
 }
 

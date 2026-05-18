@@ -1,7 +1,7 @@
 #pragma once
 
-#include <memory>
 #include "addr.hpp"
+#include <memory>
 
 // Forward declarations
 struct uv_loop_s;

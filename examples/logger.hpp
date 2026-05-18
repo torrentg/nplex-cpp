@@ -1,13 +1,13 @@
 ﻿#pragma once
 
+#include "nplex-cpp/client.hpp"
+#include <fmt/std.h>
 #include <chrono>
 #include <iomanip>
 #include <iostream>
 #include <sstream>
 #include <syncstream>
 #include <thread>
-#include <fmt/std.h>
-#include "nplex-cpp/client.hpp"
 
 /**
  * Basic example to illustrate how to extend nplex::logger.

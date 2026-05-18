@@ -1,11 +1,11 @@
+#include "client_impl.hpp"
+#include "messaging.hpp"
+#include "utils.hpp"
+#include "store.hpp"
+#include "user.hpp"
+#include <fmt/format.h>
 #include <cassert>
 #include <limits>
-#include <fmt/format.h>
-#include "utils.hpp"
-#include "user.hpp"
-#include "store.hpp"
-#include "messaging.hpp"
-#include "client_impl.hpp"
 
 #define MAX_MILLIS_IN_REACTOR  250
 

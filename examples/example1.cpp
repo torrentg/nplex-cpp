@@ -1,8 +1,8 @@
+#include "nplex-cpp/client.hpp"
+#include "logger.hpp"
 #include <stop_token>
 #include <iostream>
 #include <thread>
-#include "nplex-cpp/client.hpp"
-#include "logger.hpp"
 
 static std::string to_iso8601(std::chrono::milliseconds ms_since_epoch)
 {

@@ -1,5 +1,4 @@
 #include <doctest.h>
-#include "nplex-cpp/exception.hpp"
 #include "addr.hpp"
 
 using namespace std;
@@ -173,16 +172,16 @@ TEST_CASE("addr")
             // some invalid IP4 hosts are valid hostnames (ex: 1, 1.2, etc)
             CHECK(addr.family() == AF_UNSPEC);
             CHECK(entry.family == AF_INET);
-        } catch (const nplex_exception &ex) {
+        } catch (const std::exception &ex) {
             CHECK(true);
         }
     }
 
     // invalid ports
-    CHECK_THROWS_AS(addr_t{"localhost:0"}, nplex_exception);
-    CHECK_THROWS_AS(addr_t{"localhost:xx"}, nplex_exception);
-    CHECK_THROWS_AS(addr_t{"localhost:+1"}, nplex_exception);
-    CHECK_THROWS_AS(addr_t{"localhost:-1"}, nplex_exception);
-    CHECK_THROWS_AS(addr_t{"localhost:99999"}, nplex_exception);
-    CHECK_THROWS_AS(addr_t{"localhost:100000"}, nplex_exception);
+    CHECK_THROWS_AS(addr_t{"localhost:0"}, std::exception);
+    CHECK_THROWS_AS(addr_t{"localhost:xx"}, std::exception);
+    CHECK_THROWS_AS(addr_t{"localhost:+1"}, std::exception);
+    CHECK_THROWS_AS(addr_t{"localhost:-1"}, std::exception);
+    CHECK_THROWS_AS(addr_t{"localhost:99999"}, std::exception);
+    CHECK_THROWS_AS(addr_t{"localhost:100000"}, std::exception);
 }

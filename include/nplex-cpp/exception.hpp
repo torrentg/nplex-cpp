@@ -1,8 +1,8 @@
 #pragma once
 
-#include <ostream>
-#include <stdexcept>
 #include <fmt/format.h>
+#include <stdexcept>
+#include <ostream>
 
 namespace nplex {
 

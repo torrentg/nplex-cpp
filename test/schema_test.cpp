@@ -377,14 +377,14 @@ TEST_CASE("SubmitRequest-hard")
         CreateKeyValue(
             builder, 
             builder.CreateString("key1"), 
-            builder.CreateVector((uint8_t *) data1, sizeof(data1))
+            builder.CreateVector((const uint8_t *)data1, sizeof(data1))
         )
     );
     upserts.push_back(
         CreateKeyValue(
             builder, 
             builder.CreateString("key2"), 
-            builder.CreateVector((uint8_t *) data2, sizeof(data2))
+            builder.CreateVector((const uint8_t *)data2, sizeof(data2))
         )
     );
 

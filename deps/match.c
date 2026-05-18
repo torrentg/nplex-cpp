@@ -18,10 +18,10 @@
  *   - Added '**' support to glob_match()
  */
 
+#include "match.h"
 #include <string.h>
 #include <ctype.h>
 #include <assert.h>
-#include "match.h"
 
 // set to 1 to enable dotglob: *. ?, and [] match a . (dotfile) at the begin or after each /
 #define DOTGLOB 1

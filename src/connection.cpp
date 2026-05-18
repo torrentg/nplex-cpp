@@ -1,13 +1,13 @@
-#include <cassert>
-#include <arpa/inet.h>
-#include <uv.h>
-#include <fmt/format.h>
 #include "nplex-cpp/exception.hpp"
+#include "connection.hpp"
 #include "client_impl.hpp"
 #include "messaging.hpp"
 #include "params.hpp"
 #include "utils.hpp"
-#include "connection.hpp"
+#include <fmt/format.h>
+#include <uv.h>
+#include <cassert>
+#include <arpa/inet.h>
 
 template <typename T>
 static auto get_handle(T* obj) -> decltype(reinterpret_cast<std::conditional_t<std::is_const<T>::value, const uv_handle_t*, uv_handle_t*>>(obj)) {
@@ -163,7 +163,7 @@ static void cb_tcp_read(uv_stream_t *stream, ssize_t nread, const uv_buf_t *buf)
     }
 
     if (nread < 0) {
-        obj->disconnect((int) nread);
+        obj->disconnect(static_cast<int>(nread));
         return;
     }
 

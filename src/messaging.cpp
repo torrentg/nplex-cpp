@@ -1,11 +1,11 @@
-#include <cassert>
-#include "utf8.h"
-#include "cppcrc.h"
 #include "nplex-cpp/exception.hpp"
-#include "transaction_impl.hpp"
 #include "messaging.hpp"
-#include "utils.hpp"
+#include "transaction_impl.hpp"
 #include "buildinfo.hpp"
+#include "utils.hpp"
+#include "cppcrc.h"
+#include "utf8.h"
+#include <cassert>
 
 using namespace nplex::msgs;
 using namespace flatbuffers;
@@ -146,7 +146,7 @@ flatbuffers::DetachedBuffer nplex::create_submit_msg(std::size_t cid, rev_t crev
                         builder, 
                         builder.CreateString(item.first), 
                         builder.CreateVector(
-                            (std::uint8_t *) std::get<value_ptr>(item.second)->data().c_str(), 
+                            (const std::uint8_t *)std::get<value_ptr>(item.second)->data().c_str(), 
                             std::get<value_ptr>(item.second)->data().size()
                         )
                     )

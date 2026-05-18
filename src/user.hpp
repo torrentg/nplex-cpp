@@ -1,12 +1,12 @@
 #pragma once
 
+#include "utils.hpp"
+#include <fmt/ranges.h>
+#include <fmt/format.h>
 #include <cstdint>
 #include <string>
 #include <vector>
 #include <memory>
-#include <fmt/ranges.h>
-#include <fmt/format.h>
-#include "utils.hpp"
 
 #define CRUD_READ       0x01
 #define CRUD_CREATE     0x02

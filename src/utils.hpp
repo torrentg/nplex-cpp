@@ -1,9 +1,9 @@
 #pragma once
 
+#include "nplex-cpp/transaction.hpp"
+#include <cstdint>
 #include <string>
 #include <chrono>
-#include <cstdint>
-#include "nplex-cpp/transaction.hpp"
 
 // Nplex error codes (0 = OK, 1-999 reserved to libuv errors)
 #define ERR_CLOSED_BY_LOCAL     1000

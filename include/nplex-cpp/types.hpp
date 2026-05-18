@@ -1,5 +1,6 @@
 #pragma once
 
+#include "cstring.hpp"
 #include <string>
 #include <chrono>
 #include <memory>
@@ -10,7 +11,6 @@
 #include <string_view>
 #include <type_traits>
 #include <system_error>
-#include "cstring.hpp"
 
 #define KEY_DELIMITER '/'
 

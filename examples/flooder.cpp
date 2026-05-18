@@ -1,4 +1,5 @@
-#include <set>
+#include "nplex-cpp/client.hpp"
+#include "logger.hpp"
 #include <algorithm>
 #include <atomic>
 #include <chrono>
@@ -17,8 +18,7 @@
 #include <string>
 #include <thread>
 #include <vector>
-#include "nplex-cpp/client.hpp"
-#include "logger.hpp"
+#include <set>
 
 using namespace std::chrono;
 using sclock = std::chrono::steady_clock;

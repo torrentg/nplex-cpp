@@ -1,8 +1,8 @@
 #pragma once
 
+#include "nplex-cpp/types.hpp"
 #include <string>
 #include <vector>
-#include "nplex-cpp/types.hpp"
 
 namespace nplex {
 

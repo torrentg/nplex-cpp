@@ -1,17 +1,16 @@
 #pragma once
 
-#include <set>
-#include <map>
-#include <tuple>
-#include <mutex>
-#include <atomic>
-#include <future>
-#include "flatbuffers/flatbuffers.h"
 #include "nplex-cpp/transaction.hpp"
 #include "loggable.hpp"
 #include "schema.hpp"
 #include "store.hpp"
 #include "user.hpp"
+#include <atomic>
+#include <future>
+#include <tuple>
+#include <mutex>
+#include <set>
+#include <map>
 
 namespace nplex {
 

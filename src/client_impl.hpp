@@ -1,5 +1,12 @@
 #pragma once
 
+#include "nplex-cpp/client.hpp"
+#include "transaction_impl.hpp"
+#include "connection.hpp"
+#include "loggable.hpp"
+#include "params.hpp"
+#include "cqueue.hpp"
+#include <uv.h>
 #include <set>
 #include <vector>
 #include <atomic>
@@ -7,13 +14,6 @@
 #include <thread>
 #include <exception>
 #include <condition_variable>
-#include <uv.h>
-#include "cqueue.hpp"
-#include "nplex-cpp/client.hpp"
-#include "transaction_impl.hpp"
-#include "connection.hpp"
-#include "loggable.hpp"
-#include "params.hpp"
 
 namespace nplex {
 

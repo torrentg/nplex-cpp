@@ -1,10 +1,10 @@
 #pragma once
 
-#include <map>
-#include <mutex>
+#include "nplex-cpp/types.hpp"
 #include <vector>
 #include <memory>
-#include "nplex-cpp/types.hpp"
+#include <mutex>
+#include <map>
 
 namespace nplex {
 

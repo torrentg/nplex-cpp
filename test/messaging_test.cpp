@@ -13,7 +13,7 @@ namespace {
     {
         uv_buf_t ret = uv_buf_init(nullptr, 0);
 
-        ret.base = (char *) malloc(msg->length());
+        ret.base = new char[msg->length()];
         ret.len = msg->length();
 
         char *ptr = ret.base;
@@ -57,5 +57,5 @@ TEST_CASE("output_msg")
     CHECK(parsed_msg->content_as_LOGIN_REQUEST()->user()->str() == "jdoe");
     CHECK(parsed_msg->content_as_LOGIN_REQUEST()->password()->str() == "password");
 
-    free(network_msg.base);
+    delete[] network_msg.base;
 }

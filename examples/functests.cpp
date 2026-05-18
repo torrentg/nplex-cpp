@@ -1,3 +1,5 @@
+#include "nplex-cpp/client.hpp"
+#include "logger.hpp"
 #include <cstdlib>
 #include <cstring>
 #include <getopt.h>
@@ -6,8 +8,6 @@
 #include <stop_token>
 #include <string>
 #include <thread>
-#include "nplex-cpp/client.hpp"
-#include "logger.hpp"
 
 using namespace nplex;
 

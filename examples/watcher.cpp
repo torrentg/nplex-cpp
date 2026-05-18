@@ -1,12 +1,12 @@
+#include "nplex-cpp/client.hpp"
+#include "json.hpp"
 #include <csignal>
 #include <getopt.h>
-#include <iomanip>
 #include <iostream>
+#include <iomanip>
 #include <string>
 #include <thread>
 #include <vector>
-#include "nplex-cpp/client.hpp"
-#include "json.hpp"
 
 using namespace nplex;
 

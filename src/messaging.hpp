@@ -1,10 +1,10 @@
 #pragma once
 
-#include <array>
-#include <string>
-#include <uv.h>
 #include "nplex-cpp/types.hpp"
 #include "schema.hpp"
+#include <uv.h>
+#include <string>
+#include <array>
 
 namespace nplex {
 
